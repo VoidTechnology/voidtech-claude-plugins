@@ -1,7 +1,7 @@
 {
   "extraKnownMarketplaces": {
     "voidtech": {
-      "source": { "source": "github", "repo": "VoidTech/voidtech-claude-plugins" }
+      "source": { "source": "github", "repo": "VoidTechnology/voidtech-claude-plugins" }
     }
   },
   "enabledPlugins": {

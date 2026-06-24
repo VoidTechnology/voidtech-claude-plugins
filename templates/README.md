@@ -4,5 +4,4 @@
 
 - 模板只默认启用 `voidtech-core`。
 - MCP 插件由成员按需安装，不写入项目默认设置。
-- `VoidTech/voidtech-claude-plugins` 是占位地址，发布前替换为真实 GitHub org/repo。
 - 不要向 JSON 添加 `"//"` 伪注释键；Claude Code 会把它当作设置字段处理。

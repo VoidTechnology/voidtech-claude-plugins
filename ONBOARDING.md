@@ -16,11 +16,9 @@ node --version
 项目的 `.claude/settings.json` 应合入 `templates/project-settings.json`。手动安装时执行：
 
 ```bash
-claude plugin marketplace add VoidTech/voidtech-claude-plugins
+claude plugin marketplace add VoidTechnology/voidtech-claude-plugins
 claude plugin install voidtech-core@voidtech
 ```
-
-`VoidTech/voidtech-claude-plugins` 仍是占位地址，发布前必须替换为真实 GitHub org/repo。
 
 从旧版迁移时，先把项目 `.claude/settings.json` 中的 `voidtech-toolkit@voidtech` 替换为 `voidtech-core@voidtech`，再更新 Marketplace 并移除旧插件：
 
