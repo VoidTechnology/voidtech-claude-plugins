@@ -233,13 +233,6 @@ else
   fail "缺少 plugins/voidtech-core"
 fi
 
-archived_gstack_count=$(find archive/gstack-skills -mindepth 2 -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-if [[ "$archived_gstack_count" == "8" ]]; then
-  pass "8 个 gstack 技能位于归档区"
-else
-  fail "gstack 归档数量异常：$archived_gstack_count"
-fi
-
 for optional_plugin in plugins/voidtech-mcp-common plugins/voidtech-mcp-apple; do
   manifest="$optional_plugin/.claude-plugin/plugin.json"
   if [[ -f "$manifest" ]] && jq -e '.defaultEnabled == false' "$manifest" >/dev/null; then

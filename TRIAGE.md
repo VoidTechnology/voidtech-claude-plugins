@@ -25,8 +25,8 @@
 
 | 能力 | 原因 | 处置 |
 |---|---|---|
-| 8 个 gstack 技能 | 依赖缺失的 `~/.gstack`、`gstack/bin`、遥测与已删除技能 | 移到 `archive/gstack-skills`，逐个独立重写 |
-| karpathy-guidelines | 上游 `multica-ai/andrej-karpathy-skills` 没有 LICENSE | 移到 `archive/unlicensed-skills` |
+| 8 个 gstack 技能 | 依赖缺失的 `~/.gstack`、`gstack/bin`、遥测与已删除技能 | 未纳入仓库；如需重写，从上游 gstack 重新获取后逐个独立适配 |
+| karpathy-guidelines | 上游 `multica-ai/andrej-karpathy-skills` 没有 LICENSE | 未纳入仓库（无再分发许可） |
 | GitHub npm MCP | `@modelcontextprotocol/server-github` 已废弃 | 团队默认使用 `gh`；需要 MCP 时使用 GitHub 官方实现 |
 | Figma Context MCP | 第三方实现且厂商已有官方插件 | 使用 Figma 官方插件与 OAuth |
 | Desktop Commander | 权限面过大，核心能力已有文件与命令工具 | 不分发 |
