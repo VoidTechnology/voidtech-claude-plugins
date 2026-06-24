@@ -1,0 +1,7 @@
+{
+  "name": "voidtech-mcp-apple",
+  "version": "0.1.0",
+  "description": "VoidTech 可选 Apple MCP：Apple Docs 与 XcodeBuildMCP",
+  "author": { "name": "VoidTech" },
+  "defaultEnabled": false
+}

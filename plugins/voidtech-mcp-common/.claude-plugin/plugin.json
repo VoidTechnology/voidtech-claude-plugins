@@ -1,0 +1,7 @@
+{
+  "name": "voidtech-mcp-common",
+  "version": "0.1.0",
+  "description": "VoidTech 可选通用 MCP：Context7 与 Chrome DevTools",
+  "author": { "name": "VoidTech" },
+  "defaultEnabled": false
+}

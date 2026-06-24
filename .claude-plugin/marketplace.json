@@ -1,0 +1,24 @@
+{
+  "name": "voidtech",
+  "description": "VoidTech 内部 Claude Code 插件市场：自包含工程技能与按需启用的 MCP",
+  "owner": { "name": "VoidTech" },
+  "plugins": [
+    {
+      "name": "voidtech-core",
+      "source": "./plugins/voidtech-core",
+      "description": "默认启用的核心插件：中文约定与自包含工程技能"
+    },
+    {
+      "name": "voidtech-mcp-common",
+      "source": "./plugins/voidtech-mcp-common",
+      "description": "可选通用 MCP：Context7 与 Chrome DevTools",
+      "defaultEnabled": false
+    },
+    {
+      "name": "voidtech-mcp-apple",
+      "source": "./plugins/voidtech-mcp-apple",
+      "description": "可选 Apple MCP：Apple Docs 与 XcodeBuildMCP",
+      "defaultEnabled": false
+    }
+  ]
+}
