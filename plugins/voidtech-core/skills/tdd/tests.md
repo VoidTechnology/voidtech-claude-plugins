@@ -1,6 +1,6 @@
 # 好测试与坏测试
 
-> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 汉化:仅译用户可见文案,逻辑/结构未改。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
+> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 已汉化并完成 VoidTech 插件内自包含适配。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
 
 ## 好测试
 
@@ -21,7 +21,7 @@ test("user can checkout with valid cart", async () => {
 - 测试用户/调用方在意的行为
 - 只使用公开 API
 - 能在内部重构中存活
-- 描述 WHAT，而非 HOW
+- 描述系统做什么，而不是内部如何实现
 - 每个测试一个逻辑断言
 
 ## 坏测试
@@ -43,7 +43,7 @@ test("checkout calls paymentService.process", async () => {
 - 测试私有方法
 - 对调用次数/顺序做断言
 - 行为没变、重构却让测试挂掉
-- 测试名描述的是 HOW 而非 WHAT
+- 测试名描述内部如何实现，而不是系统做什么
 - 通过外部手段而非接口进行验证
 
 ```typescript

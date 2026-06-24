@@ -1,6 +1,6 @@
 # CONTEXT.md 格式
 
-> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 汉化:仅译用户可见文案,逻辑/结构未改。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
+> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 已汉化并完成 VoidTech 插件内自包含适配。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
 
 ## 结构
 
@@ -57,6 +57,6 @@ _Avoid_: Client, buyer, account
 
 - 若存在 `CONTEXT-MAP.md`，读它来找各上下文
 - 若只存在根目录的 `CONTEXT.md`，即单上下文
-- 若两者都不存在，在第一个术语被敲定时惰性创建根目录的 `CONTEXT.md`
+- 若两者都不存在，在确认第一个术语时按需创建根目录的 `CONTEXT.md`
 
 当存在多个上下文时，推断当前话题关联哪一个。若不清楚，就提问。

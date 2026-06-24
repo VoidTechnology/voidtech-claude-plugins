@@ -2,8 +2,8 @@
 
 ## 审计基线
 
-- 日期：2026-06-23
-- Claude Code：2.1.186
+- 日期：2026-06-24
+- Claude Code：2.1.187
 - 本地平台：macOS arm64
 - 目标最低版本：Claude Code 2.1.154
 - 规范来源：[Plugins reference](https://code.claude.com/docs/en/plugins-reference.md)、[Skills](https://code.claude.com/docs/en/skills.md)、[Hooks](https://code.claude.com/docs/en/hooks.md)、[MCP](https://code.claude.com/docs/en/mcp.md)
@@ -32,6 +32,12 @@
 
 - Marketplace 与三个插件均通过 `claude plugin validate --strict`。
 - `voidtech-core` 不包含 MCP，发布技能不引用 gstack 外部运行时。
+- `voidtech-core` 恰好发布约定的 20 个技能命令；目录名、frontmatter 展示名和内部引用已经同步。
+- 内部编排技能 `plan-review-core` 不在用户命令菜单中展示，但仍可由模型调用。
+- 20 个核心技能已逐项完成逻辑闭环审计；本地引用、跨技能调用、随附脚本定位和许可证由自动检查约束。
+- 20 个核心技能及其参考文件已完成中文可读性审查；已淘汰的生硬译法由自动检查约束。
+- issue 跟踪器等任务固有的外部系统均先做适配器与认证检查，无法写入时交付完整草稿，不依赖上游初始化技能。
+- 架构审查 HTML 不加载 CDN 或其他远程运行时。
 - 发布区所有 `SKILL.md` 均不超过 500 行。
 - 本地 MCP 包均固定精确版本。
 - Chrome DevTools MCP 默认关闭使用统计与 CrUX URL 查询。
@@ -50,6 +56,6 @@
 
 Apple Docs MCP `1.0.26` 的传递依赖 `whatwg-encoding@3.1.1` 已弃用，但当前 `npm audit --audit-level=high` 结果为 0 个漏洞；此项不阻塞发布，但升级时必须复查。
 
-## 发布前合规事项
+## 已完成合规处理
 
-Git 历史提交 `61913cd` 仍包含无许可证的 `karpathy-guidelines` 原文。公开发布前必须二选一：经明确审批后清理历史，或从当前干净工作树创建不继承旧历史的新仓库。本次审计不擅自改写 Git 历史。
+仓库已从完成审计的干净工作树重新初始化，当前历史起点为根提交 `29d8d37`，不继承曾包含无许可证 `karpathy-guidelines` 原文的旧历史。旧 `.git` 仅保存在仓库外的本机临时备份中，不属于交付内容。

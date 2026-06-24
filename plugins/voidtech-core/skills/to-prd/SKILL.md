@@ -1,13 +1,13 @@
 ---
 name: to-prd
-description: 把当前对话转化为 PRD 并发布到项目的 issue 追踪器——不做访谈，只是综合你们已经讨论过的内容。
+description: 把当前对话整理成 PRD 并发布到项目的 issue 追踪器。只综合已经讨论过的内容，不重新开展需求访谈。
 disable-model-invocation: true
 ---
-> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 汉化:仅译用户可见文案,逻辑/结构未改。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
+> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 已汉化并完成 VoidTech 插件内自包含适配。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
 
 本技能接收当前对话上下文与对代码库的理解，产出一份 PRD。不要访谈用户——只综合你已经掌握的内容。
 
-issue 追踪器与 triage 标签词表应当已经提供给你了——如果没有，运行 `/setup-matt-pocock-skills`。
+开始前读取 [Issue 跟踪器适配契约](../_shared/ISSUE-TRACKER.md)，据此识别平台、认证和标签映射；不要求任何预先安装的初始化技能。
 
 ## 流程
 
@@ -15,33 +15,33 @@ issue 追踪器与 triage 标签词表应当已经提供给你了——如果没
 
 2. 勾勒出你将用来测试该功能的 seam。优先使用已有的 seam 而非新建。使用尽可能高的 seam。如果确需新的 seam，请在尽可能高的位置提出。跨代码库的 seam 越少越好——理想数量是一个。
 
-与用户确认这些 seam 是否符合他们的预期。
+若对话中已经确认 seam，把它作为决策记录；若尚未确认，把建议写成 `Testing Decisions` 中明确标注的 proposed decision。不要为此重新开启需求访谈。
 
-3. 使用下面的模板写出 PRD，然后将其发布到项目的 issue 追踪器。打上 `ready-for-agent` triage 标签——无需额外 triage。
+3. 使用下面的模板写出 PRD，然后将其发布到项目的 issue 追踪器。使用 category `enhancement` 与 state `ready-for-agent` 对应的实际标签，无需再走 issue 整理流程。若跟踪器不可用，按适配契约生成完整 Markdown 草稿并返回路径。
 
 <prd-template>
 
-## Problem Statement
+## 问题
 
 用户所面临的问题，从用户的视角出发。
 
-## Solution
+## 方案
 
 针对该问题的解决方案，从用户的视角出发。
 
-## User Stories
+## 用户故事
 
 一份很长的、带编号的用户故事列表。每条用户故事应采用如下格式：
 
-1. As an <actor>, I want a <feature>, so that <benefit>
+1. 作为 <角色>，我希望 <功能>，从而 <收益>
 
 <user-story-example>
-1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
+1. 作为手机银行用户，我希望查看各账户余额，从而更合理地安排支出
 </user-story-example>
 
 这份用户故事列表应当极其详尽，覆盖该功能的所有方面。
 
-## Implementation Decisions
+## 实现决策
 
 一份已做出的实现决策列表。可以包括：
 
@@ -55,9 +55,9 @@ issue 追踪器与 triage 标签词表应当已经提供给你了——如果没
 
 不要包含具体的文件路径或代码片段。它们可能很快就过时了。
 
-例外：如果某个原型产出的代码片段比散文更精确地编码了一项决策（状态机、reducer、schema、type shape），就把它内联到相关决策中，并简要注明它来自一个原型。只保留富含决策的部分——不是一个可运行的 demo，只是重要的那几段。
+例外：如果原型中的代码片段能更准确地表达某项决策（状态机、reducer、schema、类型结构），可以把它放在相关决策中，并注明来源。只保留表达决策所需的部分，不要附上完整演示。
 
-## Testing Decisions
+## 测试决策
 
 一份已做出的测试决策列表。包括：
 
@@ -65,11 +65,11 @@ issue 追踪器与 triage 标签词表应当已经提供给你了——如果没
 - 哪些模块将被测试
 - 测试的先例（即代码库中类似类型的测试）
 
-## Out of Scope
+## 不在范围内
 
 对本 PRD 范围之外内容的描述。
 
-## Further Notes
+## 补充说明
 
 关于该功能的任何补充说明。
 

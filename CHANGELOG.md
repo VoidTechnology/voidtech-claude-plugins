@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.0 - 2026-06-24
+
+### Changed
+
+- 审查 20 个核心技能及其参考文件的汉化内容，清理生硬直译、夸张比喻、口语化表达和未解释的中英混用。
+- 统一技能入口说明、工作流标题、Issue 模板和架构术语的中文表达；保留命令、字段名、代码块及必要的通用技术术语。
+- 重写技能写作术语表和学习类参考格式，使定义更短、更直接，并在首次出现时解释必要术语。
+- 增加汉化文案回归检查，防止已淘汰的生硬译法重新进入发布技能。
+
+## 0.4.0 - 2026-06-24
+
+### Changed
+
+- 对 20 个核心技能完成插件内逻辑闭环审计，清除对未分发上游命令、目录和远程前端运行时的依赖。
+- 为 issue 工作流增加插件内跟踪器适配契约、标签发现、认证检查与 Markdown 草稿降级路径。
+- 随附脚本统一通过 `${CLAUDE_PLUGIN_ROOT}` 定位；Git 防护脚本增加输入校验与行为测试。
+- 架构审查报告改为纯内联 HTML、CSS 与 SVG，断网时仍可完整阅读。
+- 修正技能编写指南，使调用可见性与当前 Claude Code 的 `disable-model-invocation`、`user-invocable` 语义一致。
+- 补齐 `text-naturalizer` 的本地许可证，并将第三方声明更新为“已汉化并完成插件内自包含适配”。
+
+## 0.3.0 - 2026-06-24
+
+### Changed
+
+- 将 11 个不够直观的技能命令迁移为简单英文名称：`debug`、`git-safety`、`plan-review`、`plan-review-docs`、`plan-review-core`、`architecture-review`、`fix-conflicts`、`setup-git-checks`、`learn`、`prepare-issue`、`write-skills`。
+- 保留 `codebase-design`、`domain-modeling`、`handoff`、`implement`、`prototype`、`tdd`、`text-naturalizer`、`to-issues`、`to-prd`。
+- 将 `plan-review-core` 标记为仅供模型编排的内部技能，不在用户命令菜单中展示。
+- 增加核心技能公共命令名称契约检查，避免目录名与展示名再次漂移。
+
 ## 0.2.0 - 2026-06-23
 
 ### Changed

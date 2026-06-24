@@ -1,46 +1,46 @@
-# Design It Twice
+# 多方案接口设计
 
-> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 汉化:仅译用户可见文案,逻辑/结构未改。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
+> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 已汉化并完成 VoidTech 插件内自包含适配。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
 
-当用户想为某个选定的加深候选项探索备选接口时，使用这种并行子 agent 模式。基于 "Design It Twice"（Ousterhout）——你的第一个想法不太可能是最好的。
+当用户想为某个模块深化方案比较多种接口时，使用本流程。核心原则来自 Ousterhout 的 “Design It Twice”：不要只评估第一个想到的方案。
 
 使用 [SKILL.md](SKILL.md) 中的词汇——**module**、**interface**、**seam**、**adapter**、**leverage**。
 
 ## 流程
 
-### 1. 框定问题空间
+### 1. 明确问题和约束
 
-在拉起子 agent 之前，为选定的候选项写一份面向用户的问题空间说明：
+在启动子 agent 之前，为选定的候选项写一份面向用户的问题说明：
 
 - 任何新接口都需要满足的约束
 - 它会依赖的依赖，以及它们落入哪个类别（见 [DEEPENING.md](DEEPENING.md)）
-- 一段粗略的示意代码草图，用来落地这些约束——不是一个提案，只是把约束变具体的一种方式
+- 一段简短的示意代码，用来具体说明这些约束；它不是正式方案
 
 把这个展示给用户，然后立即进入步骤 2。用户阅读和思考的同时，子 agent 并行工作。
 
-### 2. 拉起子 agent
+### 2. 生成独立方案
 
-用 Agent 工具并行拉起 3 个以上子 agent。每一个都必须为加深后的模块产出一个**截然不同**的接口。
+优先用 Agent 工具并行启动至少 3 个子 agent。若当前环境没有 Agent 工具，则按下列约束依次独立设计三个方案；完成当前方案前不要融合前一个方案。无论采用哪种方式，每个方案都必须为深化后的模块提供一个明显不同的接口。
 
-用一份独立的技术 brief 提示每个子 agent（文件路径、耦合细节、来自 [DEEPENING.md](DEEPENING.md) 的依赖类别、seam 背后是什么）。该 brief 独立于步骤 1 中面向用户的问题空间说明。给每个 agent 一个不同的设计约束：
+为每个子 agent 提供独立的技术说明，包括文件路径、耦合关系、[DEEPENING.md](DEEPENING.md) 中的依赖类别，以及 seam 背后的实现。技术说明与步骤 1 的用户说明分开。每个 agent 使用不同的设计约束：
 
-- Agent 1: "Minimize the interface — aim for 1–3 entry points max. Maximise leverage per entry point."
-- Agent 2: "Maximise flexibility — support many use cases and extension."
-- Agent 3: "Optimise for the most common caller — make the default case trivial."
-- Agent 4 (if applicable): "Design around ports & adapters for cross-seam dependencies."
+- Agent 1：把接口压缩到 1–3 个入口，尽量提高每个入口能提供的能力。
+- Agent 2：优先考虑扩展性，支持更多合理用例。
+- Agent 3：优先优化最常见的调用方式，让默认路径最简单。
+- Agent 4（适用时）：围绕 ports and adapters 设计跨 seam 依赖。
 
-在 brief 中同时纳入 [SKILL.md](SKILL.md) 词汇与 CONTEXT.md 词汇，这样每个子 agent 给事物命名时都与架构语言和项目领域语言保持一致。
+技术说明应同时使用 [SKILL.md](SKILL.md) 的架构词汇和 `CONTEXT.md` 的领域词汇，保证各方案命名一致。
 
 每个子 agent 输出：
 
-1. 接口（types、methods、params——外加 invariants、ordering、error modes）
-2. 展示调用者如何使用它的用法示例
+1. 接口，包括类型、方法、参数、不变式、调用顺序和错误处理方式
+2. 展示调用方如何使用接口的示例
 3. 实现在 seam 背后藏了什么
 4. 依赖策略与 adapter（见 [DEEPENING.md](DEEPENING.md)）
-5. 取舍——哪里 leverage 高，哪里薄
+5. 取舍，包括哪些接口收益较高、哪些接口仍然复杂
 
 ### 3. 呈现并比较
 
-按顺序呈现各设计，让用户能逐个吸收，然后用散文比较它们。从 **depth**（接口处的 leverage）、**locality**（变更集中在何处）和 **seam placement（seam 放置）** 三方面对比。
+依次呈现各方案，再从三方面比较：**depth**（接口是否足够简单、能力是否完整）、**locality**（修改是否集中）和 **seam placement**（可替换接缝的位置是否合理）。
 
-比较之后，给出你自己的推荐：你认为哪个设计最强以及为什么。如果来自不同设计的元素能很好地组合，提出一个混合方案。要有主见——用户想要一个强有力的判断，而不是一份菜单。
+比较之后，明确推荐一个方案并说明理由。如果不同方案的部分设计可以合理组合，再提出一个混合方案。不要只列选项而不给结论。

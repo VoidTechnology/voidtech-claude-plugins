@@ -1,6 +1,6 @@
 # 何时该 mock
 
-> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 汉化:仅译用户可见文案,逻辑/结构未改。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
+> Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 已汉化并完成 VoidTech 插件内自包含适配。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
 
 只在**系统边界**处 mock：
 
@@ -13,7 +13,7 @@
 
 - 你自己的类/模块
 - 内部协作者
-- 任何你能掌控的东西
+- 任何由当前代码库控制且可以直接测试的模块
 
 ## 为可 mock 性而设计
 
@@ -55,7 +55,7 @@ const api = {
 ```
 
 SDK 方式意味着：
-- 每个 mock 返回一个特定形态
+- 每个 mock 返回固定的数据结构
 - 测试初始化里没有条件逻辑
-- 更容易看出某个测试动用了哪些端点
+- 更容易看出某个测试调用了哪些端点
 - 每个端点都有类型安全
