@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 - 2026-06-26
+
+### Added
+
+- 新增 `research` 技能：对陌生问题开展多信源开放网络调研，优先委派低成本子 agent 使用官方 `exa`、`firecrawl`、`youdotcom-agent-skills` 收集证据，再由主 agent 汇总结论、分歧、风险和建议。
+- 在 README、上手指南和使用指南中补充开放网络调研工作流，以及 `exa`、`firecrawl`、`youdotcom-agent-skills` 官方插件的安装与配合方式。
+
 ## 0.6.0 - 2026-06-26
 
 ### Added

@@ -1,15 +1,15 @@
 # voidtech-core 使用指南
 
-本指南讲清楚 `voidtech-core` 的 21 个技能各自做什么、如何调用，以及怎样把它们串成从想法到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南讲清楚 `voidtech-core` 的 22 个技能各自做什么、如何调用，以及怎样把它们串成从调研到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 心智模型
 
 `voidtech-core` 不是一堆零散命令，而是一套覆盖软件生命周期的**自包含工程工作流**：
 
 ```
-想法 ──▶ 规划与设计 ──▶ 实现与验证 ──▶ 协作与交接
-            │                │              │
-       领域模型/架构      TDD/原型/调试    交接/学习/文案
+想法 ──▶ 调研 ──▶ 规划与设计 ──▶ 实现与验证 ──▶ 协作与交接
+           │          │                │              │
+       多信源证据  领域模型/架构      TDD/原型/调试    交接/学习/文案
 ```
 
 三条设计约束决定了它的用法：
@@ -38,17 +38,18 @@
 | 触发性质 | 含义 | 技能 |
 |---|---|---|
 | **模型可自动触发** | 命中场景时 Claude 会主动建议或调用，也可手动 | `codebase-design`、`debug`、`domain-modeling`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
-| **仅用户显式触发** | 副作用大或需明确意图，Claude 不会自动启动，必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`ship`、`to-issues`、`to-prd`、`write-skills` |
+| **仅用户显式触发** | 副作用大、可能产生网络/成本开销，或需明确意图，Claude 不会自动启动，必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`research`、`ship`、`to-issues`、`to-prd`、`write-skills` |
 | **仅内部编排** | 不出现在命令菜单，由其他技能调用 | `plan-review-core` |
 
 > 经验法则：**会改代码或产生外部副作用的技能基本都需要你手动触发**；纯方法论类（TDD、调试、设计词汇）Claude 会按需自动援引。
 
 ## 3. 能力地图
 
-### 规划与设计
+### 调研、规划与设计
 
 | 命令 | 用途 | 主要产出 |
 |---|---|---|
+| `research` | 对不熟悉的问题做多信源开放网络调研，汇总证据、分歧、可信度和建议 | 调研结论、证据表、风险、下一步验证 |
 | `domain-modeling` | 统一领域术语、记录架构决策 | `CONTEXT.md`、ADR |
 | `codebase-design` | 设计接口简单、内部完整的深模块，确定可替换 seam | 模块/接口设计、seam 方案 |
 | `to-prd` | 把当前对话综合成 PRD（不重新访谈） | 发布到跟踪器的 PRD，或 Markdown 草稿 |
@@ -91,6 +92,7 @@
 
 ```text
 （讨论需求）
+   └─▶ /voidtech-core:research             不熟悉领域或需外部证据时，先做多信源调研
    └─▶ /voidtech-core:domain-modeling      建立/对齐领域词汇与 ADR（首次或新领域时）
    └─▶ /voidtech-core:codebase-design      设计深模块与 seam（涉及新接口时）
    └─▶ /voidtech-core:to-prd               把对话综合成 PRD
@@ -119,6 +121,14 @@
    └─▶ ready-for-agent 的 issue 可直接交给 /voidtech-core:implement
 ```
 
+### 支线：开放网络调研一个陌生问题
+
+```text
+/voidtech-core:research "调研 Claude Code deep research / subagent 社区方案，给迁移建议"
+   └─▶ 官方 exa / firecrawl / youdotcom-agent-skills 插件可用时，多信源并行收集证据
+   └─▶ 插件不可用时，退化为离线调研计划、查询清单和待验证假设
+```
+
 ### 支线：保障仓库 Git 卫生
 
 ```text
@@ -143,6 +153,7 @@
 ```text
 implement ───────────────▶ tdd ───────────▶ codebase-design
 ship ────────────────────▶ text-naturalizer
+research ────────────────▶ 官方 exa / firecrawl / youdotcom-agent-skills（按需）
 debug ───────────────────▶ architecture-review ──▶ codebase-design
                                               ├──▶ domain-modeling
                                               └──▶ plan-review-core
@@ -159,6 +170,7 @@ prepare-issue ───────────▶ domain-modeling
 
 | 我想… | 用 |
 |---|---|
+| 对陌生问题做开放网络调研并拿到建议 | `research` |
 | 把一段需求讨论变成正式 PRD | `to-prd` |
 | 把 PRD/计划拆成能干活的 issue | `to-issues` |
 | 实现一个已经定义好的功能 | `implement` |
@@ -186,6 +198,7 @@ prepare-issue ───────────▶ domain-modeling
 - **可选 MCP 插件**（默认禁用，按需 `claude plugin enable`）：
   - `voidtech-mcp-common`：Context7（查库文档）、Chrome DevTools（无头浏览器验证，对 `debug` / `prototype` 的 UI 验证很有用）。
   - `voidtech-mcp-apple`：Apple Docs、XcodeBuildMCP（iOS/macOS 开发）。
+- **开放网络调研**：安装官方 `exa`、`firecrawl`、`youdotcom-agent-skills` 后，`research` 会把它们作为搜索、抓取和带引用研究的增强层；未安装时退化为调研计划与查询清单。
 - **Figma / Vercel**：使用各自官方插件，团队 Marketplace 不分发第三方替代实现。
 
 ### 官方插件搭配矩阵
@@ -194,6 +207,7 @@ prepare-issue ───────────▶ domain-modeling
 |---|---|---|
 | 维护 VoidTech Marketplace 或新增插件能力 | `plugin-dev` | 在 `write-skills` 前后使用，补充 hooks、commands、MCP 与插件打包细节 |
 | 实现前端界面或原型 UI | `frontend-design`、`figma` | `prototype` 验证交互后，用 `frontend-design` 打磨界面；需要设计稿时接入 `figma` |
+| 陌生领域或开放网络调研 | `exa`、`firecrawl`、`youdotcom-agent-skills` | `research` 负责问题拆解、source lane 分工、证据分级和建议汇总；官方插件负责搜索、抓取和带引用研究 |
 | 实现后、发布前 | `pr-review-toolkit` 或 `code-review` | 在 `ship` 前做独立审查；二选一，避免重复审查噪音 |
 | 日常安全提醒 | `security-guidance` | 与 `git-safety` 并用：代码安全风险由官方插件提醒，危险 Git 操作由 VoidTech hook 拦截 |
 | 线上问题定位 | `sentry`、`datadog`、`posthog`、`amplitude` 等 | `debug` 确认需要生产证据时按监控栈启用 |
