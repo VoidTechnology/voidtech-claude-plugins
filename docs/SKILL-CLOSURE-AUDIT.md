@@ -2,8 +2,8 @@
 
 ## 审计口径
 
-日期：2026-06-24  
-范围：`voidtech-core` 发布的 20 个技能及其随附脚本、模板和参考文件。
+日期：2026-06-26
+范围：`voidtech-core` 发布的 21 个技能及其随附脚本、模板和参考文件。
 
 判定为闭环必须同时满足：
 
@@ -35,6 +35,7 @@
 | `prepare-issue` | 使用插件内跟踪器适配契约、agent brief 与 out-of-scope 规则；无认证时明确降级 | 通过 |
 | `prototype` | 逻辑与 UI 两个分支文档随包；只复用宿主项目已有运行时 | 通过 |
 | `setup-git-checks` | 检测 Node 前提与包管理器；只执行本地依赖；保留既有配置；提交需显式授权 | 通过 |
+| `ship` | 只允许用户显式调用；使用 `gh`/`glab` 前先检查认证；失败时停在本地；PR/MR 文案按 `text-naturalizer` 规则润色 | 通过 |
 | `tdd` | 测试、mock、重构参考随包；架构词汇指向插件内 `codebase-design` | 通过 |
 | `text-naturalizer` | 中英文规则与 MIT 许可证随包，无外部文件读取 | 通过 |
 | `to-issues` | 使用插件内跟踪器适配契约；认证不可用时交付完整 issue 草稿 | 通过 |
@@ -45,7 +46,7 @@
 
 `scripts/check-portability.sh` 持续验证：
 
-- 20 个技能目录名与 frontmatter 名称完全一致。
+- 21 个技能目录名与 frontmatter 名称完全一致。
 - 所有 `voidtech-core:<name>` 调用都指向已发布技能。
 - 不出现已删除的上游命令或远程 CDN 运行时。
 - Markdown 中代码块外的本地链接全部存在。
