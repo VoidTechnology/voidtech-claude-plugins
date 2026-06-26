@@ -53,6 +53,7 @@ Claude Code 使用技能目录名生成插件命令，frontmatter 中的 `name` 
 ## 后续修订
 
 - 2026-06-26：核心技能集合扩展为 21 个，新增公开发布入口 `ship`，用于用户显式触发 review、commit、push 与 PR/MR 创建流程。
+- 2026-06-26：核心技能集合扩展为 22 个，新增公开调研入口 `research`，用于用户显式触发多信源开放网络调研；官方 `exa`、`firecrawl`、`youdotcom-agent-skills` 作为按需增强层，不进入 VoidTech 默认依赖。
 
 ## 影响
 

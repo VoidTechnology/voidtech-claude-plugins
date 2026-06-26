@@ -83,6 +83,9 @@ claude plugin install plugin-dev@claude-plugins-official
 claude plugin install security-guidance@claude-plugins-official
 claude plugin install pr-review-toolkit@claude-plugins-official
 claude plugin install frontend-design@claude-plugins-official
+claude plugin install exa@claude-plugins-official
+claude plugin install firecrawl@claude-plugins-official
+claude plugin install youdotcom-agent-skills@claude-plugins-official
 ```
 
 安装建议：
@@ -91,6 +94,7 @@ claude plugin install frontend-design@claude-plugins-official
 - 团队希望增加代码安全提醒时安装 `security-guidance`。
 - 需要在 `/voidtech-core:ship` 前后做独立 PR/MR 审查时安装 `pr-review-toolkit` 或 `code-review`，二选一。
 - 做前端 UI 时安装 `frontend-design`；需要设计稿上下文时再安装 `figma`。
+- 需要开放网络调研时安装 `exa`、`firecrawl`、`youdotcom-agent-skills`，配合 `/voidtech-core:research` 做多信源搜索、抓取和带引用研究。
 - 已安装 `voidtech-mcp-common` 时，不再重复安装官方 `context7` 或 `chrome-devtools-mcp`。
 - 不建议常态安装 `commit-commands`、`feature-dev` 或 `superpowers`，它们和 VoidTech 主工作流职责重叠。
 
