@@ -4,7 +4,7 @@ set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-mcp-apple\nvoidtech-mcp-common'
-EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\ndomain-modeling\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nsetup-git-checks\ntdd\ntext-naturalizer\nto-issues\nto-prd\nwrite-skills'
+EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\ndomain-modeling\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-issues\nto-prd\nwrite-skills'
 failures=0
 
 pass() {
@@ -92,9 +92,32 @@ if [[ -d plugins/voidtech-core ]]; then
     fail "中文 hook 应从 UserPromptSubmit 改为 SessionStart"
   fi
 
+  if jq -e '
+    [.hooks.SessionStart[].hooks[].command] |
+    index("${CLAUDE_PLUGIN_ROOT}/hooks/zh-locale.sh") != null and
+    index("${CLAUDE_PLUGIN_ROOT}/hooks/check-update.sh") != null
+  ' plugins/voidtech-core/hooks/hooks.json >/dev/null 2>&1; then
+    pass "SessionStart 同时注入中文约定与更新检查"
+  else
+    fail "SessionStart 缺少中文约定或更新检查"
+  fi
+
+  update_check=plugins/voidtech-core/hooks/check-update.sh
+  if [[ -x "$update_check" ]]; then
+    pass "更新检查脚本可执行"
+  else
+    fail "更新检查脚本缺少执行权限"
+  fi
+
+  if bash scripts/test-update-check.sh >/dev/null; then
+    pass "更新检查脚本行为测试"
+  else
+    fail "更新检查脚本行为测试未通过"
+  fi
+
   core_skill_count=$(find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
-  if [[ "$core_skill_count" == "20" ]]; then
-    pass "voidtech-core 发布 20 个技能"
+  if [[ "$core_skill_count" == "21" ]]; then
+    pass "voidtech-core 发布 21 个技能"
   else
     fail "voidtech-core 技能数量异常：$core_skill_count"
   fi
@@ -328,10 +351,13 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       jq -r '.[] | select(.id == "voidtech-core@voidtech") | .installPath' <<<"$installed_json"
     )
     installed_resources=(
+      "hooks/check-update.sh"
+      "hooks/zh-locale.sh"
       "skills/_shared/ISSUE-TRACKER.md"
       "skills/architecture-review/HTML-REPORT.md"
       "skills/debug/scripts/hitl-loop.template.sh"
       "skills/git-safety/scripts/block-dangerous-git.sh"
+      "skills/ship/SKILL.md"
       "skills/text-naturalizer/LICENSE"
     )
     missing_installed_resource=0
@@ -345,10 +371,11 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
     done
 
     if ((missing_installed_resource == 0)) && \
+      [[ -x "$core_install_path/hooks/check-update.sh" ]] && \
       [[ -x "$core_install_path/skills/git-safety/scripts/block-dangerous-git.sh" ]]; then
-      pass "隔离安装保留 Git 防护脚本执行权限"
+      pass "隔离安装保留随附脚本执行权限"
     else
-      fail "隔离安装未保留 Git 防护脚本执行权限"
+      fail "隔离安装未保留随附脚本执行权限"
     fi
   else
     fail "隔离安装失败"

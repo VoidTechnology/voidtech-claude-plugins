@@ -1,6 +1,6 @@
 # voidtech-core 使用指南
 
-本指南讲清楚 `voidtech-core` 的 20 个技能各自做什么、如何调用，以及怎样把它们串成从想法到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南讲清楚 `voidtech-core` 的 21 个技能各自做什么、如何调用，以及怎样把它们串成从想法到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 心智模型
 
@@ -38,7 +38,7 @@
 | 触发性质 | 含义 | 技能 |
 |---|---|---|
 | **模型可自动触发** | 命中场景时 Claude 会主动建议或调用，也可手动 | `codebase-design`、`debug`、`domain-modeling`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
-| **仅用户显式触发** | 副作用大或需明确意图，Claude 不会自动启动，必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`to-issues`、`to-prd`、`write-skills` |
+| **仅用户显式触发** | 副作用大或需明确意图，Claude 不会自动启动，必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`ship`、`to-issues`、`to-prd`、`write-skills` |
 | **仅内部编排** | 不出现在命令菜单，由其他技能调用 | `plan-review-core` |
 
 > 经验法则：**会改代码或产生外部副作用的技能基本都需要你手动触发**；纯方法论类（TDD、调试、设计词汇）Claude 会按需自动援引。
@@ -66,6 +66,7 @@
 | `prototype` | 一次性原型验证设计（终端验逻辑 / 同路由比 UI） | 抛弃型验证产物 |
 | `debug` | 建稳定复现→二分定位→根因→补回归测试 | 修复 + 防回归测试 |
 | `architecture-review` | 扫描代码库找整合浅模块/简化接口的机会 | HTML 报告 + 选中方案审查 |
+| `ship` | 审查 diff、运行验证、提交、推送并创建 PR/MR | 远端 PR/MR + 验证摘要 |
 
 ### Git 与安全
 
@@ -96,6 +97,8 @@
    └─▶ /voidtech-core:plan-review          动手前逐项审查方案（高风险时）
    └─▶ /voidtech-core:to-issues            拆成端到端垂直切片
    └─▶ /voidtech-core:implement            逐个 issue 实现（内部用 tdd）
+   └─▶ （可选）官方 `pr-review-toolkit` / `code-review` 做独立审查
+   └─▶ /voidtech-core:ship                 审查、提交、推送并创建 PR/MR
    └─▶ /voidtech-core:handoff              收尾或换会话时交接
 ```
 
@@ -122,6 +125,7 @@
 /voidtech-core:git-safety        一次性配置，拦截破坏性 git 命令
 /voidtech-core:setup-git-checks  一次性配置 Husky 预提交门禁
 /voidtech-core:fix-conflicts     遇到 merge/rebase 冲突时按需调用
+/voidtech-core:ship              收尾时 review/commit/push 并创建 PR 或 MR
 ```
 
 ### 支线：文案、学习与技能维护
@@ -138,6 +142,7 @@
 
 ```text
 implement ───────────────▶ tdd ───────────▶ codebase-design
+ship ────────────────────▶ text-naturalizer
 debug ───────────────────▶ architecture-review ──▶ codebase-design
                                               ├──▶ domain-modeling
                                               └──▶ plan-review-core
@@ -157,6 +162,7 @@ prepare-issue ───────────▶ domain-modeling
 | 把一段需求讨论变成正式 PRD | `to-prd` |
 | 把 PRD/计划拆成能干活的 issue | `to-issues` |
 | 实现一个已经定义好的功能 | `implement` |
+| 审查、提交、推送并创建 PR/MR | `ship` |
 | 写新逻辑但想要测试保证 | `tdd` |
 | 某个东西坏了/变慢了/偶发失败 | `debug` |
 | 验证一个还没想清楚的设计或交互 | `prototype` |
@@ -176,11 +182,29 @@ prepare-issue ───────────▶ domain-modeling
 
 核心技能本身不绑定外部服务，但下列配合能放大效果：
 
-- **GitHub / issue 跟踪器**：先 `gh auth login`。`to-prd`、`to-issues`、`prepare-issue` 会按 [Issue 跟踪器适配契约](../plugins/voidtech-core/skills/_shared/ISSUE-TRACKER.md) 探测平台与标签；跟踪器不可用时退化为本地 Markdown 草稿。
+- **GitHub / GitLab / issue 跟踪器**：GitHub 先 `gh auth login`，GitLab 先 `glab auth login`。`to-prd`、`to-issues`、`prepare-issue` 会按 [Issue 跟踪器适配契约](../plugins/voidtech-core/skills/_shared/ISSUE-TRACKER.md) 探测平台与标签；跟踪器不可用时退化为本地 Markdown 草稿。
 - **可选 MCP 插件**（默认禁用，按需 `claude plugin enable`）：
   - `voidtech-mcp-common`：Context7（查库文档）、Chrome DevTools（无头浏览器验证，对 `debug` / `prototype` 的 UI 验证很有用）。
   - `voidtech-mcp-apple`：Apple Docs、XcodeBuildMCP（iOS/macOS 开发）。
 - **Figma / Vercel**：使用各自官方插件，团队 Marketplace 不分发第三方替代实现。
+
+### 官方插件搭配矩阵
+
+| 工作流位置 | 可搭配官方插件 | 使用方式 |
+|---|---|---|
+| 维护 VoidTech Marketplace 或新增插件能力 | `plugin-dev` | 在 `write-skills` 前后使用，补充 hooks、commands、MCP 与插件打包细节 |
+| 实现前端界面或原型 UI | `frontend-design`、`figma` | `prototype` 验证交互后，用 `frontend-design` 打磨界面；需要设计稿时接入 `figma` |
+| 实现后、发布前 | `pr-review-toolkit` 或 `code-review` | 在 `ship` 前做独立审查；二选一，避免重复审查噪音 |
+| 日常安全提醒 | `security-guidance` | 与 `git-safety` 并用：代码安全风险由官方插件提醒，危险 Git 操作由 VoidTech hook 拦截 |
+| 线上问题定位 | `sentry`、`datadog`、`posthog`、`amplitude` 等 | `debug` 确认需要生产证据时按监控栈启用 |
+| 语言级代码导航 | `swift-lsp`、`kotlin-lsp`、`typescript-lsp`、`pyright-lsp` 等 | 大型代码库重构、跳转和引用分析时启用 |
+
+### 不建议重复的官方插件
+
+- `commit-commands`：和 `ship` 的 commit/push/PR/MR 流程重叠。
+- `feature-dev`：和 `to-prd`、`to-issues`、`implement`、`plan-review` 的主线重叠。
+- `superpowers`：会引入另一套工程方法论，容易和 VoidTech 工作流混用。
+- `context7`、`chrome-devtools-mcp`：已由 `voidtech-mcp-common` 覆盖。
 
 ## 8. 边界与注意事项
 

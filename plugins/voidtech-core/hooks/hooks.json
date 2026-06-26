@@ -3,7 +3,8 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/zh-locale.sh" }
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/zh-locale.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/check-update.sh" }
         ]
       }
     ]
