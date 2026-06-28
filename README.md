@@ -36,6 +36,44 @@ claude plugin install voidtech-core@voidtech
 
 完整安装、迁移与 MCP 配置见 [ONBOARDING.md](ONBOARDING.md)；每个技能的用途与工作流见 [USAGE.md](docs/USAGE.md)。
 
+## AI 一键安装（复制提示词）
+
+不想手敲命令？把下面整段提示词复制给 Claude Code，它会自动添加 Marketplace、安装核心插件，并按[官方插件搭配](#官方插件搭配)矩阵补齐增强插件。提示词内已带上仓库地址，避免模型无法定位本仓库。
+
+```text
+请帮我安装 VoidTech 的 Claude Code 插件市场及其官方搭配插件。
+
+仓库地址：https://github.com/VoidTechnology/voidtech-claude-plugins
+（GitHub 简写：VoidTechnology/voidtech-claude-plugins）
+
+按以下步骤执行，每步用 claude CLI 完成并校验结果：
+
+【第 1 步：添加 Marketplace 并装核心插件】
+- claude plugin marketplace add https://github.com/VoidTechnology/voidtech-claude-plugins
+  （若该写法不被支持，改用 GitHub 简写：claude plugin marketplace add VoidTechnology/voidtech-claude-plugins）
+- claude plugin install voidtech-core@voidtech
+voidtech-core 提供 21 个自包含中文工程技能 + 中文协作约定（SessionStart hook）。
+
+【第 2 步：按搭配矩阵安装官方插件（来自 claude-plugins-official）】
+安装命令格式：claude plugin install <名称>@claude-plugins-official
+要安装的插件：
+- plugin-dev            （配 write-skills：补充 hooks/commands/MCP/打包）
+- frontend-design、figma （配 prototype：打磨界面 / 接入设计稿）
+- security-guidance      （配 git-safety：代码安全风险提醒）
+- sentry、datadog、posthog、amplitude （配 debug：线上问题需生产证据时按监控栈启用）
+- swift-lsp、kotlin-lsp、typescript-lsp、pyright-lsp （大型代码库重构/跳转/引用分析）
+
+【第 3 步：发布前审查插件——二选一，装一个即可，避免重复审查噪音】
+先问我要 pr-review-toolkit（多 agent、覆盖全）还是 code-review（轻量、低噪音），
+按我的选择只安装其中一个（同样 @claude-plugins-official）。
+
+【要求】
+- 安装前先列出 marketplace 实际存在的插件名，确认拼写无误再装。
+- 逐个安装并汇报每个的成功/失败；失败的给出原因。
+- 全部完成后用 claude plugin list 输出最终启用清单。
+- 提醒我：插件在下次启动会话后生效；sentry/datadog/posthog/amplitude/figma 等 MCP 型插件首次使用需登录或配置 API key；LSP 插件依赖本机对应语言工具链。
+```
+
 ## 包含的插件
 
 | 插件 | 版本 | 默认 | 内容 |
