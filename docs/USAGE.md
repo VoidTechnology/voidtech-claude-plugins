@@ -2,7 +2,7 @@
 
 本指南讲清楚 `voidtech-core` 的 22 个技能各自做什么、如何调用，以及怎样把它们串成从调研到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
-## 1. 心智模型
+## 1. 整体思路
 
 `voidtech-core` 不是一堆零散命令，而是一套覆盖软件生命周期的**自包含工程工作流**：
 
@@ -55,7 +55,7 @@
 | `to-prd` | 把当前对话综合成 PRD（不重新访谈） | 发布到跟踪器的 PRD，或 Markdown 草稿 |
 | `to-issues` | 把计划/PRD 拆成端到端垂直切片 | 可独立认领验证的 issue 列表 |
 | `prepare-issue` | 按分类+状态整理 issue/PR，验证主张，补信息 | agent 可直接执行的实现说明 |
-| `plan-review` | 逐项追问审查方案，找遗漏、冲突、未验证假设 | 审查结论 |
+| `plan-review` | 逐项检查方案，找遗漏、冲突和未验证假设 | 审查结论 |
 | `plan-review-docs` | 同上，并同步整理 ADR 与业务词汇表 | 审查结论 + 文档更新 |
 
 ### 实现与验证
@@ -181,7 +181,7 @@ prepare-issue ───────────▶ feature-context
 | 整理别人提的 issue 或外部 PR | `prepare-issue` |
 | 动手前请人挑方案的毛病 | `plan-review` / `plan-review-docs` |
 | 改善模块边界与接口 | `codebase-design` / `architecture-review` |
-| 统一业务词汇、澄清场景边界、沉淀架构决策 | `feature-context` |
+| 统一业务词汇、澄清场景边界、记录架构决策 | `feature-context` |
 | 防止误删/误推/误重置 | `git-safety` |
 | 加提交前的格式与测试门禁 | `setup-git-checks` |
 | 卡在合并冲突里 | `fix-conflicts` |
@@ -201,7 +201,7 @@ prepare-issue ───────────▶ feature-context
 - **开放网络调研**：安装官方 `exa`、`firecrawl`、`youdotcom-agent-skills` 后，`research` 会把它们作为搜索、抓取和带引用研究的增强层；未安装时退化为调研计划与查询清单。
 - **Figma / Vercel**：使用各自官方插件，团队 Marketplace 不分发第三方替代实现。
 
-### 官方插件搭配矩阵
+### 官方插件搭配表
 
 | 工作流位置 | 可搭配官方插件 | 使用方式 |
 |---|---|---|

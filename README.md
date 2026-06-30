@@ -2,7 +2,7 @@
 
 > VoidTech 内部 Claude Code 插件市场：一套自包含的中文工程工作流，加上按需启用的 MCP。
 
-`Claude Code ≥ 2.1.154` · `voidtech-core v0.8.0` · 内部分发
+`Claude Code ≥ 2.1.154` · `voidtech-core v0.8.1` · 内部分发
 
 VoidTech 团队的 Claude Code Marketplace。它把团队约定固化成可独立安装、可验证、许可证明确的插件，让每位成员开箱即用同一套工程方法论，而把高权限的 MCP 留作按需启用。
 
@@ -78,7 +78,7 @@ voidtech-core 提供 21 个自包含中文工程技能 + 中文协作约定（Se
 
 | 插件 | 版本 | 默认 | 内容 |
 |---|---|---|---|
-| [`voidtech-core`](plugins/voidtech-core) | 0.8.0 | ✅ 启用 | 中文约定 + 22 个自包含工程技能 |
+| [`voidtech-core`](plugins/voidtech-core) | 0.8.1 | ✅ 启用 | 中文约定 + 22 个自包含工程技能 |
 | [`voidtech-mcp-common`](plugins/voidtech-mcp-common) | 0.1.0 | ⛔ 禁用 | Context7（库文档）、Chrome DevTools（无头浏览器验证） |
 | [`voidtech-mcp-apple`](plugins/voidtech-mcp-apple) | 0.1.0 | ⛔ 禁用 | Apple Docs、XcodeBuildMCP（iOS/macOS 开发） |
 
@@ -131,7 +131,7 @@ templates/project-settings.json   项目 .claude/settings.json 合入样板
 | [USAGE.md](docs/USAGE.md) | 技能用法、工作流与场景速查 |
 | [TRIAGE.md](TRIAGE.md) | 第三方技能的处置依据 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
-| [docs/SKILL-CLOSURE-AUDIT.md](docs/SKILL-CLOSURE-AUDIT.md) | 逐技能逻辑闭环证据 |
+| [docs/SKILL-CLOSURE-AUDIT.md](docs/SKILL-CLOSURE-AUDIT.md) | 逐技能自洽性证据 |
 | [docs/SKILL-LANGUAGE-AUDIT.md](docs/SKILL-LANGUAGE-AUDIT.md) | 中文可读性审计 |
 | [docs/PORTABILITY-AUDIT.md](docs/PORTABILITY-AUDIT.md) | 可移植性与合规审计 |
 | [ADR-0001](docs/decisions/0001-split-core-and-optional-mcp.md) | 核心与可选 MCP 拆分 |

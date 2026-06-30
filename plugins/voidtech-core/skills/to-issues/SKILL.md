@@ -29,7 +29,7 @@ disable-model-invocation: true
 
 <vertical-slice-rules>
 
-- 每片切片交付一条窄而**完整**的路径，穿过每一层（schema、API、UI、测试）
+- 每个切片交付一条窄而**完整**的路径，穿过每一层（schema、API、UI、测试）
 - 一片完成的切片本身可演示或可验证
 - 必要的前置重构应拆成更早完成的独立 issue
 
@@ -37,7 +37,7 @@ disable-model-invocation: true
 
 ### 4. 向用户求证
 
-把建议的拆分以编号列表呈现。对每片切片，展示：
+把建议的拆分以编号列表呈现。对每个切片，展示：
 
 - **标题**：简短的描述性名称
 - **前置依赖**：哪些其他切片（若有）必须先完成
@@ -53,7 +53,7 @@ disable-model-invocation: true
 
 ### 5. 把 issue 发布到 issue 跟踪器
 
-对每个获批切片，向 issue 跟踪器发布一个新 issue。使用下方模板。默认把这些 issue 写到足够让无人值守 agent 直接实现，因此除非另有指示，发布时使用 category `enhancement` 与 state `ready-for-agent` 对应的实际标签。
+对每个获批切片，向 issue 跟踪器发布一个新 issue。使用下方模板。默认把这些 issue 写得足够完整，让无人值守 agent 可以直接实现；除非另有指示，发布时使用 category `enhancement` 与 state `ready-for-agent` 对应的实际标签。
 
 按依赖顺序（先发布阻塞方）发布 issue，这样你才能在 "Blocked by" 字段中引用真实的 issue 标识符。
 
