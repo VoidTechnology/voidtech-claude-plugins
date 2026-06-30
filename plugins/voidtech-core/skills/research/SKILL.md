@@ -1,6 +1,6 @@
 ---
 name: research
-description: 围绕用户不熟悉的问题开展多信源调研，优先委派多个低成本子 agent 使用官方 exa、firecrawl、youdotcom 等开放网络插件收集证据，再由主 agent 汇总判断、风险和建议。仅在用户明确要求调研、研究、找资料、比较方案或开放网络核验时手动调用。
+description: 针对用户不熟悉的问题开展多信源调研，优先委派多个低成本子 agent 使用官方 exa、firecrawl、youdotcom 等开放网络插件收集证据，再由主 agent 汇总判断、风险和建议。仅在用户明确要求调研、研究、找资料、比较方案或开放网络核验时手动调用。
 argument-hint: "要调研什么？可说明用途、时间范围、可信来源偏好和决策约束"
 disable-model-invocation: true
 ---
@@ -36,7 +36,7 @@ disable-model-invocation: true
 
 优先使用子 agent / Task 工具并行执行；可指定模型时，资料收集 agent 使用 `haiku` 或 `fable`，主 agent 保持当前模型做综合判断。若当前环境不能委派子 agent，则按相同分工顺序执行并标注为“顺序调研”。
 
-按问题选择 3-5 条 source lane，每条 lane 都要给出来源、发现和可信度：
+按问题选择 3-5 条资料线（source lane），每条资料线都要给出来源、发现和可信度：
 
 | Lane | 适用来源 | 关注点 |
 |---|---|---|

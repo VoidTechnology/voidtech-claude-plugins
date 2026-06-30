@@ -1,6 +1,6 @@
 ---
 name: to-prd
-description: 把当前对话整理成 PRD 并发布到项目的 issue 追踪器。只综合已经讨论过的内容，不重新开展需求访谈。
+description: 把当前对话整理成 PRD 并发布到项目的 issue 追踪器。只综合已经讨论过的内容，不重新访谈需求。
 disable-model-invocation: true
 ---
 > Vendored from [mattpocock/skills](https://github.com/mattpocock/skills) · MIT © 2026 Matt Pocock · upstream 6eeb81b · 已汉化并完成 VoidTech 插件内自包含适配。LICENSE 见 ../_vendor-licenses/mattpocock-LICENSE
@@ -31,7 +31,7 @@ disable-model-invocation: true
 
 ## 用户故事
 
-一份很长的、带编号的用户故事列表。每条用户故事应采用如下格式：
+一份带编号的完整用户故事列表。每条用户故事应采用如下格式：
 
 1. 作为 <角色>，我希望 <功能>，从而 <收益>
 
@@ -39,7 +39,7 @@ disable-model-invocation: true
 1. 作为手机银行用户，我希望查看各账户余额，从而更合理地安排支出
 </user-story-example>
 
-这份用户故事列表应当极其详尽，覆盖该功能的所有方面。
+这份用户故事列表应尽量覆盖该功能的主要使用场景。
 
 ## 实现决策
 
