@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 - 2026-06-30
+
+### Changed
+
+- 将 `domain-modeling` 技能迁移为 `feature-context`，降低 `domain` 在中文语境中的理解成本。
+- 同步更新跨技能调用、使用指南、审计文档和可移植性检查中的公共技能名称契约。
+- 将 `voidtech-core` 版本提升到 `0.8.0`。
+
 ## 0.7.0 - 2026-06-26
 
 ### Added

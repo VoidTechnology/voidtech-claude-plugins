@@ -21,7 +21,7 @@
 | `architecture-review` | 报告字段、图表说明、架构术语 | 已简化并补充中英文对应关系 |
 | `codebase-design` | 深模块、seam、adapter、depth、locality | 已定义必要术语并删除比喻化说明 |
 | `debug` | 反馈循环、偶发缺陷、诊断信息 | 已改为可执行的普通中文 |
-| `domain-modeling` | 术语核对、场景验证、ADR 条件 | 已删除质询式和口语化表达 |
+| `feature-context` | 业务词汇核对、场景边界验证、ADR 条件 | 已删除质询式和口语化表达 |
 | `fix-conflicts` | 冲突块、意图证据、完成条件 | 已统一 Git 术语并明确提交授权 |
 | `git-safety` | 钩子范围、拦截行为、验证步骤 | 表达清楚，无未解释术语 |
 | `handoff` | 交接范围和输出 | 表达清楚 |
