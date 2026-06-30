@@ -40,7 +40,7 @@ Claude Code 使用技能目录名生成插件命令，frontmatter 中的 `name` 
 | `triage` | `prepare-issue` |
 | `writing-great-skills` | `write-skills` |
 
-以下名称保持不变：`codebase-design`、`domain-modeling`、`handoff`、`implement`、`prototype`、`tdd`、`text-naturalizer`、`to-issues`、`to-prd`。
+以下名称保持不变：`codebase-design`、`handoff`、`implement`、`prototype`、`tdd`、`text-naturalizer`、`to-issues`、`to-prd`。
 
 `plan-review-core` 是 `plan-review` 与 `plan-review-docs` 的内部编排能力，设置 `user-invocable: false`。其余命令继续使用插件命名空间，例如 `/voidtech-core:debug`。
 
@@ -54,6 +54,7 @@ Claude Code 使用技能目录名生成插件命令，frontmatter 中的 `name` 
 
 - 2026-06-26：核心技能集合扩展为 21 个，新增公开发布入口 `ship`，用于用户显式触发 review、commit、push 与 PR/MR 创建流程。
 - 2026-06-26：核心技能集合扩展为 22 个，新增公开调研入口 `research`，用于用户显式触发多信源开放网络调研；官方 `exa`、`firecrawl`、`youdotcom-agent-skills` 作为按需增强层，不进入 VoidTech 默认依赖。
+- 2026-06-30：将 `domain-modeling` 迁移为 `feature-context`。原因是 `domain` 在中文团队沟通中容易被理解成抽象的“领域”，而该技能实际维护的是功能上下文、业务词汇、场景边界和 ADR。
 
 ## 影响
 

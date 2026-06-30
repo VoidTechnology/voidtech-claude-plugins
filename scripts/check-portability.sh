@@ -4,7 +4,7 @@ set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-mcp-apple\nvoidtech-mcp-common'
-EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\ndomain-modeling\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-issues\nto-prd\nwrite-skills'
+EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-issues\nto-prd\nwrite-skills'
 failures=0
 
 pass() {

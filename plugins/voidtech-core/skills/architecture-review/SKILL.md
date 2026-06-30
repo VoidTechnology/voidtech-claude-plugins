@@ -9,16 +9,16 @@ disable-model-invocation: true
 
 找出理解、修改和测试代码时遇到的架构阻力，并提出**模块深化方案（deepening）**：把职责零散的浅模块整合成接口简单、内部能力完整的深模块。目标是提升可测试性，让开发者和 AI 更容易理解代码。
 
-审查时使用项目现有的领域模型和统一的架构术语：
+审查时使用项目现有的功能上下文和统一的架构术语：
 
 - 运行 `voidtech-core:codebase-design` 技能，了解架构词汇（**module**、**interface**、**depth**、**seam**、**adapter**、**leverage**、**locality**）及其原则（移除模块检验、“接口就是测试面”、“一个 adapter 通常不足以证明需要 seam，两个 adapter 才能证明替换需求真实存在”）。每条建议都使用这些术语，不要换成含义不完全相同的 "component"、"service"、"API" 或 "boundary"。
-- `CONTEXT.md` 中的领域语言为好的 seam 命名；`docs/adr/` 中的 ADR 记录了本命令不应重新争论的决策。
+- `CONTEXT.md` 中的业务词汇为好的 seam 命名；`docs/adr/` 中的 ADR 记录了本命令不应重新争论的决策。
 
 ## 流程
 
 ### 1. 探查
 
-先阅读项目的领域术语表（`CONTEXT.md`）以及你所触及区域内的任何 ADR。
+先阅读项目的业务词汇表（`CONTEXT.md`）以及你所触及区域内的任何 ADR。
 
 然后用 Agent 工具配 `subagent_type=Explore` 走查代码库。若当前环境没有 Agent 工具，直接使用文件搜索、符号搜索和测试入口完成同样的探查，不得因此要求安装上游工具。根据实际代码寻找以下问题：
 
@@ -47,7 +47,7 @@ disable-model-invocation: true
 
 报告以 **Top recommendation（首选建议）** 段落收尾：说明应优先处理哪个候选项以及原因。
 
-**领域用 CONTEXT.md 词汇，架构用 `voidtech-core:codebase-design` 词汇。** 如果 `CONTEXT.md` 定义了 "Order"，就谈 "the Order intake module"——而不是 "the FooBarHandler"，也不是 "the Order service"。
+**业务命名用 `CONTEXT.md` 词汇，架构说明用 `voidtech-core:codebase-design` 词汇。** 如果 `CONTEXT.md` 定义了 "Order"，就谈 "the Order intake module"——而不是 "the FooBarHandler"，也不是 "the Order service"。
 
 **ADR 冲突**：如果某个候选项与现有 ADR 抵触，只有在当前问题严重到值得重新审视该 ADR 时才提出。在卡片中清楚标注，例如 _"contradicts ADR-0007 — but worth reopening because…"_。不要列出 ADR 已明确否决、且没有新证据支持的重构。
 
@@ -59,7 +59,7 @@ disable-model-invocation: true
 
 用户选中候选项后，运行 `voidtech-core:plan-review-core`，逐项检查约束、依赖、深化后的模块形态、seam（可替换接缝）背后的实现，以及哪些测试需要保留或替换。
 
-副作用在决策成形时就地发生——运行 `voidtech-core:domain-modeling` 技能，让领域模型随进展保持最新：
+副作用在决策成形时就地发生——运行 `voidtech-core:feature-context` 技能，让功能上下文随进展保持最新：
 
 - **要用 `CONTEXT.md` 中没有的概念为深化后的模块命名？** 把该术语加入 `CONTEXT.md`。若文件不存在则按需创建。
 - **在对话中明确了某个模糊术语？** 当场更新 `CONTEXT.md`。

@@ -20,17 +20,17 @@
 
 | 技能 | 闭环证据 | 结果 |
 |---|---|---|
-| `architecture-review` | 使用插件内 `codebase-design`、`plan-review-core`、`domain-modeling`；报告为离线 HTML/CSS/SVG；无 Agent 工具时本地探查 | 通过 |
+| `architecture-review` | 使用插件内 `codebase-design`、`plan-review-core`、`feature-context`；报告为离线 HTML/CSS/SVG；无 Agent 工具时本地探查 | 通过 |
 | `codebase-design` | `DEEPENING.md`、`DESIGN-IT-TWICE.md` 均随包；无并行 Agent 时可顺序生成独立方案 | 通过 |
 | `debug` | HITL 模板随包并通过 `${CLAUDE_PLUGIN_ROOT}` 定位；架构复盘指向插件内技能 | 通过 |
-| `domain-modeling` | `CONTEXT-FORMAT.md` 与 `ADR-FORMAT.md` 随包；项目文件按需惰性创建 | 通过 |
+| `feature-context` | `CONTEXT-FORMAT.md` 与 `ADR-FORMAT.md` 随包；项目文件按需惰性创建 | 通过 |
 | `fix-conflicts` | 以本地 Git 历史和冲突 hunk 为最低输入；PR/issue 不可访问时明确记录证据缺口 | 通过 |
 | `git-safety` | hook 脚本随包并通过 `${CLAUDE_PLUGIN_ROOT}` 定位；安装前检查 `jq`；危险与安全命令均有行为测试 | 通过 |
 | `handoff` | 明确跨平台临时目录、文件名、必备章节和回读验证；只推荐当前可发现技能 | 通过 |
 | `implement` | TDD 指向插件内技能；评审清单内联；提交改为用户显式授权 | 通过 |
 | `learn` | mission、glossary、resources、learning record 四类模板随包；无可靠来源时停止事实型课程并记录缺口 | 通过 |
 | `plan-review-core` | 访谈循环与完成条件全部内联；作为仅模型调用的内部技能 | 通过 |
-| `plan-review-docs` | 只编排插件内 `plan-review-core` 与 `domain-modeling` | 通过 |
+| `plan-review-docs` | 只编排插件内 `plan-review-core` 与 `feature-context` | 通过 |
 | `plan-review` | 只编排插件内 `plan-review-core` | 通过 |
 | `prepare-issue` | 使用插件内跟踪器适配契约、agent brief 与 out-of-scope 规则；无认证时明确降级 | 通过 |
 | `prototype` | 逻辑与 UI 两个分支文档随包；只复用宿主项目已有运行时 | 通过 |

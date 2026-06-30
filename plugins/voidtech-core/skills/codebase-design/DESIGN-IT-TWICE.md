@@ -29,7 +29,7 @@
 - Agent 3：优先优化最常见的调用方式，让默认路径最简单。
 - Agent 4（适用时）：围绕 ports and adapters 设计跨 seam 依赖。
 
-技术说明应同时使用 [SKILL.md](SKILL.md) 的架构词汇和 `CONTEXT.md` 的领域词汇，保证各方案命名一致。
+技术说明应同时使用 [SKILL.md](SKILL.md) 的架构词汇和 `CONTEXT.md` 的业务词汇，保证各方案命名一致。
 
 每个子 agent 输出：
 
