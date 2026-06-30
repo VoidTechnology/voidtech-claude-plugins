@@ -33,15 +33,15 @@
 /voidtech-core:learn Swift 并发模型
 ```
 
-技能按"谁能触发"分三类，这决定了你需不需要手动喊它：
+技能按"谁能触发"分三类。这里说的是 Claude 能不能看到并调用这个技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。
 
-| 触发性质 | 含义 | 技能 |
+| 可见性 | 含义 | 技能 |
 |---|---|---|
-| **模型可自动触发** | 命中场景时 Claude 会主动建议或调用，也可手动 | `codebase-design`、`debug`、`feature-context`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
-| **仅用户显式触发** | 副作用大、可能产生网络/成本开销，或需明确意图，Claude 不会自动启动，必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`research`、`ship`、`to-issues`、`to-prd`、`write-skills` |
+| **模型可援引** | 命中场景时 Claude 可以主动使用，也可以手动调用；涉及文件或仓库状态变更时，按技能自己的流程确认 | `codebase-design`、`debug`、`feature-context`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
+| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`research`、`ship`、`to-issues`、`to-prd`、`write-skills` |
 | **仅内部编排** | 不出现在命令菜单，由其他技能调用 | `plan-review-core` |
 
-> 经验法则：**会改代码或产生外部副作用的技能基本都需要你手动触发**；纯方法论类（TDD、调试、设计词汇）Claude 会按需自动援引。
+> 经验法则：越像一次完整交付流程，越应该由你手动触发；越像方法、诊断纪律或文案规则，越适合让 Claude 在具体任务中按需使用。
 
 ## 3. 能力地图
 
@@ -88,30 +88,54 @@
 
 ## 4. 端到端工作流
 
-### 主线：从想法到交付一个功能
+### 入口选择：先走最短有效路径
+
+```text
+/voidtech-core:implement <已明确的功能或 issue>
+   └─▶ 技能内部尽可能使用 tdd，完成实现、测试、自审和交付检查
+   └─▶ 工作树保持未提交；准备提交、推送和创建 PR/MR 时再手动调用 ship
+
+/voidtech-core:ship <本次改动说明>
+   └─▶ 审查 diff、运行验证、提交、推送并创建 PR/MR
+```
+
+这是日常最常见的路径。需求已经说清楚时，不必先写 PRD 或 issue；让 `implement` 直接围绕当前上下文完成代码和验证。
+
+### 主线：需要拆分的功能
+
+```text
+（已有计划、规格、PRD 或需求讨论）
+   └─▶ /voidtech-core:to-issues            拆成端到端垂直切片
+   └─▶ /voidtech-core:implement            逐个 issue 实现与验证
+   └─▶ （可选）官方 `pr-review-toolkit` / `code-review` 做独立审查
+   └─▶ /voidtech-core:ship                 提交、推送并创建 PR/MR
+```
+
+适用于多人协作、范围超过一次改动、或需要把任务交给多个 agent 认领的功能。`to-issues` 负责让每个 issue 能独立验证，`implement` 负责实际落地。
+
+### 主线：不确定性高或风险高的功能
 
 ```text
 （讨论需求）
-   └─▶ /voidtech-core:research             不熟悉业务场景或需外部证据时，先做多信源调研
-   └─▶ /voidtech-core:feature-context      建立/对齐业务词汇与 ADR（首次或新业务场景时）
-   └─▶ /voidtech-core:codebase-design      设计深模块与 seam（涉及新接口时）
-   └─▶ /voidtech-core:to-prd               把对话综合成 PRD
-   └─▶ /voidtech-core:plan-review          动手前逐项审查方案（高风险时）
-   └─▶ /voidtech-core:to-issues            拆成端到端垂直切片
-   └─▶ /voidtech-core:implement            逐个 issue 实现（内部用 tdd）
-   └─▶ （可选）官方 `pr-review-toolkit` / `code-review` 做独立审查
-   └─▶ /voidtech-core:ship                 审查、提交、推送并创建 PR/MR
-   └─▶ /voidtech-core:handoff              收尾或换会话时交接
+   └─▶ /voidtech-core:research             需要外部证据、版本现状或竞品事实时
+   └─▶ /voidtech-core:feature-context      首次进入新业务场景，或术语/边界还不稳定时
+   └─▶ /voidtech-core:codebase-design      涉及新接口、seam 或模块边界时
+   └─▶ /voidtech-core:prototype            设计或交互还停留在猜测阶段时
+   └─▶ /voidtech-core:to-prd               需要正式化产品范围时
+   └─▶ /voidtech-core:plan-review          风险、依赖或迁移路径需要动手前审查时
+   └─▶ /voidtech-core:to-issues            拆成可独立交付的垂直切片
+   └─▶ /voidtech-core:implement            实现、测试、自审
+   └─▶ /voidtech-core:ship                 提交、推送并创建 PR/MR
 ```
 
-不是每步都必需：小改动可以直接 `implement`；想法已清晰可跳过 `to-prd` 直接 `to-issues`。
+这不是默认流程，而是复杂功能才需要的升级路径。每一步都有触发条件：不需要外部事实就跳过 `research`，没有新接口就跳过 `codebase-design`，不需要正式产品文档就跳过 `to-prd`。
 
 ### 支线：修一个 bug
 
 ```text
 /voidtech-core:debug    建稳定复现 → 定位 → 根因 → 补回归测试
    └─（修复阶段用 tdd 的红绿循环）
-   └─（若根因是架构腐化，debug 会引导到 architecture-review）
+   └─（若根因是架构腐化，debug 会建议手动进入 architecture-review）
 ```
 
 ### 支线：处理外部贡献 / 堆积的 issue
@@ -124,10 +148,12 @@
 ### 支线：开放网络调研一个陌生问题
 
 ```text
-/voidtech-core:research "调研 Claude Code deep research / subagent 社区方案，给迁移建议"
+/voidtech-core:research "比较 iOS 崩溃日志脱敏与上报方案，给 SDK 选型和接入风险建议"
    └─▶ 官方 exa / firecrawl / youdotcom-agent-skills 插件可用时，多信源并行收集证据
    └─▶ 插件不可用时，退化为离线调研计划、查询清单和待验证假设
 ```
+
+适用于不应该只靠模型记忆做决策的场景，例如依赖版本、平台政策、安全合规、价格、竞品现状或线上服务能力。
 
 ### 支线：保障仓库 Git 卫生
 
@@ -135,8 +161,9 @@
 /voidtech-core:git-safety        一次性配置，拦截破坏性 git 命令
 /voidtech-core:setup-git-checks  一次性配置 Husky 预提交门禁
 /voidtech-core:fix-conflicts     遇到 merge/rebase 冲突时按需调用
-/voidtech-core:ship              收尾时 review/commit/push 并创建 PR 或 MR
 ```
+
+`ship` 属于发布收尾，不是卫生配置；只有准备提交、推送并创建 PR/MR 时再调用。
 
 ### 支线：文案、学习与技能维护
 
@@ -148,25 +175,29 @@
 
 ## 5. 技能编排关系
 
-部分技能在内部会援引其他技能，理解这张图能帮你判断该从哪个入口进入：
+部分技能会使用底层规则，或在发现特定问题后建议进入另一个入口。这张图用来判断该从哪个用户入口开始：
 
 ```text
-implement ───────────────▶ tdd ───────────▶ codebase-design
-ship ────────────────────▶ text-naturalizer
-to-prd ───────────────────▶ text-naturalizer
-to-issues ────────────────▶ text-naturalizer（轻量自审）
-research ────────────────▶ 官方 exa / firecrawl / youdotcom-agent-skills（按需）
-debug ───────────────────▶ architecture-review ──▶ codebase-design
-                                              ├──▶ feature-context
-                                              └──▶ plan-review-core
-plan-review ─────────────▶ plan-review-core
-plan-review-docs ────────▶ plan-review-core
-                           └──▶ feature-context
-prepare-issue ───────────▶ feature-context
-                           └──▶ plan-review-core
+implement ──────尽可能使用──────▶ tdd ───────────▶ codebase-design（需要架构词汇时）
+ship ───────────润色 PR/MR 文案──▶ text-naturalizer
+to-prd ─────────润色正文────────▶ text-naturalizer
+to-issues ──────轻量自审文案────▶ text-naturalizer
+
+plan-review ────────────────▶ plan-review-core
+plan-review-docs ───────────▶ plan-review-core
+                              └──▶ feature-context
+prepare-issue ──────────────▶ feature-context
+                              └──▶ plan-review-core
+
+architecture-review ────────▶ codebase-design
+                              ├──▶ feature-context
+                              └──▶ plan-review-core
+
+debug ──若根因指向架构腐化，建议手动进入──▶ architecture-review
+research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom-agent-skills
 ```
 
-含义：你只需调用面向用户的入口（如 `plan-review`、`implement`、`architecture-review`），它们会自动编排底层能力；`plan-review-core` 永远不用手动调用。
+含义：你只需调用面向用户的入口（如 `implement`、`plan-review`、`architecture-review`）。`plan-review-core` 永远不用手动调用；`architecture-review`、`research`、`ship` 这类仅用户显式触发的技能，不会因为图里有箭头就在后台自动启动。
 
 ## 6. 场景速查
 
