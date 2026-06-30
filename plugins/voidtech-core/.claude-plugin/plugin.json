@@ -1,6 +1,6 @@
 {
   "name": "voidtech-core",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "VoidTech 团队 Claude Code 核心能力：中文约定与自包含工程技能",
   "author": { "name": "VoidTech" }
 }

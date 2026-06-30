@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart 钩子：每天最多检查一次 voidtech-core 更新。
-# 只提示用户可执行命令，不自动修改本地插件或 Marketplace。
+# 钩子自身只注入上下文，不执行任何更新；发现新版时让助手先征求用户同意，
+# 同意后才由助手运行更新命令，钩子绝不自动修改本地插件或 Marketplace。
 
 set -uo pipefail
 
@@ -99,7 +100,7 @@ if ! semver_gt "$latest_version" "$current_version"; then
   exit 0
 fi
 
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"【VoidTech update】%s 有可用更新：%s -> %s。建议运行：claude plugin marketplace update %s && claude plugin update %s@%s"}}\n' \
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"【VoidTech update】检测到 %s 可升级：%s -> %s。请先用一句话询问用户是否现在升级，不要直接执行。用户同意后依次运行：claude plugin marketplace update %s && claude plugin update %s@%s，并提醒升级后需重新打开会话才能加载新版；用户表示先不升级则本次会话不再提及此事。"}}\n' \
   "$PLUGIN_NAME" \
   "$current_version" \
   "$latest_version" \
