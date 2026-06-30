@@ -153,6 +153,8 @@
 ```text
 implement ───────────────▶ tdd ───────────▶ codebase-design
 ship ────────────────────▶ text-naturalizer
+to-prd ───────────────────▶ text-naturalizer
+to-issues ────────────────▶ text-naturalizer（轻量自审）
 research ────────────────▶ 官方 exa / firecrawl / youdotcom-agent-skills（按需）
 debug ───────────────────▶ architecture-review ──▶ codebase-design
                                               ├──▶ feature-context

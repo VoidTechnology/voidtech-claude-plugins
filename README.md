@@ -2,7 +2,7 @@
 
 > VoidTech 内部 Claude Code 插件市场：一套自包含的中文工程工作流，加上按需启用的 MCP。
 
-`Claude Code ≥ 2.1.154` · `voidtech-core v0.8.1` · 内部分发
+`Claude Code ≥ 2.1.154` · `voidtech-core v0.8.2` · 内部分发
 
 VoidTech 团队的 Claude Code Marketplace。它把团队约定固化成可独立安装、可验证、许可证明确的插件，让每位成员开箱即用同一套工程方法论，而把高权限的 MCP 留作按需启用。
 
@@ -52,7 +52,7 @@ claude plugin install voidtech-core@voidtech
 - claude plugin marketplace add https://github.com/VoidTechnology/voidtech-claude-plugins
   （若该写法不被支持，改用 GitHub 简写：claude plugin marketplace add VoidTechnology/voidtech-claude-plugins）
 - claude plugin install voidtech-core@voidtech
-voidtech-core 提供 21 个自包含中文工程技能 + 中文协作约定（SessionStart hook）。
+voidtech-core 提供 22 个自包含中文工程技能 + 中文协作约定（SessionStart hook）。
 
 【第 2 步：按搭配矩阵安装官方插件（来自 claude-plugins-official）】
 安装命令格式：claude plugin install <名称>@claude-plugins-official
@@ -78,7 +78,7 @@ voidtech-core 提供 21 个自包含中文工程技能 + 中文协作约定（Se
 
 | 插件 | 版本 | 默认 | 内容 |
 |---|---|---|---|
-| [`voidtech-core`](plugins/voidtech-core) | 0.8.1 | ✅ 启用 | 中文约定 + 22 个自包含工程技能 |
+| [`voidtech-core`](plugins/voidtech-core) | 0.8.2 | ✅ 启用 | 中文约定 + 22 个自包含工程技能 |
 | [`voidtech-mcp-common`](plugins/voidtech-mcp-common) | 0.1.0 | ⛔ 禁用 | Context7（库文档）、Chrome DevTools（无头浏览器验证） |
 | [`voidtech-mcp-apple`](plugins/voidtech-mcp-apple) | 0.1.0 | ⛔ 禁用 | Apple Docs、XcodeBuildMCP（iOS/macOS 开发） |
 
