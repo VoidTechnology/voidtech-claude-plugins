@@ -17,7 +17,11 @@ disable-model-invocation: true
 
 若对话中已经确认 seam，把它作为决策记录；若尚未确认，把建议写成 `Testing Decisions` 中明确标注的 proposed decision。不要为此重新开启需求访谈。
 
-3. 使用下面的模板写出 PRD，然后将其发布到项目的 issue 追踪器。使用 category `enhancement` 与 state `ready-for-agent` 对应的实际标签，无需再走 issue 整理流程。若跟踪器不可用，按适配契约生成完整 Markdown 草稿并返回路径。
+3. 使用下面的模板写出 PRD。
+
+4. 发布前使用 `voidtech-core:text-naturalizer` 的规则润色 PRD 正文，去掉模板腔、抽象话和 AI 写作痕迹。若 Skill 工具可用，调用 `voidtech-core:text-naturalizer` 处理草稿；若不可用，读取 `${CLAUDE_PLUGIN_ROOT}/skills/text-naturalizer/SKILL.md`，按其中规则自审并改写。润色时必须保留事实、范围、术语、标题层级、列表结构、实现决策、测试决策和不在范围内的内容，不得为了自然表达而弱化约束。
+
+5. 将润色后的 PRD 发布到项目的 issue 追踪器。使用 category `enhancement` 与 state `ready-for-agent` 对应的实际标签，无需再走 issue 整理流程。若跟踪器不可用，按适配契约生成完整 Markdown 草稿并返回路径。
 
 <prd-template>
 

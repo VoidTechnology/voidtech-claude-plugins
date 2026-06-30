@@ -55,6 +55,8 @@ disable-model-invocation: true
 
 对每个获批切片，向 issue 跟踪器发布一个新 issue。使用下方模板。默认把这些 issue 写得足够完整，让无人值守 agent 可以直接实现；除非另有指示，发布时使用 category `enhancement` 与 state `ready-for-agent` 对应的实际标签。
 
+发布前可按 `voidtech-core:text-naturalizer` 的规则轻量自审标题、目标描述和背景说明，去掉模板腔和抽象话。若 Skill 工具可用，调用 `voidtech-core:text-naturalizer` 处理这些段落；若不可用，读取 `${CLAUDE_PLUGIN_ROOT}/skills/text-naturalizer/SKILL.md`，按其中规则自审并改写。不要改写验收标准、前置依赖、标签、issue 结构、代码片段、接口名、字段名或业务术语；这些内容的可验证性和精确性优先于文案自然度。
+
 按依赖顺序（先发布阻塞方）发布 issue，这样你才能在 "Blocked by" 字段中引用真实的 issue 标识符。
 
 <issue-template>
