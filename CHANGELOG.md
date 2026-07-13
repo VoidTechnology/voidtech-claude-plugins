@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 - 2026-07-13
+
+### Added
+
+- 新增 `to-design-brief` 技能：读取设计语言文档（design tokens 分析）与 PRD，合成一份自包含的设计 brief，可整段粘贴进 claude.ai/design 作为逐页生成 UI 的风格锚点。产出包含两层 token 结构（原始色板 + 语义映射）、组件规范、带需求编号追溯的逐页规格和出图顺序建议。
+- 在 README 和使用指南中登记 `to-design-brief` 的触发方式与场景速查，核心技能数更新为 23。
+
 ## 0.8.3 - 2026-06-30
 
 ### Changed
