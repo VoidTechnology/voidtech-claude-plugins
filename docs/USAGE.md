@@ -1,6 +1,6 @@
 # voidtech-core 使用指南
 
-本指南讲清楚 `voidtech-core` 的 22 个技能各自做什么、如何调用，以及怎样把它们串成从调研到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南讲清楚 `voidtech-core` 的 23 个技能各自做什么、如何调用，以及怎样把它们串成从调研到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -38,7 +38,7 @@
 | 可见性 | 含义 | 技能 |
 |---|---|---|
 | **模型可援引** | 命中场景时 Claude 可以主动使用，也可以手动调用；涉及文件或仓库状态变更时，按技能自己的流程确认 | `codebase-design`、`debug`、`feature-context`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
-| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`research`、`ship`、`to-issues`、`to-prd`、`write-skills` |
+| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`research`、`ship`、`to-design-brief`、`to-issues`、`to-prd`、`write-skills` |
 | **仅内部编排** | 不出现在命令菜单，由其他技能调用 | `plan-review-core` |
 
 > 经验法则：越像一次完整交付流程，越应该由你手动触发；越像方法、诊断纪律或文案规则，越适合让 Claude 在具体任务中按需使用。
@@ -53,6 +53,7 @@
 | `feature-context` | 统一业务词汇、澄清场景边界、记录架构决策 | `CONTEXT.md`、ADR |
 | `codebase-design` | 设计接口简单、内部完整的深模块，确定可替换 seam | 模块/接口设计、seam 方案 |
 | `to-prd` | 把当前对话综合成 PRD（不重新访谈） | 发布到跟踪器的 PRD，或 Markdown 草稿 |
+| `to-design-brief` | 把设计语言文档与 PRD 合成自包含设计 brief，供 claude.ai/design 逐页生成 UI | `claude-design-brief.md` |
 | `to-issues` | 把计划/PRD 拆成端到端垂直切片 | 可独立认领验证的 issue 列表 |
 | `prepare-issue` | 按分类+状态整理 issue/PR，验证主张，补信息 | agent 可直接执行的实现说明 |
 | `plan-review` | 逐项检查方案，找遗漏、冲突和未验证假设 | 审查结论 |
@@ -205,6 +206,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 |---|---|
 | 对陌生问题做开放网络调研并拿到建议 | `research` |
 | 把一段需求讨论变成正式 PRD | `to-prd` |
+| 拿 PRD 和设计语言文档生成给 claude.ai/design 用的设计 brief | `to-design-brief` |
 | 把 PRD/计划拆成能干活的 issue | `to-issues` |
 | 实现一个已经定义好的功能 | `implement` |
 | 审查、提交、推送并创建 PR/MR | `ship` |

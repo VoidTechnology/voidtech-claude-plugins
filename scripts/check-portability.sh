@@ -4,7 +4,7 @@ set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-mcp-apple\nvoidtech-mcp-common'
-EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-issues\nto-prd\nwrite-skills'
+EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
 failures=0
 
 pass() {
@@ -116,8 +116,8 @@ if [[ -d plugins/voidtech-core ]]; then
   fi
 
   core_skill_count=$(find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
-  if [[ "$core_skill_count" == "22" ]]; then
-    pass "voidtech-core 发布 22 个技能"
+  if [[ "$core_skill_count" == "23" ]]; then
+    pass "voidtech-core 发布 23 个技能"
   else
     fail "voidtech-core 技能数量异常：$core_skill_count"
   fi
