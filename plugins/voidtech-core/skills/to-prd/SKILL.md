@@ -7,6 +7,12 @@ disable-model-invocation: true
 
 本技能接收当前对话上下文与对代码库的理解，产出一份 PRD。不要访谈用户——只综合你已经掌握的内容。
 
+## 与 prd-from-requirements 的分工
+
+本技能适用于“从当前对话轻量整理一份单体 PRD，并发布到 issue 追踪器”，主要服务开发交付和后续 agent 实现。
+
+如果用户提供的是原始需求文档、Excel 整理稿、访谈纪要、需求清单或旧版 PRD，并需要模块化 PRD 工作树、需求追溯矩阵、状态机、字段规则、权限矩阵、跨系统依赖或 product-manager subagent 评审，应改用 `voidtech-core:prd-from-requirements`。
+
 开始前读取 [Issue 跟踪器适配契约](../_shared/ISSUE-TRACKER.md)，据此识别平台、认证和标签映射；不要求任何预先安装的初始化技能。
 
 ## 流程

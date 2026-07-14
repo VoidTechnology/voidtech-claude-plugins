@@ -7,6 +7,10 @@
 # Node（若插件后续带脚本依赖）
 node_modules/
 
+# Python
+__pycache__/
+*.pyc
+
 # 本地密钥（绝不入库）
 .env
 .env.*
