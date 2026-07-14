@@ -43,8 +43,8 @@ Git 处理（谨慎，不做隐式版本控制代理）：
 
 1. 确定目标模块：用户指定优先；否则按 `deepening-backlog.md` 的建议顺序取；无 backlog 时从各文档头部深度声明（可借助状态看板定位）找出骨架级模块，与用户确认目标后，先按 `templates/deepening-backlog.md` 补建 backlog 再开始。
 2. 只读该模块 `prd.md`、它引用的领域规格、追溯矩阵中对应区间指向的源需求区段。
-3. 按 `templates/module-prd.md` 补全到验收级；先过 `templates/deepening-backlog.md` 中的「跨文档一致性自检」。
-4. 更新：模块头部深度声明、模块第 13 节行级追溯、追溯矩阵区间入口标注、backlog 对应行。
+3. 按 `templates/module-prd.md` 补全；过「跨文档一致性自检」并逐项记录证据，backlog 对应行标「待评审」。此时头部深度暂不改。
+4. 交独立核验（规则单源见 `prd-from-requirements`「深度分级与分期交付」）：委派 `@voidtech-core:product-manager` 按 DoD 与一致性自检逐项核验留证，记录写入 backlog「验收级核验记录」表。通过后才更新模块头部深度、第 13 节行级追溯、追溯矩阵区间入口标注和 backlog「已完成」；打回则修订后重新核验。做的人不能给自己认证。
 
 ### 2. 需求变更（新增需求或口径变更）
 
