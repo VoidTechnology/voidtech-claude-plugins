@@ -4,7 +4,8 @@ set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-mcp-apple\nvoidtech-mcp-common'
-EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
+EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprd-from-requirements\nprd-maintain\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
+EXPECTED_CORE_AGENTS=$'architect\nproduct-manager'
 failures=0
 
 pass() {
@@ -116,8 +117,8 @@ if [[ -d plugins/voidtech-core ]]; then
   fi
 
   core_skill_count=$(find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
-  if [[ "$core_skill_count" == "23" ]]; then
-    pass "voidtech-core 发布 23 个技能"
+  if [[ "$core_skill_count" == "25" ]]; then
+    pass "voidtech-core 发布 25 个技能"
   else
     fail "voidtech-core 技能数量异常：$core_skill_count"
   fi
@@ -135,6 +136,26 @@ if [[ -d plugins/voidtech-core ]]; then
     fail "voidtech-core 技能名称不符合公共命令契约"
   fi
 
+  core_agent_count=$(find plugins/voidtech-core/agents -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
+  if [[ "$core_agent_count" == "2" ]]; then
+    pass "voidtech-core 发布 2 个 subagent"
+  else
+    fail "voidtech-core subagent 数量异常：$core_agent_count"
+  fi
+
+  actual_core_agents=$(
+    find plugins/voidtech-core/agents -maxdepth 1 -type f -name '*.md' -print0 |
+      while IFS= read -r -d '' agent_file; do
+        basename "$agent_file" .md
+      done |
+      sort
+  )
+  if [[ "$actual_core_agents" == "$EXPECTED_CORE_AGENTS" ]]; then
+    pass "voidtech-core subagent 名称符合公共契约"
+  else
+    fail "voidtech-core subagent 名称不符合公共契约"
+  fi
+
   while IFS= read -r -d '' skill_file; do
     skill_dir=$(basename "$(dirname "$skill_file")")
     declared_name=$(sed -n 's/^name: *//p' "$skill_file" | head -n 1)
@@ -148,9 +169,11 @@ if [[ -d plugins/voidtech-core ]]; then
   while IFS= read -r skill_ref; do
     referenced_skill=${skill_ref#voidtech-core:}
     if grep -Fxq "$referenced_skill" <<<"$EXPECTED_CORE_SKILLS"; then
-      pass "跨技能调用指向已发布技能 $skill_ref"
+      pass "跨组件调用指向已发布技能 $skill_ref"
+    elif grep -Fxq "$referenced_skill" <<<"$EXPECTED_CORE_AGENTS"; then
+      pass "跨组件调用指向已发布 subagent $skill_ref"
     else
-      fail "跨技能调用指向未发布技能 $skill_ref"
+      fail "跨组件调用指向未发布技能或 subagent $skill_ref"
     fi
   done < <(
     rg -o --no-filename 'voidtech-core:[a-z0-9-]+' plugins/voidtech-core/skills |
@@ -353,6 +376,17 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
     installed_resources=(
       "hooks/check-update.sh"
       "hooks/zh-locale.sh"
+      "agents/architect.md"
+      "agents/product-manager.md"
+      "skills/prd-from-requirements/SKILL.md"
+      "skills/prd-from-requirements/scripts/xlsx-to-markdown.py"
+      "skills/prd-from-requirements/scripts/check-prd-tree.py"
+      "skills/prd-from-requirements/scripts/generate-dashboard.py"
+      "skills/prd-from-requirements/templates/product-overview.md"
+      "skills/prd-from-requirements/templates/domain-spec.md"
+      "skills/prd-from-requirements/templates/feature-gating-matrix.md"
+      "skills/prd-from-requirements/templates/deepening-backlog.md"
+      "skills/prd-maintain/SKILL.md"
       "skills/_shared/ISSUE-TRACKER.md"
       "skills/architecture-review/HTML-REPORT.md"
       "skills/debug/scripts/hitl-loop.template.sh"

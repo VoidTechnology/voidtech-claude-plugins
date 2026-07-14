@@ -1,6 +1,6 @@
 # voidtech-core 使用指南
 
-本指南讲清楚 `voidtech-core` 的 23 个技能各自做什么、如何调用，以及怎样把它们串成从调研到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南讲清楚 `voidtech-core` 的 25 个技能和 2 个专业 subagent 各自做什么、如何调用，以及怎样把它们串成从调研到交付的完整工作流。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -17,6 +17,7 @@
 - **自包含**：发布技能只引用插件内资源，不依赖插件目录之外的脚本或运行时。外部服务（issue 跟踪器、CDN）缺失时一定有明确的降级产出（如完整 Markdown 草稿）。
 - **业务词汇共享**：多个技能在动手前会读取 `CONTEXT.md` 与 ADR，使用项目业务词汇表的措辞。先用 `feature-context` 整理清楚功能上下文，后续技能的产出质量会显著提升。
 - **用户掌控副作用**：会提交、推送、合并、部署的动作只在你显式要求时发生。技能默认交付"已验证但未提交"的工作树。
+- **重任务隔离**：复杂架构设计和产品破题可以交给 `architect` / `product-manager` subagent，让主会话只接收结论、风险和可执行下一步。
 
 ## 2. 如何调用
 
@@ -33,12 +34,19 @@
 /voidtech-core:learn Swift 并发模型
 ```
 
+专业 subagent 使用插件命名空间通过 @ mention 调用：
+
+```text
+@voidtech-core:architect 设计支付回调幂等与重试架构
+@voidtech-core:product-manager 把这个想法整理成 MVP PRD
+```
+
 技能按"谁能触发"分三类。这里说的是 Claude 能不能看到并调用这个技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。
 
 | 可见性 | 含义 | 技能 |
 |---|---|---|
 | **模型可援引** | 命中场景时 Claude 可以主动使用，也可以手动调用；涉及文件或仓库状态变更时，按技能自己的流程确认 | `codebase-design`、`debug`、`feature-context`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
-| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prepare-issue`、`prototype`、`research`、`ship`、`to-design-brief`、`to-issues`、`to-prd`、`write-skills` |
+| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prd-from-requirements`、`prd-maintain`、`prepare-issue`、`prototype`、`research`、`ship`、`to-design-brief`、`to-issues`、`to-prd`、`write-skills` |
 | **仅内部编排** | 不出现在命令菜单，由其他技能调用 | `plan-review-core` |
 
 > 经验法则：越像一次完整交付流程，越应该由你手动触发；越像方法、诊断纪律或文案规则，越适合让 Claude 在具体任务中按需使用。
@@ -53,6 +61,8 @@
 | `feature-context` | 统一业务词汇、澄清场景边界、记录架构决策 | `CONTEXT.md`、ADR |
 | `codebase-design` | 设计接口简单、内部完整的深模块，确定可替换 seam | 模块/接口设计、seam 方案 |
 | `to-prd` | 把当前对话综合成 PRD（不重新访谈） | 发布到跟踪器的 PRD，或 Markdown 草稿 |
+| `prd-from-requirements` | 从原始需求、整理稿、访谈纪要或旧 PRD 生成模块化 PRD 工作树 | 模块 PRD、全局文档、追溯矩阵、开放问题清单、状态看板 |
+| `prd-maintain` | 维护既有 PRD 工作树：深化模块、合入需求变更、定案开放问题、落实评审修订 | 修订后的主本、重生成的汇总与状态看板、变更记录 |
 | `to-design-brief` | 把设计语言文档与 PRD 合成自包含设计 brief，供 claude.ai/design 逐页生成 UI | `claude-design-brief.md` |
 | `to-issues` | 把计划/PRD 拆成端到端垂直切片 | 可独立认领验证的 issue 列表 |
 | `prepare-issue` | 按分类+状态整理 issue/PR，验证主张，补信息 | agent 可直接执行的实现说明 |
@@ -86,6 +96,13 @@
 | `learn` | 在工作区持续教授一项技能，记录目标/资料/进展 | 学习记录文件 |
 | `text-naturalizer` | 润色中/英/混排文本，去除 AI 写作痕迹 | 改写后的文本 |
 | `write-skills` | 编写/改进技能，保持触发准确、流程清楚、可验证 | 新建或优化的 SKILL.md |
+
+### 专业 subagent
+
+| Agent | 用途 | 主要产出 |
+|---|---|---|
+| `architect` | 只读侦察复杂技术问题，设计架构、模块边界、接口契约、迁移和验证策略 | 推荐方案、现状证据、设计、风险与实施顺序 |
+| `product-manager` | 把模糊想法或需求转成用户场景、MVP 边界、PRD/User Story，或评审既有体验 | 产品判断、范围边界、验收标准、PRD/User Story |
 
 ## 4. 端到端工作流
 
@@ -123,13 +140,14 @@
    └─▶ /voidtech-core:codebase-design      涉及新接口、seam 或模块边界时
    └─▶ /voidtech-core:prototype            设计或交互还停留在猜测阶段时
    └─▶ /voidtech-core:to-prd               需要正式化产品范围时
+   └─▶ /voidtech-core:prd-from-requirements 原始需求复杂，需要模块化 PRD 工作树时
    └─▶ /voidtech-core:plan-review          风险、依赖或迁移路径需要动手前审查时
    └─▶ /voidtech-core:to-issues            拆成可独立交付的垂直切片
    └─▶ /voidtech-core:implement            实现、测试、自审
    └─▶ /voidtech-core:ship                 提交、推送并创建 PR/MR
 ```
 
-这不是默认流程，而是复杂功能才需要的升级路径。每一步都有触发条件：不需要外部事实就跳过 `research`，没有新接口就跳过 `codebase-design`，不需要正式产品文档就跳过 `to-prd`。
+这不是默认流程，而是复杂功能才需要的升级路径。每一步都有触发条件：不需要外部事实就跳过 `research`，没有新接口就跳过 `codebase-design`，不需要正式产品文档就跳过 `to-prd`，不需要从原始需求生成模块化文档就跳过 `prd-from-requirements`。
 
 ### 支线：修一个 bug
 
@@ -182,6 +200,9 @@
 implement ──────尽可能使用──────▶ tdd ───────────▶ codebase-design（需要架构词汇时）
 ship ───────────润色 PR/MR 文案──▶ text-naturalizer
 to-prd ─────────润色正文────────▶ text-naturalizer
+prd-from-requirements ───────▶ product-manager subagent
+                        └────▶ text-naturalizer（需要润色对外文档时）
+prd-maintain ──规则与脚本单源──▶ prd-from-requirements（红线/模板/自检脚本/看板生成器）
 to-issues ──────轻量自审文案────▶ text-naturalizer
 
 plan-review ────────────────▶ plan-review-core
@@ -206,6 +227,8 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 |---|---|
 | 对陌生问题做开放网络调研并拿到建议 | `research` |
 | 把一段需求讨论变成正式 PRD | `to-prd` |
+| 从原始需求、Excel 整理稿或访谈纪要生成模块化 PRD 工作树 | `prd-from-requirements` |
+| 维护既有 PRD 工作树（深化到验收级、合入需求变更、定案开放问题、落实评审意见） | `prd-maintain` |
 | 拿 PRD 和设计语言文档生成给 claude.ai/design 用的设计 brief | `to-design-brief` |
 | 把 PRD/计划拆成能干活的 issue | `to-issues` |
 | 实现一个已经定义好的功能 | `implement` |

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.11.1 - 2026-07-14
+
+### Added
+
+- 新增 `prd-maintain` 技能：维护既有 PRD 工作树的轻量入口，四种工况（深化模块、需求变更合入 `_source/changes/`、OQ 定案回扫、评审修订处置）+ 硬性收尾不变式（改主本 → 重生成汇总 → 机械自检 → 重生成看板 → 追加变更记录）；规则与脚本单源引用 `prd-from-requirements`，不复制红线；git 仅建议不代办。在 README、使用指南和可移植性检查中登记第 25 个核心技能。
+- `prd-from-requirements` 新增状态看板生成器 `generate-dashboard.py`：从深度声明、引用领域规格、追溯矩阵映射、跨系统流程与机械自检结果自动生成 `00-global/status-dashboard.md` + 自包含 `.html`，按依赖闭包判定模块「可交开发/被依赖阻塞/存疑/待深化」，并推导端到端路径就绪视图；看板是生成物禁止手改，「自报深度」与「机械信号」分列以暴露可疑绿灯。
+
+### Changed
+
+- `prd-from-requirements` 按大规模需求实测结果补强：新增深度分级与分期交付机制（骨架级/验收级声明 + `deepening-backlog.md` 深化任务清单），需求超规模时先确认分期计划，不再以骨架产出冒充完整交付；新增 `domain-spec.md`（跨端对象只定义一次）与 `feature-gating-matrix.md`（功能开通矩阵）两个模板；新增 `check-prd-tree.py` 机械自检脚本（断链、占位符、绝对路径权威源、裸推断标记、OQ 编号对账、深度声明）；权威源必须拷入 `_source/original/` 或记录校验和；期次口径以追溯矩阵为唯一权威并写入质量红线。
+- `prd-from-requirements` 第二轮实测补强（针对「验收级虚标」）：深化 DoD 增加跨文档一致性自检（幽灵状态、终态唯一裁决、空指针/循环互指、编号格式、声明与事实一致）；新增评审缺陷处置规则（修复/转排期/转开放问题三选一并对账，禁止静默丢弃）；深化 pass 收尾必须回扫术语表、跨系统依赖、OQ 与功能开通矩阵；自检脚本新增编号零填充一致性、幽灵状态启发式、「开放问题 #n」回指三项检查，深度声明检查改按文档角色（`*-matrix.md`）匹配，改名不再豁免。
+
+## 0.11.0 - 2026-07-14
+
+### Added
+
+- 新增 `prd-from-requirements` 技能：从原始需求、Excel 整理稿、访谈纪要、需求清单或旧版 PRD 生成模块化 PRD 工作树，包含产品总览、术语表、跨系统依赖、跨系统流程、模块 PRD、需求追溯矩阵和开放问题清单。
+- 在 README、使用指南和可移植性检查中登记第 24 个核心技能，并允许技能引用已发布的 `product-manager` subagent。
+
+### Changed
+
+- 首次安装引导开启 marketplace 自动更新：`templates/project-settings.json` 为 `voidtech` 声明 `"autoUpdate": true`，ONBOARDING 新增必做步骤（settings 写入 + `/plugin` 界面确认），插件发版后团队自动收到更新提示。
+
+## 0.10.0 - 2026-07-14
+
+### Added
+
+- 新增 `architect` 与 `product-manager` 两个插件级 subagent：前者只读侦察复杂技术问题并产出架构方案，后者把模糊需求转为用户场景、MVP 边界、PRD/User Story 或体验评审结论。
+- 在 README 与使用指南中登记 subagent 的调用方式和适用场景。
+
+### Changed
+
+- 优化本地 `architect` / `product-manager` agent 定义：补充 `effort`、`maxTurns`、工作边界和验证要求；`architect` 移除 `Bash` 权限，保持真正只读。
+
 ## 0.9.0 - 2026-07-13
 
 ### Added
