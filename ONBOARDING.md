@@ -13,12 +13,37 @@ node --version
 
 ## 2. 安装核心插件
 
-项目的 `.claude/settings.json` 应合入 `templates/project-settings.json`。手动安装时执行：
+项目的 `.claude/settings.json` 应合入 `templates/project-settings.json`（其中已为 `voidtech` marketplace 声明 `"autoUpdate": true`）。手动安装时执行：
 
 ```bash
 claude plugin marketplace add VoidTechnology/voidtech-claude-plugins
 claude plugin install voidtech-core@voidtech
 ```
+
+### 2.1 开启 marketplace 自动更新（必做）
+
+第三方 marketplace 的自动更新默认关闭。不开启的话，插件发版后不会出现 "Plugin updated: … Run /reload-plugins to apply" 提示，只能手动 `claude plugin marketplace update voidtech`。
+
+安装后按顺序确认两件事：
+
+1. **settings 配置**：项目 `.claude/settings.json` 的 `extraKnownMarketplaces.voidtech` 条目包含与 `source` 平级的 `"autoUpdate": true`。缺少时补上：
+
+   ```json
+   {
+     "extraKnownMarketplaces": {
+       "voidtech": {
+         "source": { "source": "github", "repo": "VoidTechnology/voidtech-claude-plugins" },
+         "autoUpdate": true
+       }
+     }
+   }
+   ```
+
+2. **界面确认**：在 Claude Code 内运行 `/plugin` → **Marketplaces** → 选择 `voidtech`，确认显示 auto-update 已启用；若仍为关闭，选择 **Enable auto-update**。这一步是交互界面，需要用户本人操作。
+
+> 给引导安装的 Agent：完成 `marketplace add` 和 `plugin install` 后，必须检查并写入上面的 `autoUpdate` 配置（settings 文件可以直接编辑），然后提醒用户在 `/plugin` 界面做最终确认。没有 CLI 子命令可以切换这个开关，不要凭空编造 `claude plugin marketplace` 参数。
+>
+> 仓库为私有时，后台自动更新依赖本机 git 凭据：先执行 `gh auth setup-git`（或配置等效 credential helper），否则后台拉取会失败。
 
 从旧版迁移时，先把项目 `.claude/settings.json` 中的 `voidtech-toolkit@voidtech` 替换为 `voidtech-core@voidtech`，再更新 Marketplace 并移除旧插件：
 
@@ -113,4 +138,4 @@ claude plugin list
 /doctor
 ```
 
-预期结果：`voidtech-core` 已启用；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`。
+预期结果：`voidtech-core` 已启用；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。
