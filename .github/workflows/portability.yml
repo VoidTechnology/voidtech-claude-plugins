@@ -29,3 +29,35 @@ jobs:
 
       - name: Validate portability
         run: scripts/check-portability.sh --install-smoke
+
+  loop-behavior:
+    # voidtech-loop 一期试点 OS 为 macOS arm64（PRD 5.5 / V22）；macos-15 runner 即 arm64。
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Detect voidtech-loop changes
+        id: changes
+        run: |
+          if git rev-parse HEAD^1 >/dev/null 2>&1; then
+            base=HEAD^1
+          else
+            base=$(git rev-parse HEAD)
+          fi
+          if git diff --name-only "$base" HEAD | grep -q '^plugins/voidtech-loop/'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js
+        if: steps.changes.outputs.run == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.22.0
+
+      - name: Run voidtech-loop behavior tests
+        if: steps.changes.outputs.run == 'true'
+        run: node --test plugins/voidtech-loop/tests/

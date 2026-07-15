@@ -116,7 +116,18 @@ async function cmdGoal(repo, argv) {
 
 async function cmdRun() {
   const config = JSON.parse(process.env.LOOP_RUN_CONFIG ?? '{}');
-  await startLoop({ repo: config.repo, rawSpec: config.rawSpec, skipPreflight: true });
+  // detach 守护的信号处理（技术设计 §11）：SIGTERM/SIGINT 翻转停止标志，
+  // 控制器在下一个轮次间检查点干净收尾为 STOPPED(canceled) 并释放锁。
+  let stopRequested = false;
+  for (const sig of ['SIGTERM', 'SIGINT']) {
+    process.on(sig, () => { stopRequested = true; });
+  }
+  await startLoop({
+    repo: config.repo,
+    rawSpec: config.rawSpec,
+    skipPreflight: true,
+    shouldStop: () => stopRequested,
+  });
 }
 
 function cmdStatus(repo, argv) {
