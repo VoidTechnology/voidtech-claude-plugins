@@ -170,6 +170,31 @@ echo did-work > work-output.txt
   }
 });
 
+test('worker 继承认证环境（凭据清理只作用于 eval，不作用于 worker）', async () => {
+  // 回归：dogfood 曾因 worker 走 eval 白名单丢失凭据环境而报 “Not logged in”。
+  const root = makeWorktreeDir();
+  const stubDir = mkdtempSync(join(tmpdir(), 'stub-'));
+  const stub = join(stubDir, 'envcheck.sh');
+  // stub 把关键认证相关环境变量落盘，验证 worker 能看到父进程环境
+  writeFileSync(stub, `#!/bin/bash
+{ echo "HOME=$HOME"; echo "MARKER=$LOOP_WORKER_ENV_MARKER"; } > env-seen.txt
+`, { mode: 0o755 });
+  const prev = process.env.LOOP_WORKER_ENV_MARKER;
+  process.env.LOOP_WORKER_ENV_MARKER = 'inherited-ok';
+  try {
+    const r = await runWorker({ worktree: root, prompt: 'x', timeoutSeconds: 30, overrideArgv: ['bash', stub] });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    const seen = readFileSync(join(root, 'env-seen.txt'), 'utf8');
+    assert.ok(seen.includes('MARKER=inherited-ok'), 'worker 应继承父进程环境（认证所需）');
+    assert.ok(/HOME=\S/.test(seen), 'worker 环境应含 HOME');
+  } finally {
+    if (prev === undefined) delete process.env.LOOP_WORKER_ENV_MARKER;
+    else process.env.LOOP_WORKER_ENV_MARKER = prev;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(stubDir, { recursive: true, force: true });
+  }
+});
+
 test('runWorker 超时：stub 挂起时 timed_out=true', async () => {
   const root = makeWorktreeDir();
   const stubDir = mkdtempSync(join(tmpdir(), 'stub-'));

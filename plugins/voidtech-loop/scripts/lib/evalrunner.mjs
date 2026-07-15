@@ -66,10 +66,12 @@ export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash
 }
 
 // 执行单条 eval（含 repeat）；baseline 也走这里。
-export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null } = {}) {
+// env：默认凭据清理白名单（eval 跑不可信代码）；worker 调用传入继承环境（claude -p 需认证）。
+export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null } = {}) {
+  const runEnv = env ?? whitelistEnv();
   const runs = [];
   for (let n = 1; n <= evalDef.repeat; n++) {
-    const run = await runOnce(evalDef, worktree);
+    const run = await runOnce(evalDef, worktree, runEnv);
     if (evidenceDir) {
       const path = join(evidenceDir, `${evalDef.id}-run${n}.log`);
       writeEvidenceFile(path, evalDef, run, n, { candidateSha, goalHash });
@@ -133,7 +135,7 @@ function writeEvidenceFile(path, evalDef, run, runNo, { candidateSha, goalHash }
   writeFileSync(path, header + body);
 }
 
-function runOnce(evalDef, worktree) {
+function runOnce(evalDef, worktree, runEnv) {
   return new Promise((resolvePromise) => {
     const cwd = join(worktree, evalDef.cwd);
     const [cmd, args] = evalDef.shell
@@ -146,7 +148,7 @@ function runOnce(evalDef, worktree) {
     try {
       child = spawn(cmd, args, {
         cwd,
-        env: whitelistEnv(),
+        env: runEnv,
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
