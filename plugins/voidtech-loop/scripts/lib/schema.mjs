@@ -65,12 +65,15 @@ export function validateSchema(value, schema, path = '$') {
   }
 
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    // 必填与已知字段判断只认自有属性：走原型链会让继承键旁路必填检查（M4）。
     for (const key of schema.required ?? []) {
-      if (!(key in value)) errors.push({ path, message: `缺少必填字段 ${key}` });
+      if (!Object.prototype.hasOwnProperty.call(value, key)) {
+        errors.push({ path, message: `缺少必填字段 ${key}` });
+      }
     }
     const props = schema.properties ?? {};
     for (const [key, v] of Object.entries(value)) {
-      if (key in props) {
+      if (Object.prototype.hasOwnProperty.call(props, key)) {
         errors.push(...validateSchema(v, props[key], `${path}.${key}`));
       } else if (schema.additionalProperties === false) {
         errors.push({ path: `${path}.${key}`, message: '未知字段（schema 不允许额外字段）' });

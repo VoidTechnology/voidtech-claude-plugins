@@ -43,6 +43,16 @@ function parseBlock(lines, i, indent) {
   return isSeqItem(lines[i].content) ? parseSeq(lines, i, indent) : parseMap(lines, i, indent);
 }
 
+// 映射键必须写成自有数据属性："__proto__" 走普通赋值会改写对象原型（原型污染）。
+function setOwn(obj, key, value) {
+  Object.defineProperty(obj, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 function parseMap(lines, i, indent) {
   const obj = {};
   while (i < lines.length && lines[i].indent === indent && !isSeqItem(lines[i].content)) {
@@ -56,13 +66,13 @@ function parseMap(lines, i, indent) {
     const rest = stripComment(m[2] ?? '', line).trim();
     i++;
     if (rest !== '') {
-      obj[key] = parseScalarOrFlow(rest, line);
+      setOwn(obj, key, parseScalarOrFlow(rest, line));
     } else if (i < lines.length && lines[i].indent > indent) {
       const [v, next] = parseBlock(lines, i, lines[i].indent);
-      obj[key] = v;
+      setOwn(obj, key, v);
       i = next;
     } else {
-      obj[key] = null;
+      setOwn(obj, key, null);
     }
   }
   if (i < lines.length && lines[i].indent > indent) {
