@@ -140,7 +140,7 @@ function writeEvidenceFile(path, evalDef, run, runNo, { candidateSha, goalHash }
     '',
   ].join('\n');
   const body = run.stream.truncated
-    ? `${run.stream.headText()}\n\n===== TRUNCATED: ${run.stream.total - run.stream.head.length - run.stream.tail.length} bytes omitted =====\n\n${run.stream.tailText()}`
+    ? `${run.stream.headText()}\n\n===== TRUNCATED: ${Math.max(0, run.stream.total - run.stream.head.length - run.stream.tail.length)} bytes omitted =====\n\n${run.stream.tailText()}`
     : run.stream.headText();
   writeFileSync(path, header + body);
 }
@@ -226,7 +226,8 @@ function makeStreamCapture() {
     },
     finalize() {
       state.sha256 = hash.digest('hex');
-      state.truncated = state.total > HEAD_CAP + TAIL_CAP;
+      // head 装不下即截断；(HEAD_CAP, HEAD_CAP+TAIL_CAP] 区间 head/tail 有重叠，但尾部不得静默丢弃
+      state.truncated = state.total > HEAD_CAP;
     },
     headText() {
       return state.head.toString('utf8');
