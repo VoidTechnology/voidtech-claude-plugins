@@ -1,0 +1,6 @@
+{
+  "name": "voidtech-loop",
+  "version": "0.1.0",
+  "description": "Loop Engineering 工程内循环：不可变 Goal Spec、确定性控制器与指定 commit 验收（开发中，F3 阶段）",
+  "author": { "name": "VoidTech" }
+}
