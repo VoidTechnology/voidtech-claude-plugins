@@ -15,6 +15,9 @@ const HEAD_CAP = 256 * 1024;
 const TAIL_CAP = 256 * 1024;
 const PER_EVAL_SUMMARY_CAP = 8 * 1024;
 export const WORKER_SUMMARY_TOTAL_CAP = 32 * 1024;
+// captureStdout 的完整 stdout 上限：worker 的 --output-format json 必须整体可解析，
+// 8KiB 摘要截断会让大 result 字段恒解析失败（M2）；超过此上限同样按解析失败降级为 unavailable。
+const CAPTURE_STDOUT_CAP = 8 * 1024 * 1024;
 
 // 子进程环境白名单（技术设计 §4）：凭据类环境变量不继承，eval 断开全局 git 配置。
 export function whitelistEnv() {
@@ -67,11 +70,12 @@ export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash
 
 // 执行单条 eval（含 repeat）；baseline 也走这里。
 // env：默认凭据清理白名单（eval 跑不可信代码）；worker 调用传入继承环境（claude -p 需认证）。
-export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null } = {}) {
+// captureStdout：worker 调用需要完整 stdout 解析 --output-format json（M2），常规 eval 不开启。
+export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null, captureStdout = false } = {}) {
   const runEnv = env ?? whitelistEnv();
   const runs = [];
   for (let n = 1; n <= evalDef.repeat; n++) {
-    const run = await runOnce(evalDef, worktree, runEnv);
+    const run = await runOnce(evalDef, worktree, runEnv, captureStdout);
     if (evidenceDir) {
       const path = join(evidenceDir, `${evalDef.id}-run${n}.log`);
       writeEvidenceFile(path, evalDef, run, n, { candidateSha, goalHash });
@@ -87,8 +91,12 @@ export async function execEval(evalDef, worktree, { evidenceDir = null, candidat
   }
   const pass = runs.length === evalDef.repeat && runs.every((r) => !r.timed_out && r.exit === evalDef.expected_exit);
   const summary = buildSummary(evalDef, runs);
-  for (const r of runs) delete r.stream; // 原始缓冲不进状态与报告
-  return {
+  const stdout = captureStdout ? (runs[runs.length - 1].stdout ?? '') : undefined;
+  for (const r of runs) {
+    delete r.stream; // 原始缓冲不进状态与报告
+    delete r.stdout;
+  }
+  const result = {
     id: evalDef.id,
     role: evalDef.role,
     expected_exit: evalDef.expected_exit,
@@ -97,6 +105,8 @@ export async function execEval(evalDef, worktree, { evidenceDir = null, candidat
     timed_out: runs.some((r) => r.timed_out),
     summary,
   };
+  if (captureStdout) result.stdout = stdout;
+  return result;
 }
 
 function buildSummary(evalDef, runs) {
@@ -135,7 +145,7 @@ function writeEvidenceFile(path, evalDef, run, runNo, { candidateSha, goalHash }
   writeFileSync(path, header + body);
 }
 
-function runOnce(evalDef, worktree, runEnv) {
+function runOnce(evalDef, worktree, runEnv, captureStdout = false) {
   return new Promise((resolvePromise) => {
     const cwd = join(worktree, evalDef.cwd);
     const [cmd, args] = evalDef.shell
@@ -143,6 +153,10 @@ function runOnce(evalDef, worktree, runEnv) {
       : [evalDef.command[0], evalDef.command.slice(1)];
 
     const stream = makeStreamCapture();
+    // 与 head/tail 截断证据分离：captureStdout 单独保留完整 stdout（不混入 stderr），供 JSON 整体解析
+    const stdoutChunks = captureStdout ? [] : null;
+    let stdoutBytes = 0;
+    const fullStdout = () => (stdoutChunks ? Buffer.concat(stdoutChunks).toString('utf8') : undefined);
     const started = Date.now();
     let child;
     try {
@@ -154,11 +168,17 @@ function runOnce(evalDef, worktree, runEnv) {
       });
     } catch (err) {
       stream.finalize();
-      resolvePromise({ exit: null, signal: null, duration_ms: 0, timed_out: false, spawn_error: String(err), stream });
+      resolvePromise({ exit: null, signal: null, duration_ms: 0, timed_out: false, spawn_error: String(err), stream, stdout: fullStdout() });
       return;
     }
 
-    child.stdout.on('data', stream.push);
+    child.stdout.on('data', (chunk) => {
+      stream.push(chunk);
+      if (stdoutChunks && stdoutBytes < CAPTURE_STDOUT_CAP) {
+        stdoutChunks.push(chunk);
+        stdoutBytes += chunk.length;
+      }
+    });
     child.stderr.on('data', stream.push);
 
     let timedOut = false;
@@ -173,13 +193,13 @@ function runOnce(evalDef, worktree, runEnv) {
     child.on('error', (err) => {
       clearTimeout(killTimer);
       stream.finalize();
-      resolvePromise({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, spawn_error: String(err), stream });
+      resolvePromise({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, spawn_error: String(err), stream, stdout: fullStdout() });
     });
     child.on('close', (code, signal) => {
       clearTimeout(killTimer);
       try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 残留兜底 */ }
       stream.finalize();
-      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, stream });
+      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, stream, stdout: fullStdout() });
     });
   });
 }
