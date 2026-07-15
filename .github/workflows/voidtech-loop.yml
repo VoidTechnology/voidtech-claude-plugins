@@ -1,0 +1,34 @@
+name: voidtech-loop
+
+# 一期试点 OS 为 macOS arm64（PRD 5.5 / V22）；macos-15 runner 即 arm64。
+# 用 GitHub 原生 paths 过滤：仅当 voidtech-loop 相关文件变更时才在 macOS 上跑，
+# 控制计费面且不会因浅 checkout 的变更检测退化而假绿。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/voidtech-loop/**'
+      - '.github/workflows/voidtech-loop.yml'
+  pull_request:
+    paths:
+      - 'plugins/voidtech-loop/**'
+      - '.github/workflows/voidtech-loop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  behavior:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.22.0
+
+      - name: Run voidtech-loop behavior tests
+        run: node --test plugins/voidtech-loop/tests/
