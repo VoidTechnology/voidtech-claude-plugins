@@ -31,4 +31,5 @@ jobs:
           node-version: 22.22.0
 
       - name: Run voidtech-loop behavior tests
-        run: node --test plugins/voidtech-loop/tests/
+        # 显式文件 glob：node --test 传目录会被当模块执行而报错，须传具体文件
+        run: node --test "plugins/voidtech-loop/tests/**/*.test.mjs"
