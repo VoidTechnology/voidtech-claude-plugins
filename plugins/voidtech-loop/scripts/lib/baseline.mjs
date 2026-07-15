@@ -1,51 +1,26 @@
 // 基线 eval：在 base commit 的一次性 detached worktree 中执行 Eval Pack，按角色裁定（PRD 4.1 体检第 4 步）。
 // 裁定规则：任一 invariant 不成立 → invariant_broken；全部 target 已成立 → all_targets_met；
 // 至少一个 target 未成立且全部 invariant 成立 → startable；任一 eval 超时 → timeout（不得交付可启动结论）。
+// 执行与加固逻辑复用 evalrunner/gitops，本文件只保留裁定语义。
 
-import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-
-// 控制器与 eval 的加固 Git 配置（技术设计 §6）：防止仓库内配置借我们权限执行代码。
-function hardenedGitArgs(emptyHooksDir) {
-  return [
-    '-c', 'core.fsmonitor=',
-    '-c', `core.hooksPath=${emptyHooksDir}`,
-    '-c', 'commit.gpgsign=false',
-    '-c', 'tag.gpgsign=false',
-  ];
-}
-
-// 子进程环境白名单（技术设计 §4）：eval 额外断开全局 git 配置，切断 keychain credential helper。
-function whitelistEnv() {
-  const out = { TERM: 'dumb', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  for (const key of ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR']) {
-    if (process.env[key] !== undefined) out[key] = process.env[key];
-  }
-  return out;
-}
-
-function git(repo, args, emptyHooksDir) {
-  const res = spawnSync('git', ['-C', repo, ...hardenedGitArgs(emptyHooksDir), ...args], {
-    encoding: 'utf8',
-    env: whitelistEnv(),
-  });
-  return res;
-}
+import { spawnSync } from 'node:child_process';
+import { gitRun, removeWorktree } from './gitops.mjs';
+import { execEval } from './evalrunner.mjs';
 
 export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
   const repoPath = resolve(repo ?? '.');
-  const emptyHooksDir = mkdtempSync(join(tmpdir(), 'goal-spec-hooks-'));
   let worktree = null;
 
   try {
-    const common = git(repoPath, ['rev-parse', '--git-common-dir'], emptyHooksDir);
+    const common = gitRun(repoPath, ['rev-parse', '--git-common-dir']);
     if (common.status !== 0) {
       return { verdict: 'infra_error', exitCode: 2, message: `不是 Git 仓库：${repoPath}` };
     }
 
-    const rev = git(repoPath, ['rev-parse', '--verify', '--quiet', `${normalizedSpec.base_commit}^{commit}`], emptyHooksDir);
+    const rev = gitRun(repoPath, ['rev-parse', '--verify', '--quiet', `${normalizedSpec.base_commit}^{commit}`]);
     if (rev.status !== 0) {
       return {
         verdict: 'invalid_base',
@@ -56,7 +31,7 @@ export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
     const baseSha = rev.stdout.trim();
 
     worktree = mkdtempSync(join(tmpdir(), 'goal-spec-baseline-'));
-    const add = git(repoPath, ['worktree', 'add', '--detach', '--force', worktree, baseSha], emptyHooksDir);
+    const add = gitRun(repoPath, ['worktree', 'add', '--detach', '--force', worktree, baseSha]);
     if (add.status !== 0) {
       return { verdict: 'infra_error', exitCode: 2, message: `创建验收 worktree 失败：${add.stderr.trim()}` };
     }
@@ -73,7 +48,7 @@ export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
 
     const results = [];
     for (const evalDef of normalizedSpec.evals) {
-      const result = await runEval(evalDef, worktree);
+      const result = await execEval(evalDef, worktree);
       results.push(result);
       if (result.timed_out) {
         return {
@@ -115,85 +90,6 @@ export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
       message: `可启动：${unmetTargets.length} 个 target 未满足，全部 invariant 成立`,
     };
   } finally {
-    if (worktree) {
-      git(resolve(repo ?? '.'), ['worktree', 'remove', '--force', worktree], emptyHooksDir);
-      git(resolve(repo ?? '.'), ['worktree', 'prune'], emptyHooksDir);
-      rmSync(worktree, { recursive: true, force: true });
-    }
-    rmSync(emptyHooksDir, { recursive: true, force: true });
+    if (worktree) removeWorktree(repoPath, worktree);
   }
-}
-
-async function runEval(evalDef, worktree) {
-  const runs = [];
-  for (let n = 0; n < evalDef.repeat; n++) {
-    runs.push(await runOnce(evalDef, worktree));
-    if (runs[runs.length - 1].timed_out) break;
-  }
-  const pass = runs.every((r) => !r.timed_out && r.exit === evalDef.expected_exit);
-  return {
-    id: evalDef.id,
-    role: evalDef.role,
-    expected_exit: evalDef.expected_exit,
-    runs,
-    pass,
-    timed_out: runs.some((r) => r.timed_out),
-  };
-}
-
-const OUTPUT_CAP = 32 * 1024;
-
-function runOnce(evalDef, worktree) {
-  return new Promise((resolvePromise) => {
-    const cwd = join(worktree, evalDef.cwd);
-    const [cmd, args] = evalDef.shell
-      ? ['/bin/bash', ['-c', evalDef.command]]
-      : [evalDef.command[0], evalDef.command.slice(1)];
-
-    const started = Date.now();
-    let child;
-    try {
-      child = spawn(cmd, args, {
-        cwd,
-        env: whitelistEnv(),
-        detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-    } catch (err) {
-      resolvePromise({ exit: null, signal: null, duration_ms: 0, timed_out: false, spawn_error: String(err) });
-      return;
-    }
-
-    let tail = '';
-    const collect = (chunk) => {
-      tail = (tail + chunk.toString('utf8')).slice(-OUTPUT_CAP);
-    };
-    child.stdout.on('data', collect);
-    child.stderr.on('data', collect);
-
-    let timedOut = false;
-    const killTimer = setTimeout(() => {
-      timedOut = true;
-      try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 进程组可能已退出 */ }
-      setTimeout(() => {
-        try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 同上 */ }
-      }, 2000).unref();
-    }, evalDef.timeout_seconds * 1000);
-
-    child.on('error', (err) => {
-      clearTimeout(killTimer);
-      resolvePromise({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, spawn_error: String(err) });
-    });
-    child.on('close', (code, signal) => {
-      clearTimeout(killTimer);
-      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 残留子进程兜底，组已退出则忽略 */ }
-      resolvePromise({
-        exit: code,
-        signal,
-        duration_ms: Date.now() - started,
-        timed_out: timedOut,
-        output_tail: tail.slice(-4096),
-      });
-    });
-  });
 }
