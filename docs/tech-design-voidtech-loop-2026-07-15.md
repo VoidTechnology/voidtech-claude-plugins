@@ -51,7 +51,8 @@
 ## 4. 命令协议（§8.4）
 
 - `--check` 解析：引号感知 tokenizer（单/双引号成组），遇到 `| & ; < > $( ) \`` 反引号、换行即拒绝并引导 Goal Spec 显式 `shell: true`。
-- worker 与 eval 的子进程环境从固定白名单构造：`PATH`、`HOME`、`LANG`、`LC_ALL`、`TMPDIR`，外加 `TERM=dumb`；其余一律不继承。
+- **eval** 子进程环境从固定白名单构造：`PATH`、`HOME`、`LANG`、`LC_ALL`、`TMPDIR`，外加 `TERM=dumb`；其余一律不继承（eval 跑待验证的不可信代码）。
+- **worker** 子进程继承父进程完整环境（`claude -p` 需 keychain/OAuth 认证），仅剥离控制器为 git 操作设的 `GIT_CONFIG_*` 覆盖。凭据清理只作用于 eval，不作用于 worker——2026-07-16 首次真实 worker dogfood 发现白名单套在 worker 上会导致 `Not logged in`，据此修正（原设计误将白名单同时套用两者）。
 - eval 进程额外设 `GIT_CONFIG_GLOBAL=/dev/null` 与 `GIT_CONFIG_NOSYSTEM=1`，切断 osxkeychain credential helper 路径。副作用（测试依赖用户 gitconfig）会在启动体检的基线 eval 中显式失败，不会静默。
 - submodule：启动体检检测到活跃 submodule 即拒绝（一期声明不支持）；LFS：仓库启用 LFS 且本机未安装 `git-lfs` 即拒绝。
 - monorepo：eval `cwd` 相对仓库根解析，realpath 必须落在验收 worktree 内。
