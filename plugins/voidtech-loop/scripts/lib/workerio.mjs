@@ -88,9 +88,10 @@ export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = D
   };
   // worker 是我们信任的 claude -p 调用，需继承认证环境（keychain/OAuth）；
   // 凭据清理只作用于 eval（跑待验证的不可信代码），不作用于 worker。
-  const result = await execEval(evalDef, worktree, { env: workerEnv() });
+  // captureStdout：cost/denials 必须从完整 JSON stdout 解析，8KiB 截断摘要会让大 result 字段恒解析失败（M2）。
+  const result = await execEval(evalDef, worktree, { env: workerEnv(), captureStdout: true });
   const run = result.runs[0];
-  const parsed = parseWorkerJson(result.summary);
+  const parsed = parseWorkerJson(result.stdout ?? '');
   return {
     ok: !result.timed_out && run.exit === 0 && !run.spawn_error,
     exit: run.exit,
@@ -114,11 +115,13 @@ function workerEnv() {
   return env;
 }
 
-function parseWorkerJson(summary) {
-  const tail = summary.split('\n').slice(1).join('\n').trim();
-  if (!tail.startsWith('{')) return null;
+// 解析 worker 的完整 stdout（--output-format json 为单个 JSON 对象；容忍 CLI 在其前的横幅噪声）
+function parseWorkerJson(stdout) {
+  const text = stdout.trim();
+  const start = text.indexOf('{');
+  if (start === -1) return null;
   try {
-    return JSON.parse(tail);
+    return JSON.parse(text.slice(start));
   } catch {
     return null;
   }
