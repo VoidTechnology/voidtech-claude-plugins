@@ -13,6 +13,7 @@ import {
 import { runEvalPack, WORKER_SUMMARY_TOTAL_CAP } from './evalrunner.mjs';
 import { runWorker, buildWorkerPrompt, writeWorkerSettings } from './workerio.mjs';
 import { writeState, STATE_VERSION, processIdentity } from './statestore.mjs';
+import { writeReport } from './report.mjs';
 
 const NO_PROGRESS_LIMIT = 3;
 const CONTROLLER_PATHS = ['.claude'];
@@ -55,6 +56,7 @@ export async function runControllerLoop(ctx) {
     state.stop_reason = reason;
     state.stop_detail = detail;
     persist();
+    writeReport(stateDir, state);
     return state;
   };
 
@@ -204,6 +206,7 @@ export async function runControllerLoop(ctx) {
       state.status = 'EVALS_PASSED';
       state.candidate_commit = cp.sha;
       persist();
+      writeReport(stateDir, state);
       return state;
     }
 

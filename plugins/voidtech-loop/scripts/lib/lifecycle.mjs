@@ -9,6 +9,7 @@ import { preflight } from './preflight.mjs';
 import { runBaseline } from './baseline.mjs';
 import { gitRun, gitCommonDir, createLoopWorktree } from './gitops.mjs';
 import { runControllerLoop } from './controller.mjs';
+import { writeReport } from './report.mjs';
 import {
   projectDataDir, readState, writeState, acquireLock, releaseLock,
   inspectLock, takeoverStaleLock, processIdentity, STATE_VERSION,
@@ -113,6 +114,7 @@ export function acceptRun({ repo, runId }) {
   }
   const next = { ...r.state, status: 'ACCEPTED', accepted_at: new Date().toISOString() };
   writeState(stateDir, next);
+  writeReport(stateDir, next);
   return { ok: true, state: next };
 }
 
