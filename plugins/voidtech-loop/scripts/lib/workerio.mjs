@@ -88,6 +88,7 @@ export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = D
   };
   const result = await execEval(evalDef, worktree);
   const run = result.runs[0];
+  const parsed = parseWorkerJson(result.summary);
   return {
     ok: !result.timed_out && run.exit === 0 && !run.spawn_error,
     exit: run.exit,
@@ -95,5 +96,30 @@ export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = D
     spawn_error: run.spawn_error ?? null,
     duration_ms: run.duration_ms,
     summary: result.summary,
+    // token 统计（技术设计 §8）：来自 --output-format json；解析失败即 unavailable，不估算
+    cost_usd: typeof parsed?.total_cost_usd === 'number' ? parsed.total_cost_usd : null,
+    session_id: parsed?.session_id ?? null,
+    permission_denials: normalizeDenials(parsed?.permission_denials),
   };
+}
+
+function parseWorkerJson(summary) {
+  const tail = summary.split('\n').slice(1).join('\n').trim();
+  if (!tail.startsWith('{')) return null;
+  try {
+    return JSON.parse(tail);
+  } catch {
+    return null;
+  }
+}
+
+// 规范化权限拒绝：tool + 输入摘要（PRD 5.3 的连续拒绝熔断以此为比较键）
+function normalizeDenials(denials) {
+  if (!Array.isArray(denials)) return [];
+  return denials.map((d) => {
+    if (typeof d === 'string') return d;
+    const tool = d.tool_name ?? 'unknown';
+    const input = d.tool_input ? JSON.stringify(d.tool_input) : '';
+    return `${tool}:${input}`.slice(0, 512);
+  });
 }
