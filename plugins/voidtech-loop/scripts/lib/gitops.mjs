@@ -169,9 +169,11 @@ function isAncestor(repo, maybeAncestor, sha) {
 // ---------- 变更枚举与 checkpoint 闸门 ----------
 
 // 以工作树为准枚举相对 lastSha 的变更路径（含未跟踪文件）。
-export function changedPaths(worktreePath, lastSha) {
-  const diff = gitRun(worktreePath, ['diff', '--name-only', lastSha]);
-  const untracked = gitRun(worktreePath, ['ls-files', '--others', '--exclude-standard']);
+// exclude：控制器基础设施路径（如 .claude/），既不进 checkpoint 也不算进展。
+export function changedPaths(worktreePath, lastSha, { exclude = [] } = {}) {
+  const excludeSpec = exclude.map((p) => `:(exclude)${p}`);
+  const diff = gitRun(worktreePath, ['diff', '--name-only', lastSha, '--', '.', ...excludeSpec]);
+  const untracked = gitRun(worktreePath, ['ls-files', '--others', '--exclude-standard', '--', '.', ...excludeSpec]);
   const set = new Set();
   for (const out of [diff.stdout, untracked.stdout]) {
     for (const line of out.split('\n')) {
@@ -181,9 +183,9 @@ export function changedPaths(worktreePath, lastSha) {
   return [...set].sort();
 }
 
-export function checkpointGate(worktreePath, lastSha) {
+export function checkpointGate(worktreePath, lastSha, { exclude = [] } = {}) {
   const hits = [];
-  for (const path of changedPaths(worktreePath, lastSha)) {
+  for (const path of changedPaths(worktreePath, lastSha, { exclude })) {
     const base = path.split('/').pop();
     for (const { rule, test: match } of SENSITIVE_BASENAMES) {
       if (match(base)) hits.push({ path, rule });
@@ -222,15 +224,16 @@ export function protectedPathsHits(worktreePath, lastSha, patterns) {
 
 // ---------- checkpoint（临时 index 五步，技术设计 §6） ----------
 
-export function checkpoint(repo, worktreePath, branch, lastSha, message) {
+export function checkpoint(repo, worktreePath, branch, lastSha, message, { exclude = [] } = {}) {
   const indexDir = mkdtempSync(join(tmpdir(), 'loop-index-'));
   const indexFile = join(indexDir, 'index');
   const env = { GIT_INDEX_FILE: indexFile };
+  const excludeSpec = exclude.map((p) => `:(exclude)${p}`);
   try {
     let r = gitRun(worktreePath, ['read-tree', lastSha], env);
     if (r.status !== 0) return { error: 'read_tree_failed', detail: r.stderr.trim() };
 
-    r = gitRun(worktreePath, ['add', '-A'], env);
+    r = gitRun(worktreePath, ['add', '-A', '--', '.', ...excludeSpec], env);
     if (r.status !== 0) return { error: 'add_failed', detail: r.stderr.trim() };
 
     r = gitRun(worktreePath, ['write-tree'], env);
