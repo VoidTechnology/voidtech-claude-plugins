@@ -86,7 +86,9 @@ export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = D
     timeout_seconds: timeoutSeconds,
     repeat: 1,
   };
-  const result = await execEval(evalDef, worktree);
+  // worker 是我们信任的 claude -p 调用，需继承认证环境（keychain/OAuth）；
+  // 凭据清理只作用于 eval（跑待验证的不可信代码），不作用于 worker。
+  const result = await execEval(evalDef, worktree, { env: workerEnv() });
   const run = result.runs[0];
   const parsed = parseWorkerJson(result.summary);
   return {
@@ -101,6 +103,15 @@ export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = D
     session_id: parsed?.session_id ?? null,
     permission_denials: normalizeDenials(parsed?.permission_denials),
   };
+}
+
+// worker 继承父进程完整环境（claude -p 需要 keychain/OAuth 认证），
+// 但剥离控制器为 git 操作设的 GIT_CONFIG_* 覆盖，避免污染 worker 内的 git 只读操作。
+function workerEnv() {
+  const env = { ...process.env };
+  delete env.GIT_CONFIG_GLOBAL;
+  delete env.GIT_CONFIG_NOSYSTEM;
+  return env;
 }
 
 function parseWorkerJson(summary) {
