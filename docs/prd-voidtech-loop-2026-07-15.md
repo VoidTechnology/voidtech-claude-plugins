@@ -38,7 +38,7 @@ Claude Code 当前已内置 `/goal`、`/loop`、worktree、后台 agent、subage
 
 | 决策点 | 结论 | 理由 |
 |--------|------|------|
-| 独立插件还是并入 core | 独立插件 `voidtech-loop` | 循环是高风险能力，须按需安装、独立演进 |
+| 独立插件还是并入 core | 独立插件 `voidtech-loop`，marketplace 默认启用（`defaultEnabled: true`） | 独立插件便于独立演进、失败不污染 core；团队决定默认启用以降低试点门槛（2026-07-16 覆盖原「按需安装」倾向，前提是一期严格保持不自动合入等安全边界） |
 | MVP 循环类型 | 单任务 goal 式工程内循环 | 完成条件可机器判定，单人单任务即可产生价值 |
 | 控制平面 | 确定性控制器独占状态迁移、checkpoint、验收启动与终态裁定 | worker 不能决定自己是否完成，也不能选择是否执行 checker |
 | 循环驱动 | 每轮是一个有界 worker invocation；不以连续阻止 Stop hook 作为唯一调度机制 | Stop hook 有连续阻止上限，用户中断与 API 错误也不走同一路径 |
@@ -455,3 +455,4 @@ checkpoint 前只检查本轮待提交文件，不扫描整个仓库：
 - 2026-07-15：第八次工程评审修订（依 architect 评审与 spike 实测）——refs 快照扩为 Git 审计集（含 `.git/config`、attributes、hooks 目录、worktree 指针），豁免名单改为控制器自身变更后立即重拍快照；5.5 明确循环期间用户 Git 写操作 fail closed 的取舍（`refs/remotes/*` 纯前进除外）；控制器 Git 调用统一加固配置，checkpoint 改用独立临时 index；F4 增加 worker invocation 测试接缝，V10/V23/V24 验证方式改为可确定复现的 fixture；§8.1 回填 spike GO 结论并遗留会话连续性测项，新增 §8.11 控制器宿主与生命周期、§8.12 验收 worktree 依赖策略，§8.10 排除 shell+jq；6.2 固定声明补审计快照局限、keychain 凭据路径与证据随卸载删除的提示。
 - 2026-07-15：第九次 spike 回填——§8.11 定案 detach 守护进程宿主模型（launchd 收养后 `claude -p` 与凭据实测可用，SIGTERM 经锁文件 PID 可达）；§8.1 会话连续性定案为每轮全新调用，`--resume` 记为二期优化；5.3 明确运行期中断统一走 `cancel`，Ctrl+C 只覆盖前台启动阶段。
 - 2026-07-15：转 Final——§8 十二项在 `docs/tech-design-voidtech-loop-2026-07-15.md` 全部定案；3.1 哈希规则纳入技术设计新增的可选 `setup` 字段（验收依赖 warm 安装命令）。
+- 2026-07-16：F1–F10 实现完成并双路径真实 worker dogfood 通过（简单 `--check` 与复杂 `--spec` 均达 EVALS_PASSED，用户分支/protected path/main 均未被触碰）；插件注册进 marketplace 并按团队决定 `defaultEnabled: true`，1.3 决策行与 portability install-smoke 同步更新。
