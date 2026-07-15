@@ -51,7 +51,7 @@ function makeStub(script) {
   return { dir, path };
 }
 
-async function runLoopFixture({ stubScript, specOpts = {}, mutate }) {
+async function runLoopFixture({ stubScript, specOpts = {}, mutate, shouldStop = null }) {
   const { repo, sha } = makeRepo();
   const { spec, hash } = makeSpec(sha, specOpts);
   if (mutate) mutate(spec);
@@ -75,6 +75,7 @@ async function runLoopFixture({ stubScript, specOpts = {}, mutate }) {
     stateDir,
     evidenceDir,
     overrideArgv: ['bash', stub.path],
+    shouldStop,
   });
   return { final, repo, sha, wt, stateDir, cleanup };
 }
@@ -232,6 +233,26 @@ test('时间预算耗尽 → STOPPED(exhausted)', async () => {
     assert.equal(final.status, 'STOPPED');
     assert.equal(final.stop_reason, 'exhausted');
     assert.equal(final.stop_detail.kind, 'duration');
+  } finally {
+    cleanup();
+  }
+});
+
+test('V17：shouldStop 在轮次间触发 → STOPPED(canceled) 且生成报告', async () => {
+  const script = `echo step > progress.txt`; // 有变化但不满足 target，会进入下一轮
+  let calls = 0;
+  const { final, stateDir, cleanup } = await runLoopFixture({
+    stubScript: script,
+    specOpts: { maxIterations: 10 },
+    shouldStop: () => (++calls >= 2), // 第二次检查时请求停止
+  });
+  try {
+    assert.equal(final.status, 'STOPPED');
+    assert.equal(final.stop_reason, 'canceled');
+    assert.equal(final.stop_detail.kind, 'user_stop');
+    const { existsSync } = await import('node:fs');
+    const { join: pjoin } = await import('node:path');
+    assert.ok(existsSync(pjoin(stateDir, 'report.md')), 'canceled 终态也应生成报告');
   } finally {
     cleanup();
   }
