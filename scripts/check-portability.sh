@@ -3,7 +3,7 @@
 set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-mcp-apple\nvoidtech-mcp-common'
+EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-loop\nvoidtech-mcp-apple\nvoidtech-mcp-common'
 EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprd-from-requirements\nprd-maintain\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
 EXPECTED_CORE_AGENTS=$'architect\nproduct-manager'
 failures=0
@@ -350,18 +350,20 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
   audit_dir=$(mktemp -d "${TMPDIR:-/tmp}/voidtech-plugin-audit.XXXXXX")
   if CLAUDE_CONFIG_DIR="$audit_dir" claude plugin marketplace add ./ >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-core@voidtech --scope user >/dev/null && \
+    CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-loop@voidtech --scope user >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-mcp-common@voidtech --scope user >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-mcp-apple@voidtech --scope user >/dev/null; then
     installed_json=$(CLAUDE_CONFIG_DIR="$audit_dir" claude plugin list --json)
     installed_count=$(jq 'length' <<<"$installed_json")
-    if [[ "$installed_count" == "3" ]]; then
-      pass "隔离安装三个插件"
+    if [[ "$installed_count" == "4" ]]; then
+      pass "隔离安装四个插件"
     else
       fail "隔离环境安装数量异常：$installed_count"
     fi
 
     if jq -e '
       (map(select(.id == "voidtech-core@voidtech" and .enabled == true)) | length == 1) and
+      (map(select(.id == "voidtech-loop@voidtech" and .enabled == true)) | length == 1) and
       (map(select(.id == "voidtech-mcp-common@voidtech" and .enabled == false)) | length == 1) and
       (map(select(.id == "voidtech-mcp-apple@voidtech" and .enabled == false)) | length == 1)
     ' <<<"$installed_json" >/dev/null; then
