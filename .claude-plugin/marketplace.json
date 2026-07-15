@@ -9,6 +9,12 @@
       "description": "默认启用的核心插件：中文约定与自包含工程技能"
     },
     {
+      "name": "voidtech-loop",
+      "source": "./plugins/voidtech-loop",
+      "description": "默认启用的 Loop Engineering 工程内循环：不可变 Goal Spec、确定性控制器与指定 commit 验收",
+      "defaultEnabled": true
+    },
+    {
       "name": "voidtech-mcp-common",
       "source": "./plugins/voidtech-mcp-common",
       "description": "可选通用 MCP：Context7 与 Chrome DevTools",
