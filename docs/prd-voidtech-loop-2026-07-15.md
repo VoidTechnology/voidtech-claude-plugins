@@ -175,7 +175,7 @@ Deterministic Eval Runner
 
 ### 3.3 状态存储与项目锁
 
-控制器状态存入 `${CLAUDE_PLUGIN_DATA}` 下按 Git common directory 真实路径派生的项目目录（该变量仅在 hook/MCP 上下文注入，控制器按官方公式 `~/.claude/plugins/data/<plugin-id>` 自行推导，不假设环境变量存在），不进入循环分支，不受 worker 修改。状态文件采用“写临时文件、fsync、原子 rename”更新；同一项目的活动循环通过原子目录锁互斥，禁止 check-then-create。
+控制器状态存入插件专属数据目录下按 Git common directory 真实路径派生的项目目录。仅当 `${CLAUDE_PLUGIN_DATA}` 解析后的末级目录是 `voidtech-loop` 时采用该注入值；变量缺失或继承自其他插件时，控制器按官方公式自行推导 `~/.claude/plugins/data/voidtech-loop`。状态不进入循环分支，不受 worker 修改。状态文件采用“写临时文件、fsync、原子 rename”更新；同一项目的活动循环通过原子目录锁互斥，禁止 check-then-create。
 
 状态至少包含：
 
@@ -430,8 +430,8 @@ checkpoint 前只检查本轮待提交文件，不扫描整个仓库：
 8. **token 统计**：确认宿主是否提供逐轮可信 usage；不可用时保持 `unavailable`，不阻塞一期。
 9. **Goal Spec 作者文件**：确定 `.voidtech-loop/specs/` 的默认 `.gitignore` 建议与 spec 中允许保存的非敏感元数据；活动 run 始终只信任插件状态区冻结副本。
 10. **实现语言与分发**：shell+jq 已排除——shell 无法对指定 fd 执行 fsync，也写不出二进制安全的流式截断；候选收敛为 Node 脚本 vs 钉版本 Agent SDK，与第 1、11 条结论联动。必须满足 6.3 的自包含约束，不引入浮动版本外部运行时，并定义 macOS arm64 CI job 的触发路径过滤。
-11. **控制器宿主与生命周期（spike 已完成，见 spike 报告第二轮）**：定案为 detach 守护进程——`goal` 完成启动体检后派生脱离会话的控制器进程并立即返回。实测确认：被 launchd 收养（ppid=1）、无 TTY 的进程可正常调用 `claude -p` 且凭据可用；SIGTERM 经锁文件 PID 送达并被信号陷阱干净收尾。设计后果：宿主会话关闭不影响循环（与无人值守目标一致）；交互会话的 Ctrl+C 不达守护进程，运行期中断统一走 `cancel`。
-12. **验收 worktree 依赖策略**：一次性 worktree 只含 tracked 文件，四个主场景的 eval 会因缺 `node_modules` 等依赖直接失败。默认方案：每 run 一次 warm 安装 + 每轮以 APFS clonefile（`cp -c`）克隆依赖目录进验收 worktree（试点 OS 仅 macOS，克隆近零成本）；基线 eval 与 dry-run 同样在隔离 worktree 执行；依赖安装的时机、次数与联网行为写入报告能力声明。
+11. **控制器宿主与生命周期（spike 已完成，见 spike 报告第二轮）**：定案为 detach 守护进程——`goal` 完成前台准备后派生脱离会话的控制器，并等待其通过专用 IPC 回报 ready；只有锁与状态身份接管成功才返回 run ID。握手失败统一写入终态并释放锁。实测确认：被 launchd 收养（ppid=1）、无 TTY 的进程可正常调用 `claude -p` 且凭据可用；SIGTERM 经锁文件 PID 送达并被信号陷阱干净收尾。设计后果：宿主会话关闭不影响循环（与无人值守目标一致）；交互会话的 Ctrl+C 不达守护进程，运行期中断统一走 `cancel`。
+12. **验收 worktree 依赖策略**：`setup` 是进入 `goal_hash` 的 shell 命令字符串数组，在基线、循环与每次验收的干净 worktree 中各执行一遍；产物必须由 `.gitignore` 覆盖。`goal-spec baseline` 与 `loop goal` 共用 shell 确认门，只有显式 `--allow-shell` 后才执行。预热安装、APFS clonefile 或其他缓存只能作为未来性能优化，不得改变命令执行次数、candidate 绑定或可观察语义。
 
 ## 9. 来源
 
@@ -456,3 +456,4 @@ checkpoint 前只检查本轮待提交文件，不扫描整个仓库：
 - 2026-07-15：第九次 spike 回填——§8.11 定案 detach 守护进程宿主模型（launchd 收养后 `claude -p` 与凭据实测可用，SIGTERM 经锁文件 PID 可达）；§8.1 会话连续性定案为每轮全新调用，`--resume` 记为二期优化；5.3 明确运行期中断统一走 `cancel`，Ctrl+C 只覆盖前台启动阶段。
 - 2026-07-15：转 Final——§8 十二项在 `docs/tech-design-voidtech-loop-2026-07-15.md` 全部定案；3.1 哈希规则纳入技术设计新增的可选 `setup` 字段（验收依赖 warm 安装命令）。
 - 2026-07-16：F1–F10 实现完成并双路径真实 worker dogfood 通过（简单 `--check` 与复杂 `--spec` 均达 EVALS_PASSED，用户分支/protected path/main 均未被触碰）；插件注册进 marketplace 并按团队决定 `defaultEnabled: true`，1.3 决策行与 portability install-smoke 同步更新。
+- 2026-07-16：一期 1.1 收尾——setup 定案为每个干净 worktree 都执行的稳定语义，预热与 clonefile 降级为不改变语义的未来优化；baseline 与正式启动共用 shell 确认门；detach 启动增加 ready 握手与失败终态化；插件数据目录拒绝继承其他插件的注入路径。

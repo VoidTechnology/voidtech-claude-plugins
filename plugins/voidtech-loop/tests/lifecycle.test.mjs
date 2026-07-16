@@ -13,12 +13,12 @@ import { startLoop, acceptRun, cancelRun, getStatus, newFromCommit } from '../sc
 // 每个测试独立的插件数据区，避免写真实 home
 function withDataRoot(fn) {
   const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = mkdtempSync(join(tmpdir(), 'loop-data-'));
+  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
   process.env.CLAUDE_PLUGIN_DATA = root;
   return Promise.resolve(fn(root)).finally(() => {
     if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
     else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(root, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
   });
 }
 

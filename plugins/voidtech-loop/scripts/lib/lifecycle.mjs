@@ -1,6 +1,6 @@
 // 循环生命周期编排（PRD F8/F9 + 4.1 启动体检 + 4.3 接受/重新发起）。
 // 纯逻辑层：prepare/run/status/cancel/accept/newFromCommit。CLI 负责 detach 与信号，本层可被测试直接驱动。
-// 两阶段启动（P0-1）：prepareRun 在前台完成校验、基线、锁、worktree、warm setup 与初始状态；
+// 两阶段启动（P0-1）：prepareRun 在前台完成校验、基线、锁、worktree、初始状态与循环 setup；
 // runPreparedLoop 接管已准备完成的 run 跑控制器，任何异常都保证终态化（P1-5）。
 
 import { join } from 'node:path';
@@ -15,7 +15,7 @@ import { runSetup } from './evalrunner.mjs';
 import { writeReport } from './report.mjs';
 import {
   projectDataDir, readState, writeState, acquireLock, releaseLock,
-  inspectLock, takeoverStaleLock, processIdentity, STATE_VERSION,
+  inspectLock, takeoverStaleLock, processIdentity, updateLockMeta, STATE_VERSION,
 } from './statestore.mjs';
 
 const TERMINAL_STATUSES = ['STOPPED', 'EVALS_PASSED', 'ACCEPTED'];
@@ -29,7 +29,7 @@ function runDir(projectDir, runId) {
 }
 
 // 阶段一（前台，PRD 4.1）：校验 spec → 解析 base（先规范化完整 SHA 再算 goal_hash，P1-6）→
-// 基线裁定 → 陈旧锁接管（含旧 run 终态化）→ 获取锁 → 建 worktree → warm setup → 写初始状态。
+// 基线裁定 → 陈旧锁接管（含旧 run 终态化）→ 获取锁 → 建 worktree → 写初始状态 → 循环 setup。
 // 所有会失败的准备步骤都在这里发生，返回 { ok:false, stage, ... } 时调用方能拿到真实错误。
 export async function prepareRun({ repo, rawSpec, cloneDeps = [], preflightOpts = null, skipPreflight = false }) {
   // 环境门：非试点 OS/缺命令在建分支或 worktree 前拒绝（V9）。测试用 skipPreflight 走注入路径。
@@ -96,26 +96,30 @@ export async function prepareRun({ repo, rawSpec, cloneDeps = [], preflightOpts 
   const evidenceDir = join(stateDir, 'evidence');
   mkdirSync(evidenceDir, { recursive: true });
 
-  // warm setup（P0-3）：spec.setup 在循环 worktree 内先跑一遍，worker 起步即有依赖；
-  // 产物须被 .gitignore 覆盖，否则会被当作 worker 变更进入 checkpoint。
-  if (normalized.setup?.length) {
-    const setup = await runSetup(normalized.setup, wt.path, { evidenceDir });
-    if (!setup.ok) {
-      releaseLock(projectDir, runId);
-      return { ok: false, stage: 'setup', message: setup.message };
-    }
-  }
+  const prep = {
+    ok: true, repo, runId, projectDir, stateDir, evidenceDir,
+    branch: wt.branch, worktree: wt.path, baseSha, normalized, goalHash,
+  };
 
-  // 初始状态先于控制器落盘：status <runId> 从此刻起可用；controller 字段暂为准备进程，接管后被控制器覆盖
+  // 初始状态必须先于任何后续可失败步骤落盘。这样循环 setup、后台握手等失败都能复用
+  // finalizeInterruptedRun 留下可审计终态，而不是产生无记录的孤儿分支。
   writeState(stateDir, buildInitialState({
     repo, spec: normalized, goalHash, runId,
     branch: wt.branch, worktree: wt.path, baseCommit: baseSha,
   }));
 
-  return {
-    ok: true, repo, runId, projectDir, stateDir, evidenceDir,
-    branch: wt.branch, worktree: wt.path, baseSha, normalized, goalHash,
-  };
+  // 循环 setup（P0-3）：spec.setup 在循环 worktree 内跑一遍，worker 起步即有依赖；
+  // 产物须被 .gitignore 覆盖，否则会被当作 worker 变更进入 checkpoint。
+  if (normalized.setup?.length) {
+    const setup = await runSetup(normalized.setup, wt.path, { evidenceDir });
+    if (!setup.ok) {
+      const detail = { kind: 'setup_failed', message: setup.message };
+      failPreparedRun(prep, detail);
+      return { ...prep, ok: false, stage: 'setup', message: setup.message };
+    }
+  }
+
+  return prep;
 }
 
 // 阶段二：跑控制器直至终态。锁在终态释放（PRD 3.3）；控制器抛出未处理异常时，
@@ -160,6 +164,33 @@ export function finalizeInterruptedRun(stateDir, detail) {
   writeState(stateDir, next);
   writeReport(stateDir, next);
   return { ok: true, state: next };
+}
+
+// prepared run 在控制器接管前失败时的统一收尾：保留分支/worktree 现场，终态化并释放锁。
+// 幂等调用不会覆盖已有终态，也不会因为锁已释放而把成功收尾误报成失败。
+export function failPreparedRun(prep, detail) {
+  const finalized = finalizeInterruptedRun(prep.stateDir, detail);
+  const released = releaseLock(prep.projectDir, prep.runId);
+  const releaseOk = released.ok || released.reason === 'not_held';
+  return { ok: finalized.ok && releaseOk, finalized, released };
+}
+
+// 后台控制器在 ready 回执前同时接管锁和状态中的 PID 身份，避免用户拿到 run ID 后
+// 立即 cancel 时仍向已经退出的准备进程发信号。
+export function adoptPreparedRun(prep, identity) {
+  const lock = updateLockMeta(prep.projectDir, prep.runId, identity);
+  if (!lock.ok) return { ok: false, reason: `锁接管失败：${lock.reason}` };
+  const current = readState(prep.stateDir);
+  if (!current.ok) {
+    releaseLock(prep.projectDir, prep.runId);
+    return { ok: false, reason: `初始状态不可读：${current.reason}` };
+  }
+  writeState(prep.stateDir, {
+    ...current.state,
+    controller: identity,
+    updated_at: new Date().toISOString(),
+  });
+  return { ok: true };
 }
 
 export function getStatus({ repo, runId = null }) {

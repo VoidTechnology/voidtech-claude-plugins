@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import {
   writeState,
@@ -13,6 +13,7 @@ import {
   inspectLock,
   takeoverStaleLock,
   processIdentity,
+  pluginDataRoot,
 } from '../scripts/lib/statestore.mjs';
 
 function tempDir() {
@@ -162,5 +163,29 @@ test('锁目录不存在 → free', () => {
     assert.equal(inspectLock(dir).status, 'free');
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('插件数据目录：忽略其他插件继承的 CLAUDE_PLUGIN_DATA', () => {
+  const prev = process.env.CLAUDE_PLUGIN_DATA;
+  process.env.CLAUDE_PLUGIN_DATA = join(tmpdir(), 'codex-openai-codex');
+  try {
+    assert.equal(pluginDataRoot(), join(homedir(), '.claude', 'plugins', 'data', 'voidtech-loop'));
+  } finally {
+    if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
+    else process.env.CLAUDE_PLUGIN_DATA = prev;
+  }
+});
+
+test('插件数据目录：仅接受尾部为 voidtech-loop 的官方注入路径', () => {
+  const prev = process.env.CLAUDE_PLUGIN_DATA;
+  const expected = join(tempDir(), 'voidtech-loop');
+  process.env.CLAUDE_PLUGIN_DATA = expected;
+  try {
+    assert.equal(pluginDataRoot(), expected);
+  } finally {
+    if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
+    else process.env.CLAUDE_PLUGIN_DATA = prev;
+    rmSync(join(expected, '..'), { recursive: true, force: true });
   }
 });

@@ -16,12 +16,12 @@ const PF_OK = preflight().ok;
 
 function withDataRoot(fn) {
   const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = mkdtempSync(join(tmpdir(), 'loop-data-'));
+  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
   process.env.CLAUDE_PLUGIN_DATA = root;
   return Promise.resolve(fn(root)).finally(() => {
     if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
     else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(root, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
   });
 }
 
@@ -113,8 +113,8 @@ test('P0-1：锁未持有（接管失败）时 __run 回执 error 并以非零�
       assert.equal(hs.ok, false);
       assert.match(hs.reason, /锁接管失败/);
       assert.notEqual(await exited, 0);
-      // run 保持 prepare 时写入的初始状态，未被控制器推进
-      assert.equal(readState(prep.stateDir).state.iteration, 0);
+      // 接管失败也必须终态化，不能留下永远不推进的 RUNNING
+      assert.equal(readState(prep.stateDir).state.status, 'STOPPED');
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

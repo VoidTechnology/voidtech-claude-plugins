@@ -1,5 +1,18 @@
 # Changelog
 
+## voidtech-loop 0.2.0 - 2026-07-16
+
+### Changed
+
+- 将 `setup` 定案为 Goal Spec 的稳定语义契约：在基线、循环与每次验收的干净 worktree 中各执行一遍，产物必须由 `.gitignore` 覆盖；预热安装与 APFS clonefile 降级为不改变语义的未来性能优化。
+- `goal-spec baseline` 与 `loop goal` 共用 shell 确认门；含 `shell: true` eval 或 `setup` 的规格必须经 `--allow-shell` 明确确认后才会执行。
+- 准备阶段在 setup 前落盘初始状态；setup 或后台握手失败时统一写入可信终态并释放项目锁，同时保留分支和 worktree 供排查。
+- 插件数据目录只接受尾部为 `voidtech-loop` 的 `CLAUDE_PLUGIN_DATA`，避免继承其他插件环境变量后把 run 证据写入错误目录。
+
+### Fixed
+
+- L2 取消测试改为跟踪并验证 stub 的准确 PID，移除可能误伤并行任务或本机同名进程的全局 `pgrep` 断言。
+
 ## 0.11.1 - 2026-07-14
 
 ### Added

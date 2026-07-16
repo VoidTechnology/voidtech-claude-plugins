@@ -7,19 +7,19 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, chmodSync } 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { startLoop, prepareRun, runPreparedLoop, getStatus, finalizeInterruptedRun } from '../scripts/lib/lifecycle.mjs';
+import { startLoop, prepareRun, runPreparedLoop, getStatus, finalizeInterruptedRun, failPreparedRun } from '../scripts/lib/lifecycle.mjs';
 import { buildInitialState } from '../scripts/lib/controller.mjs';
 import { projectDataDir, writeState, readState, acquireLock, inspectLock } from '../scripts/lib/statestore.mjs';
 import { gitCommonDir } from '../scripts/lib/gitops.mjs';
 
 function withDataRoot(fn) {
   const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = mkdtempSync(join(tmpdir(), 'loop-data-'));
+  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
   process.env.CLAUDE_PLUGIN_DATA = root;
   return Promise.resolve(fn(root)).finally(() => {
     if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
     else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(root, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
   });
 }
 
@@ -121,6 +121,55 @@ test('P1-5：控制器崩溃时 run 落为 STOPPED(interrupted, controller_crash
       const again = finalizeInterruptedRun(prep.stateDir, { kind: 'noop' });
       assert.equal(again.already, true);
       assert.equal(readState(prep.stateDir).state.stop_detail.kind, 'controller_crash');
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+});
+
+test('P1-5：循环 setup 失败时已落初始状态，并统一终态化且保留排查现场', async () => {
+  await withDataRoot(async () => {
+    const { repo, sha } = makeRepo();
+    const once = join(mkdtempSync(join(tmpdir(), 'setup-once-')), 'ran');
+    try {
+      const spec = {
+        ...simpleSpec(sha, 'setup-fails-warm'),
+        setup: [`if [ -e "${once}" ]; then exit 9; else touch "${once}"; fi`],
+      };
+      const res = await prepareRun({ repo, rawSpec: spec, skipPreflight: true });
+      assert.equal(res.ok, false);
+      assert.equal(res.stage, 'setup');
+      assert.ok(res.runId && res.stateDir && res.worktree, JSON.stringify(res));
+
+      const st = readState(res.stateDir);
+      assert.equal(st.ok, true);
+      assert.equal(st.state.status, 'STOPPED');
+      assert.equal(st.state.stop_reason, 'interrupted');
+      assert.equal(st.state.stop_detail.kind, 'setup_failed');
+      assert.equal(existsSync(join(res.stateDir, 'report.md')), true);
+      assert.equal(existsSync(res.worktree), true, '失败现场 worktree 应保留供排查');
+      assert.equal(inspectLock(res.projectDir).status, 'free');
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(join(once, '..'), { recursive: true, force: true });
+    }
+  });
+});
+
+test('P1-5：握手失败统一终态化 prepared run 并释放锁', async () => {
+  await withDataRoot(async () => {
+    const { repo, sha } = makeRepo();
+    try {
+      const prep = await prepareRun({ repo, rawSpec: simpleSpec(sha, 'handshake-fails'), skipPreflight: true });
+      assert.equal(prep.ok, true, JSON.stringify(prep));
+
+      const failed = failPreparedRun(prep, { kind: 'handshake_failed', reason: 'timeout' });
+      assert.equal(failed.ok, true);
+      const st = readState(prep.stateDir);
+      assert.equal(st.state.status, 'STOPPED');
+      assert.equal(st.state.stop_detail.kind, 'handshake_failed');
+      assert.equal(existsSync(join(prep.stateDir, 'report.md')), true);
+      assert.equal(inspectLock(prep.projectDir).status, 'free');
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

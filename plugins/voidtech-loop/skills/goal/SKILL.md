@@ -1,7 +1,7 @@
 ---
 name: goal
 description: 启动一次 voidtech-loop 工程内循环。给一个可机器判定的任务与一行验收命令，控制器在隔离 worktree 的专属分支上驱动受限 worker 逐轮工作，对指定 commit 执行 eval，全部通过产生 EVALS_PASSED 等待人工复核。仅在用户明确要求“开循环/跑 loop/让 agent 自主推进某个有明确验收命令的任务”时手动调用。
-argument-hint: "\"<任务描述>\" --check \"<验收命令>\" --max-iterations N [--base <commit>] [--max-duration <秒>] [--spec <file.yaml>]"
+argument-hint: "\"<任务描述>\" --check \"<验收命令>\" --max-iterations N [--base <commit>] [--max-duration <秒>] [--spec <file.yaml>] [--allow-shell]"
 disable-model-invocation: true
 ---
 

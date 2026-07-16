@@ -8,7 +8,7 @@ import {
   mkdirSync, rmSync, existsSync, statSync,
 } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { basename, join, dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { canonicalJson } from './validate.mjs';
@@ -16,9 +16,12 @@ import { canonicalJson } from './validate.mjs';
 export const STATE_VERSION = 1;
 const CREATING_GRACE_MS = 2000;
 
-// ${CLAUDE_PLUGIN_DATA} 仅在 hook/MCP 上下文注入；控制器按官方公式自行推导（PRD 3.3）。
+// CLI 可能继承当前会话中其他插件的 ${CLAUDE_PLUGIN_DATA}；只接受本插件目录，
+// 其余情况按官方公式自行推导（PRD 3.3）。
 export function pluginDataRoot() {
-  return process.env.CLAUDE_PLUGIN_DATA ?? join(homedir(), '.claude', 'plugins', 'data', 'voidtech-loop');
+  const injected = process.env.CLAUDE_PLUGIN_DATA;
+  if (injected && basename(resolve(injected)) === 'voidtech-loop') return injected;
+  return join(homedir(), '.claude', 'plugins', 'data', 'voidtech-loop');
 }
 
 export function projectDataDir(gitCommonDirRealpath) {

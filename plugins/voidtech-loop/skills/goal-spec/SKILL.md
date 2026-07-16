@@ -31,6 +31,8 @@ disable-model-invocation: true
    ${CLAUDE_PLUGIN_ROOT}/scripts/goal-spec baseline .voidtech-loop/specs/<slug>.yaml --json
    ```
 
+   spec 含 `shell: true` 的 eval 或 `setup` 命令时，该命令会完整展示将执行的 shell 命令并以退出码 2 停止。把命令清单转达给用户；只有得到明确同意后，才可追加 `--allow-shell` 重新执行。`baseline` 与正式启动共用同一确认门，不得替用户默认确认。
+
    裁定规则：全部 target 已满足 → 报告“目标在基线已满足”，不交付可启动结论；任一 invariant 基线不成立 → 要求改角色或先修基线；命令超时/需未声明网络/未声明副作用 → 停止，不交付“可启动”。只有“至少一个 target 未满足且全部 invariant 成立”才可启动。
 7. **输出**：目标/不变量摘要、基线结果、固定 best-effort 能力、manual review 清单，以及准确的启动命令：
 
@@ -38,7 +40,7 @@ disable-model-invocation: true
    ${CLAUDE_PLUGIN_ROOT}/scripts/loop goal --spec .voidtech-loop/specs/<slug>.yaml
    ```
 
-   绝不自动启动循环、绝不修改业务代码。
+   若已为同一冻结 spec 明确确认过 shell 命令，启动命令追加 `--allow-shell`；否则保留确认门。绝不自动启动循环、绝不修改业务代码。
 
 ## 参考
 

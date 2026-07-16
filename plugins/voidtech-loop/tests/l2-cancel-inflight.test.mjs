@@ -1,7 +1,7 @@
 // L2 回归测试（QA 发现）：cancel 必须及时终止 in-flight worker，而非等到 worker 超时（可长达整个预算）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -13,8 +13,23 @@ import { validateSpecObject } from '../scripts/lib/validate.mjs';
 function sleeperStub(seconds) {
   const dir = mkdtempSync(join(tmpdir(), 'l2-stub-'));
   const stub = join(dir, 's.sh');
-  writeFileSync(stub, `#!/bin/bash\nsleep ${seconds}\n`, { mode: 0o755 });
-  return { dir, argv: ['bash', stub] };
+  const pidFile = join(dir, 'pid');
+  writeFileSync(stub, `#!/bin/bash\nprintf '%s\\n' "$$" > "${pidFile}"\nexec sleep ${seconds}\n`, { mode: 0o755 });
+  return { dir, pidFile, argv: ['bash', stub] };
+}
+
+async function waitForProcessExit(pid, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      if (err.code === 'ESRCH') return true;
+      throw err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
 }
 
 test('L2: shouldStop 期间 runWorker 及时终止 worker（不等超时）', async () => {
@@ -27,9 +42,9 @@ test('L2: shouldStop 期间 runWorker 及时终止 worker（不等超时）', as
     assert.ok(elapsed < 5000, `cancel 应在数秒内生效，实际 ${elapsed}ms`);
     assert.equal(r.ok, false);
     assert.equal(r.canceled, true);
-    await new Promise((res) => setTimeout(res, 2500));
-    const leftover = spawnSync('pgrep', ['-f', `sleep 30`], { encoding: 'utf8' });
-    assert.notEqual(leftover.status, 0, 'worker 进程组应被清理');
+    assert.equal(existsSync(stub.pidFile), true, 'stub 应记录自身 PID');
+    const pid = Number(readFileSync(stub.pidFile, 'utf8').trim());
+    assert.equal(await waitForProcessExit(pid), true, `worker 进程 ${pid} 应被清理`);
   } finally {
     rmSync(wt, { recursive: true, force: true });
     rmSync(stub.dir, { recursive: true, force: true });

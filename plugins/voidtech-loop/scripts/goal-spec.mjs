@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { validateSpecText } from './lib/validate.mjs';
 import { runBaseline } from './lib/baseline.mjs';
+import { shellExecutionGate } from './lib/shellgate.mjs';
 
 const HELP = `用法：goal-spec <命令> <spec.yaml> [选项]
 
@@ -15,6 +16,7 @@ const HELP = `用法：goal-spec <命令> <spec.yaml> [选项]
   --json                 以 JSON 输出（机器可读）
   --repo <path>          仓库路径（baseline，默认当前目录）
   --clone-deps <path>    从仓库根克隆依赖目录进验收 worktree（baseline，可重复）
+  --allow-shell          确认执行 shell eval 与 setup 命令（baseline 安全门）
 
 退出码：
   0  校验通过 / 基线可启动
@@ -33,6 +35,7 @@ function parseArgs(argv) {
     if (a === '--json') args.json = true;
     else if (a === '--repo') args.repo = argv[++i];
     else if (a === '--clone-deps') args.cloneDeps.push(argv[++i]);
+    else if (a === '--allow-shell') args.allowShell = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else positional.push(a);
   }
@@ -95,6 +98,11 @@ async function main() {
   if (!validation.ok) {
     printValidation(validation, args.json);
     process.exit(1);
+  }
+  const shellGate = shellExecutionGate(validation, { allowShell: args.allowShell });
+  if (!shellGate.ok) {
+    console.error(shellGate.message);
+    process.exit(2);
   }
   const report = await runBaseline(validation.normalized, {
     repo: args.repo,

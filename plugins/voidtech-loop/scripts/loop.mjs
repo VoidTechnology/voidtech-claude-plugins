@@ -10,8 +10,9 @@ import { buildSimpleSpec } from './lib/simplemode.mjs';
 import { parseYaml } from './lib/yaml.mjs';
 import { preflight } from './lib/preflight.mjs';
 import { validateSpecObject } from './lib/validate.mjs';
-import { prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun } from './lib/lifecycle.mjs';
-import { updateLockMeta, processIdentity } from './lib/statestore.mjs';
+import { shellExecutionGate } from './lib/shellgate.mjs';
+import { adoptPreparedRun, failPreparedRun, prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun } from './lib/lifecycle.mjs';
+import { processIdentity } from './lib/statestore.mjs';
 import { gitRun } from './lib/gitops.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
@@ -82,31 +83,50 @@ function buildRawSpec(repo, opts) {
   return { ok: true, raw: built.spec };
 }
 
-// shell 确认门（P0-4，PRD 安全承诺“完整展示并单独确认”）：
-// spec 含 shell eval 或 setup 命令（同为任意 shell 字符串）时，完整展示并要求 --allow-shell。
-function shellGate(raw, opts) {
-  const v = validateSpecObject(raw);
-  if (!v.ok) return { ok: true }; // 结构问题交给 prepareRun 统一报告
-  const shellEvals = v.normalized.evals.filter((e) => e.shell);
-  const setupCmds = v.normalized.setup ?? [];
-  if (shellEvals.length === 0 && setupCmds.length === 0) return { ok: true };
-  if (opts.allowShell) return { ok: true };
-  console.error('Goal Spec 含将以 shell 执行的任意命令，需要单独确认后才能启动：');
-  for (const e of shellEvals) console.error(`  [eval ${e.id}] ${e.command}`);
-  for (const c of setupCmds) console.error(`  [setup] ${c}`);
-  console.error('确认以上命令无误后，加 --allow-shell 重新启动。');
-  return { ok: false };
-}
-
 // 等待后台控制器的 ready/error 握手（P0-1）
 function awaitHandshake(child) {
   return new Promise((res) => {
-    const timer = setTimeout(() => res({ ok: false, reason: `控制器 ${HANDSHAKE_TIMEOUT_MS / 1000}s 内未回执` }), HANDSHAKE_TIMEOUT_MS);
-    const done = (v) => { clearTimeout(timer); res(v); };
-    child.once('message', (m) => done(m?.ok ? m : { ok: false, reason: m?.reason ?? '控制器拒绝接管' }));
-    child.once('error', (err) => done({ ok: false, reason: String(err) }));
-    child.once('exit', (code, signal) => done({ ok: false, reason: `控制器提前退出（${signal ?? `exit ${code}`}）` }));
+    let settled = false;
+    const onMessage = (m) => done(m?.ok ? m : { ok: false, reason: m?.reason ?? '控制器拒绝接管' });
+    const onError = (err) => done({ ok: false, reason: String(err) });
+    const onExit = (code, signal) => done({ ok: false, reason: `控制器提前退出（${signal ?? `exit ${code}`}）` });
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.off('message', onMessage);
+      child.off('error', onError);
+      child.off('exit', onExit);
+    };
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      res(value);
+    };
+    const timer = setTimeout(() => done({ ok: false, reason: `控制器 ${HANDSHAKE_TIMEOUT_MS / 1000}s 内未回执` }), HANDSHAKE_TIMEOUT_MS);
+    child.once('message', onMessage);
+    child.once('error', onError);
+    child.once('exit', onExit);
   });
+}
+
+async function terminateController(child) {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  const waitForExit = (timeoutMs) => new Promise((resolveExit) => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolveExit(true);
+    const timer = setTimeout(() => {
+      child.off('exit', onExit);
+      resolveExit(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolveExit(true);
+    };
+    child.once('exit', onExit);
+  });
+  try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch { /* 已退出 */ } }
+  if (await waitForExit(2000)) return;
+  try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* 已退出 */ } }
+  await waitForExit(2000);
 }
 
 async function cmdGoal(repo, argv) {
@@ -121,7 +141,11 @@ async function cmdGoal(repo, argv) {
     console.error(built.message);
     return 2;
   }
-  if (!shellGate(built.raw, opts).ok) return 2;
+  const shellGate = shellExecutionGate(validateSpecObject(built.raw), { allowShell: opts.allowShell });
+  if (!shellGate.ok) {
+    console.error(shellGate.message);
+    return 2;
+  }
 
   if (opts.foreground) {
     const res = await startLoop({ repo, rawSpec: built.raw, skipPreflight: true });
@@ -150,8 +174,10 @@ async function cmdGoal(repo, argv) {
   });
   const hs = await awaitHandshake(child);
   if (!hs.ok) {
+    await terminateController(child);
+    failPreparedRun(prep, { kind: 'handshake_failed', reason: hs.reason });
     console.error(`后台控制器启动失败：${hs.reason}`);
-    console.error(`run ${prep.runId} 已准备但未运行；可用 loop status ${prep.runId} 检视。`);
+    console.error(`run ${prep.runId} 已终止；可用 loop status ${prep.runId} 检视报告。`);
     return 1;
   }
   child.unref();
@@ -171,9 +197,10 @@ async function cmdRun() {
     process.on(sig, () => { stopRequested = true; });
   }
   // 接管锁所有权（判活身份换成控制器自身），成功后回执握手；失败则拒绝接管
-  const lock = updateLockMeta(prep.projectDir, prep.runId, processIdentity());
-  if (!lock.ok) {
-    if (process.send) { try { process.send({ ok: false, reason: `锁接管失败：${lock.reason}` }); } catch { /* 父进程可能已退出 */ } }
+  const adoption = adoptPreparedRun(prep, processIdentity());
+  if (!adoption.ok) {
+    failPreparedRun(prep, { kind: 'handshake_failed', reason: adoption.reason });
+    if (process.send) { try { process.send({ ok: false, reason: adoption.reason }); } catch { /* 父进程可能已退出 */ } }
     process.exitCode = 1;
     return;
   }

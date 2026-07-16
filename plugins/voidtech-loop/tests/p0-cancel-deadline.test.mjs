@@ -12,12 +12,12 @@ import { startLoop } from '../scripts/lib/lifecycle.mjs';
 
 function withDataRoot(fn) {
   const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = mkdtempSync(join(tmpdir(), 'loop-data-'));
+  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
   process.env.CLAUDE_PLUGIN_DATA = root;
   return Promise.resolve(fn(root)).finally(() => {
     if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
     else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(root, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
   });
 }
 

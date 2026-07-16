@@ -323,7 +323,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 
 `voidtech-loop` 用于无人值守推进工程任务。它把任务和验收条件冻结为 Goal Spec，由确定性控制器在独立 worktree 的专属分支上逐轮驱动 worker，并对每轮 checkpoint commit 运行 eval。
 
-当前为 F3 开发阶段，仅支持 macOS arm64。运行环境需要 Claude Code 2.1.210 或更高版本、Node.js 18+、Git 和 `jq`。
+一期工程内循环已经完成，当前试点版仅支持 macOS arm64。运行环境需要 Claude Code 2.1.210 或更高版本、Node.js 18+、Git 和 `jq`。
 
 ### 9.1 何时使用
 
@@ -361,7 +361,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 - `manual_review`：只能由人判断的产品或设计要求，不进入 eval；
 - `out_of_scope`：本轮明确不做的内容。
 
-若任务其实只有一个 target，且能用一条安全命令表达，`goal-spec` 不会生成 YAML，而是返回一行 `goal --check` 命令。复杂任务会运行 schema 校验和基线 dry-run，草稿默认写入 `.voidtech-loop/specs/<slug>.yaml`。`goal-spec` 只生成和验证规格，不会启动循环，也不会修改业务代码。确认草稿后再调用：
+若任务其实只有一个 target，且能用一条安全命令表达，`goal-spec` 不会生成 YAML，而是返回一行 `goal --check` 命令。复杂任务会运行 schema 校验和基线 dry-run，草稿默认写入 `.voidtech-loop/specs/<slug>.yaml`。spec 含 `shell: true` 的 eval 或 `setup` 命令时，基线命令也会展示完整命令清单，并要求显式追加 `--allow-shell` 后才执行。`goal-spec` 只生成和验证规格，不会启动循环，也不会修改业务代码。确认草稿后再调用：
 
 ```text
 /voidtech-loop:goal --spec .voidtech-loop/specs/<slug>.yaml
