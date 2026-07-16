@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop review decision record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "decision_id", "run_id", "goal_hash", "source_commit",
+    "outcome", "manual_review_results", "decided_at", "decided_by",
+    "authorization", "proposal_hash", "approval_bundle_hash", "basis", "note"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "decision_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "goal_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "outcome": { "enum": ["accept", "abandon", "revise"] },
+    "manual_review_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "passed", "passed_by", "note"],
+        "properties": {
+          "item": { "type": "string", "minLength": 1 },
+          "passed": { "type": "boolean" },
+          "passed_by": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "claimed_id", "identity_verified"],
+            "properties": {
+              "kind": { "const": "local_user" },
+              "claimed_id": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+              "identity_verified": { "type": "boolean" }
+            }
+          },
+          "note": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+        }
+      }
+    },
+    "decided_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T" },
+    "decided_by": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "claimed_id", "identity_verified"],
+          "properties": {
+            "kind": { "const": "local_user" },
+            "claimed_id": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "identity_verified": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "session_id", "authorization"],
+          "properties": {
+            "kind": { "const": "agent" },
+            "session_id": { "type": "string", "minLength": 1 },
+            "authorization": { "const": "bounded_delegate" }
+          }
+        }
+      ]
+    },
+    "authorization": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["grant_id", "grant_hash"],
+          "properties": {
+            "grant_id": { "type": "string", "minLength": 1 },
+            "grant_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
+      ]
+    },
+    "proposal_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] },
+    "approval_bundle_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] },
+    "basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["original_goal_hash", "supplemental_verification"],
+      "properties": {
+        "original_goal_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "supplemental_verification": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["goal_hash", "commit", "result", "evidence_hash"],
+              "properties": {
+                "goal_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+                "result": { "const": "passed" },
+                "evidence_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "note": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+  }
+}

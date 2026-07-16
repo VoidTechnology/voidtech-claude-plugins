@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop review operation journal entry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id", "protocol_version", "run_id", "outcome",
+    "expected_state_checksum", "grant", "decision_payload", "phase"
+  ],
+  "properties": {
+    "operation_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "protocol_version": { "const": 1 },
+    "run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "outcome": { "enum": ["accept", "abandon", "revise"] },
+    "expected_state_checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "grant": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["grant_id", "grant_hash"],
+          "properties": {
+            "grant_id": { "type": "string", "minLength": 1 },
+            "grant_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
+      ]
+    },
+    "decision_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_hash", "decision"],
+      "properties": {
+        "decision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "decision": { "type": "object" }
+      }
+    },
+    "phase": { "enum": ["prepared", "committed"] }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop supplemental verification attempt record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "verification_id", "run_id", "approval_bundle_hash",
+    "attempt", "started_at", "finished_at", "result", "detail", "evidence_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "verification_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "approval_bundle_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "started_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T" },
+    "finished_at": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T" }] },
+    "result": { "enum": ["passed", "correction_required", "inconclusive"] },
+    "detail": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+    "evidence_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] }
+  }
+}

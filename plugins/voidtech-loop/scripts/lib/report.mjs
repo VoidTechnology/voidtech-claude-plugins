@@ -15,7 +15,7 @@ const FIXED_DECLARATIONS = [
   '循环从不自动 push、merge、建 PR 或改写用户分支；合入永远由人执行。',
 ];
 
-export function renderReport(state) {
+export function renderReport(state, review = null) {
   const L = [];
   const push = (s = '') => L.push(s);
 
@@ -112,6 +112,27 @@ export function renderReport(state) {
     push();
   }
 
+  // 二期（P2-24）：执行健康与评审健康分开呈现；decision actor 与依据可追溯，不伪装身份认证
+  if (review) {
+    push(`## Review 决定与健康度`);
+    push();
+    push(`- **run_integrity**：\`${review.integrity?.run_integrity ?? 'unknown'}\``);
+    push(`- **review_integrity**：\`${review.integrity?.review_integrity ?? 'not_started'}\``);
+    if (review.decision) {
+      const d = review.decision;
+      const actor = d.decided_by.kind === 'agent'
+        ? `agent（session ${d.decided_by.session_id}，授权 ${d.authorization?.grant_id ?? 'n/a'}）`
+        : `local_user（identity_verified: false）`;
+      push(`- **decision**：${d.outcome}　\`${d.decision_id}\`　by ${actor}　at ${d.decided_at}`);
+      if (d.note) push(`- **note**：${d.note}`);
+      if (d.manual_review_results.length) {
+        push(`- **manual review 结果**：`);
+        for (const m of d.manual_review_results) push(`  - [${m.passed ? 'x' : ' '}] ${m.item}${m.note ? `（${m.note}）` : ''}`);
+      }
+    }
+    push();
+  }
+
   push(`## 固定声明`);
   push();
   for (const d of FIXED_DECLARATIONS) push(`- ${d}`);
@@ -120,9 +141,9 @@ export function renderReport(state) {
   return L.join('\n');
 }
 
-export function writeReport(stateDir, state) {
+export function writeReport(stateDir, state, review = null) {
   const path = join(stateDir, 'report.md');
-  writeFileSync(path, renderReport(state));
+  writeFileSync(path, renderReport(state, review));
   return path;
 }
 

@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop feedback pack v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "feedback_id", "parent_run_id", "created_at", "source", "items"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "feedback_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "parent_run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "created_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "content_hash"],
+      "properties": {
+        "kind": { "enum": ["review_finding", "human_note", "external"] },
+        "reference": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "content_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "summary", "disposition", "mapped_to", "evidence_refs", "note"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "summary": { "type": "string", "minLength": 1 },
+          "disposition": { "enum": ["apply", "out_of_scope", "escalate", "reject"] },
+          "mapped_to": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "note": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+        }
+      }
+    }
+  }
+}

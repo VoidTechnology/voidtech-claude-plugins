@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop approval bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "draft_id", "draft_version", "parent_run_id",
+    "proposal_hash", "feedback_pack_hash", "goal_spec_hash", "base_commit",
+    "execution_plan_hash", "delegation_grant_hash", "evidence_snapshot_hash",
+    "validation_plan_hash", "approval_bundle_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "draft_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "draft_version": { "type": "integer", "minimum": 1 },
+    "parent_run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "proposal_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "feedback_pack_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "goal_spec_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "base_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "execution_plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "delegation_grant_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] },
+    "evidence_snapshot_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "validation_plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "approval_bundle_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

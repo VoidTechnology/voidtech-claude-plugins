@@ -11,7 +11,7 @@ import { parseYaml } from './lib/yaml.mjs';
 import { preflight } from './lib/preflight.mjs';
 import { validateSpecObject } from './lib/validate.mjs';
 import { shellExecutionGate } from './lib/shellgate.mjs';
-import { adoptPreparedRun, failPreparedRun, prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun } from './lib/lifecycle.mjs';
+import { adoptPreparedRun, failPreparedRun, prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun, abandonRun } from './lib/lifecycle.mjs';
 import { processIdentity } from './lib/statestore.mjs';
 import { resolveCommit } from './lib/gitops.mjs';
 
@@ -226,6 +226,9 @@ function cmdStatus(repo, argv) {
     console.log(`run ${s.run_id}：${s.status}${s.stop_reason ? `(${s.stop_reason})` : ''}`);
     console.log(`迭代 ${s.iteration}，最近 checkpoint ${s.last_checkpoint}`);
     if (s.candidate_commit) console.log(`candidate ${s.candidate_commit}`);
+    if (r.review) {
+      console.log(`run_integrity ${r.review.run_integrity}，review_integrity ${r.review.review_integrity}${r.review.outcome ? `（${r.review.outcome}）` : ''}`);
+    }
   } else if (r.lock.status === 'alive') {
     console.log(`活动循环：run ${r.lock.meta?.run_id}（pid ${r.lock.meta?.pid}）`);
   } else {
@@ -243,12 +246,41 @@ function cmdCancel(repo, argv) {
   return 0;
 }
 
-function cmdAccept(repo, argv) {
+// 临时 CLI 契约（完整审批交互属 Task 5.3）：spec 含 manual_review 时必须显式 --manual-passed
+// 逐项确认已通过；未给出时列出待办项并拒绝，不静默替人打勾。
+async function cmdAccept(repo, argv) {
   const runId = argv[0];
-  if (!runId) { console.error('用法：loop accept <runId>'); return 2; }
-  const r = acceptRun({ repo, runId });
-  if (!r.ok) { console.error(r.message); return 1; }
-  console.log(`run ${runId} 已接受（ACCEPTED）`);
+  if (!runId) { console.error('用法：loop accept <runId> [--manual-passed] [--note <text>]'); return 2; }
+  const noteIdx = argv.indexOf('--note');
+  const note = noteIdx >= 0 ? (argv[noteIdx + 1] ?? null) : null;
+  const manualPassed = argv.includes('--manual-passed');
+
+  const status = getStatus({ repo, runId });
+  if (!status.ok) { console.error(`状态不可读：${status.reason}`); return 1; }
+  const required = status.state.spec?.manual_review ?? [];
+  if (required.length > 0 && !manualPassed) {
+    console.error(`该 run 有 ${required.length} 项 manual review 待人工确认：`);
+    for (const item of required) console.error(`  - ${item}`);
+    console.error(`逐项确认无误后执行：loop accept ${runId} --manual-passed`);
+    return 1;
+  }
+  const manualReviewResults = manualPassed ? required.map((item) => ({ item, passed: true })) : [];
+
+  const r = await acceptRun({ repo, runId, manualReviewResults, note });
+  if (!r.ok) { console.error(r.message ?? r.reason); return 1; }
+  if (r.legacy) { console.log(`run ${runId} 为一期 legacy ACCEPTED，不补造 Decision Record`); return 0; }
+  console.log(`run ${runId} 已接受（ACCEPTED）${r.idempotent ? '（幂等：返回已有决定）' : ''}，decision ${r.decision.decision_id}`);
+  return 0;
+}
+
+async function cmdAbandon(repo, argv) {
+  const runId = argv[0];
+  if (!runId) { console.error('用法：loop abandon <runId> [--reason <text>]'); return 2; }
+  const reasonIdx = argv.indexOf('--reason');
+  const note = reasonIdx >= 0 ? (argv[reasonIdx + 1] ?? null) : null;
+  const r = await abandonRun({ repo, runId, note });
+  if (!r.ok) { console.error(r.message ?? r.reason); return 1; }
+  console.log(`run ${runId} 已放弃${r.idempotent ? '（幂等：返回已有决定）' : ''}，decision ${r.decision.decision_id}；run 执行事实未被修改`);
   return 0;
 }
 
@@ -262,6 +294,7 @@ async function main() {
     case 'status': return cmdStatus(repo, rest);
     case 'cancel': return cmdCancel(repo, rest);
     case 'accept': return cmdAccept(repo, rest);
+    case 'abandon': return cmdAbandon(repo, rest);
     case undefined:
     case '-h':
     case '--help':

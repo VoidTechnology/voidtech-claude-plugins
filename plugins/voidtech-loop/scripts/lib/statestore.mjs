@@ -54,7 +54,21 @@ export function readState(dir) {
   const expected = createHash('sha256').update(canonicalJson(body), 'utf8').digest('hex');
   if (checksum !== expected) return { ok: false, reason: 'checksum_mismatch' };
   if (body.state_version !== STATE_VERSION) return { ok: false, reason: 'unsupported_schema' };
-  return { ok: true, state: body };
+  // checksum 一并返回：review 层的锁内 compare-and-write 以它为前置条件（二期 §3.4）
+  return { ok: true, state: body, checksum };
+}
+
+// 锁内 compare-and-write（二期技术设计 §3.4）：只承诺单机文件系统上、持 review lock 前提下的
+// 条件更新，不是分布式 CAS。锁的存在被机械强制，不靠调用方自觉。
+export function updateStateIfChecksum(dir, expectedChecksum, mutator) {
+  if (!existsSync(join(dir, 'review.lock'))) return { ok: false, reason: 'lock_not_held' };
+  const r = readState(dir);
+  if (!r.ok) return { ok: false, reason: r.reason };
+  if (r.checksum !== expectedChecksum) return { ok: false, reason: 'state_changed', checksum: r.checksum };
+  const next = mutator(structuredClone(r.state));
+  writeState(dir, next);
+  const after = readState(dir);
+  return { ok: true, state: after.state, checksum: after.checksum };
 }
 
 export function atomicWrite(path, payload) {

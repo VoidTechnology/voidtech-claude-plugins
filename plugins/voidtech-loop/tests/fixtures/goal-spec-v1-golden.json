@@ -1,0 +1,42 @@
+[
+  {
+    "name": "simple-target-defaults",
+    "note": "简单模式等价：单 target，全部默认值（max_duration/shell/cwd/expected_exit/repeat/三个空数组）",
+    "same_hash_as": null,
+    "yaml": "schema_version: 1\ngoal_id: payment-tests\ntask: Fix failing tests in the payment module\nbase_commit: a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\nbudgets:\n  max_iterations: 25\nevals:\n  - id: payment-tests\n    role: target\n    command: [npm, test, --, payment]\n    timeout_seconds: 600\n",
+    "expected_canonical": "{\"base_commit\":\"a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\",\"budgets\":{\"max_duration_seconds\":3600,\"max_iterations\":25},\"evals\":[{\"command\":[\"npm\",\"test\",\"--\",\"payment\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"payment-tests\",\"repeat\":1,\"role\":\"target\",\"shell\":false,\"timeout_seconds\":600}],\"goal_id\":\"payment-tests\",\"manual_review\":[],\"out_of_scope\":[],\"protected_paths\":[],\"schema_version\":1,\"task\":\"Fix failing tests in the payment module\"}",
+    "expected_goal_hash": "76a4ee61497984bcfd2aa7944b495b5b1ab3b1d5572724f819be5ad904afc669"
+  },
+  {
+    "name": "complex-full-fields",
+    "note": "复杂：invariant + setup + shell:true + manual/out_of_scope/protected_paths + cwd/repeat/expected_exit",
+    "same_hash_as": null,
+    "yaml": "schema_version: 1\ngoal_id: payment-api-migration\ntask: Migrate payment to the new API and keep contract tests passing\nbase_commit: a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\nbudgets:\n  max_iterations: 30\n  max_duration_seconds: 5400\nsetup:\n  - npm ci\nprotected_paths:\n  - tests/payment/acceptance/**\nevals:\n  - id: contract-tests\n    role: target\n    command: [npm, test, --, contract]\n    cwd: packages/payment\n    timeout_seconds: 600\n    repeat: 2\n  - id: typecheck\n    role: invariant\n    command: [npx, tsc, --noEmit]\n    timeout_seconds: 300\n    expected_exit: 0\n  - id: e2e-shell\n    role: target\n    shell: true\n    command: npm run test:e2e -- payment | tee /dev/null\n    timeout_seconds: 900\nmanual_review:\n  - Confirm the public payment API remains source-compatible\nout_of_scope:\n  - Performance tuning beyond passing tests\n",
+    "expected_canonical": "{\"base_commit\":\"a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\",\"budgets\":{\"max_duration_seconds\":5400,\"max_iterations\":30},\"evals\":[{\"command\":[\"npm\",\"test\",\"--\",\"contract\"],\"cwd\":\"packages/payment\",\"expected_exit\":0,\"id\":\"contract-tests\",\"repeat\":2,\"role\":\"target\",\"shell\":false,\"timeout_seconds\":600},{\"command\":[\"npx\",\"tsc\",\"--noEmit\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"typecheck\",\"repeat\":1,\"role\":\"invariant\",\"shell\":false,\"timeout_seconds\":300},{\"command\":\"npm run test:e2e -- payment | tee /dev/null\",\"cwd\":\".\",\"expected_exit\":0,\"id\":\"e2e-shell\",\"repeat\":1,\"role\":\"target\",\"shell\":true,\"timeout_seconds\":900}],\"goal_id\":\"payment-api-migration\",\"manual_review\":[\"Confirm the public payment API remains source-compatible\"],\"out_of_scope\":[\"Performance tuning beyond passing tests\"],\"protected_paths\":[\"tests/payment/acceptance/**\"],\"schema_version\":1,\"setup\":[\"npm ci\"],\"task\":\"Migrate payment to the new API and keep contract tests passing\"}",
+    "expected_goal_hash": "8c1e271aa58f11d9fe178ccfd035d46bb1ed977aa088de5205bfeb0b1d5709cb"
+  },
+  {
+    "name": "uppercase-short-sha",
+    "note": "大写短 SHA：normalize 只做小写化，不解析补全（补全在 lifecycle 层，另有 p1 测试）",
+    "same_hash_as": null,
+    "yaml": "schema_version: 1\ngoal_id: short-sha\ntask: Uppercase short sha is lowercased by normalize\nbase_commit: A1B2C3D\nbudgets:\n  max_iterations: 5\nevals:\n  - id: t\n    role: target\n    command: [bash, check.sh]\n    timeout_seconds: 60\n",
+    "expected_canonical": "{\"base_commit\":\"a1b2c3d\",\"budgets\":{\"max_duration_seconds\":3600,\"max_iterations\":5},\"evals\":[{\"command\":[\"bash\",\"check.sh\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"t\",\"repeat\":1,\"role\":\"target\",\"shell\":false,\"timeout_seconds\":60}],\"goal_id\":\"short-sha\",\"manual_review\":[],\"out_of_scope\":[],\"protected_paths\":[],\"schema_version\":1,\"task\":\"Uppercase short sha is lowercased by normalize\"}",
+    "expected_goal_hash": "fb4d54a8b90856e21bf48d5895ac49429dfbbdb23efd10fd04c6dae91f513ffc"
+  },
+  {
+    "name": "key-order-and-comments",
+    "note": "键序打乱 + 注释：hash 必须与 simple-target-defaults 完全一致",
+    "same_hash_as": "simple-target-defaults",
+    "yaml": "# comment at top\ntask: Fix failing tests in the payment module\nevals:\n  - timeout_seconds: 600  # inline comment\n    command: [npm, test, --, payment]\n    role: target\n    id: payment-tests\nbudgets:\n  max_iterations: 25\nbase_commit: a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\ngoal_id: payment-tests # trailing comment\nschema_version: 1\n",
+    "expected_canonical": "{\"base_commit\":\"a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\",\"budgets\":{\"max_duration_seconds\":3600,\"max_iterations\":25},\"evals\":[{\"command\":[\"npm\",\"test\",\"--\",\"payment\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"payment-tests\",\"repeat\":1,\"role\":\"target\",\"shell\":false,\"timeout_seconds\":600}],\"goal_id\":\"payment-tests\",\"manual_review\":[],\"out_of_scope\":[],\"protected_paths\":[],\"schema_version\":1,\"task\":\"Fix failing tests in the payment module\"}",
+    "expected_goal_hash": "76a4ee61497984bcfd2aa7944b495b5b1ab3b1d5572724f819be5ad904afc669"
+  },
+  {
+    "name": "scalar-quoting-edges",
+    "note": "YAML 标量类型边角：带引号的数字/布尔字符串参数必须保持字符串",
+    "same_hash_as": null,
+    "yaml": "schema_version: 1\ngoal_id: scalar-edges\ntask: Quoted scalars stay strings\nbase_commit: a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\nbudgets:\n  max_iterations: 5\nevals:\n  - id: t\n    role: target\n    command: [node, script.js, \"1\", \"true\", \"007\"]\n    timeout_seconds: 60\n",
+    "expected_canonical": "{\"base_commit\":\"a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0\",\"budgets\":{\"max_duration_seconds\":3600,\"max_iterations\":5},\"evals\":[{\"command\":[\"node\",\"script.js\",\"1\",\"true\",\"007\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"t\",\"repeat\":1,\"role\":\"target\",\"shell\":false,\"timeout_seconds\":60}],\"goal_id\":\"scalar-edges\",\"manual_review\":[],\"out_of_scope\":[],\"protected_paths\":[],\"schema_version\":1,\"task\":\"Quoted scalars stay strings\"}",
+    "expected_goal_hash": "cb27a4c8e9e2d2f10c04299f75f411b84c7075d9b0aed30d599cd3efbdffb187"
+  }
+]

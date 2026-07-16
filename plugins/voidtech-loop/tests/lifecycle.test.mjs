@@ -87,11 +87,18 @@ test('V16：accept 只能从 EVALS_PASSED 进入 ACCEPTED', async () => {
       const built = buildSimpleSpec({ task: 'make done', check: 'bash check.sh', maxIterations: 5, baseCommit: sha });
       const res = await startLoop({ repo, rawSpec: built.spec, overrideArgv: stub.argv, skipPreflight: true });
       assert.equal(res.final.status, 'EVALS_PASSED');
-      const acc = acceptRun({ repo, runId: res.runId });
+      const acc = await acceptRun({ repo, runId: res.runId });
       assert.equal(acc.ok, true);
       assert.equal(acc.state.status, 'ACCEPTED');
-      // 再次 accept（已 ACCEPTED）应被拒绝
-      assert.equal(acceptRun({ repo, runId: res.runId }).ok, false);
+      // 二期：accept 同时生成外部 Decision Record 并写入 decision_ref
+      assert.equal(acc.decision.outcome, 'accept');
+      assert.equal(acc.state.decision_ref.decision_id, acc.decision.decision_id);
+      assert.equal(acc.state.review_protocol_version, 1);
+      // 再次 accept（已 ACCEPTED）：相同请求幂等返回已有决定（P2-15）
+      const again = await acceptRun({ repo, runId: res.runId });
+      assert.equal(again.ok, true);
+      assert.equal(again.idempotent, true);
+      assert.equal(again.decision.decision_id, acc.decision.decision_id);
     } finally {
       rmSync(repo, { recursive: true, force: true });
       rmSync(stub.dir, { recursive: true, force: true });
@@ -109,7 +116,7 @@ test('V16：对非 EVALS_PASSED 状态 accept 被拒绝', async () => {
       const built = buildSimpleSpec({ task: 'never', check: 'bash check.sh', maxIterations: 10, baseCommit: sha });
       const res = await startLoop({ repo, rawSpec: built.spec, overrideArgv: ['bash', stub], skipPreflight: true });
       assert.equal(res.final.status, 'STOPPED');
-      assert.equal(acceptRun({ repo, runId: res.runId }).ok, false);
+      assert.equal((await acceptRun({ repo, runId: res.runId })).ok, false);
     } finally {
       rmSync(repo, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });
@@ -127,7 +134,7 @@ test('V18：状态文件损坏时 accept/status fail closed', async () => {
       // 篡改状态文件正文，破坏 checksum
       const statePath = join(res.stateDir, 'state.json');
       writeFileSync(statePath, '{"state_version":1,"run_id":"x","status":"ACCEPTED","checksum":"deadbeef"}');
-      assert.equal(acceptRun({ repo, runId: res.runId }).ok, false, '损坏状态不得被接受');
+      assert.equal((await acceptRun({ repo, runId: res.runId })).ok, false, '损坏状态不得被接受');
       const st = getStatus({ repo, runId: res.runId });
       assert.equal(st.ok, false);
     } finally {

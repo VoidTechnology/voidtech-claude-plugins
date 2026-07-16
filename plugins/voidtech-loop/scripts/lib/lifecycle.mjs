@@ -17,6 +17,11 @@ import {
   projectDataDir, readState, writeState, acquireLock, releaseLock,
   inspectLock, takeoverStaleLock, processIdentity, updateLockMeta, STATE_VERSION,
 } from './statestore.mjs';
+import { submitDecision } from './decisionstore.mjs';
+import {
+  classifyReviewIntegrity, recoverRunReview, isLegacyAccepted,
+  buildAcceptStateUpdate, buildStatePrecondition,
+} from './reviewintegrity.mjs';
 
 const TERMINAL_STATUSES = ['STOPPED', 'EVALS_PASSED', 'ACCEPTED'];
 
@@ -198,26 +203,154 @@ export function getStatus({ repo, runId = null }) {
   if (!common) return { ok: false, message: '不是 Git 仓库' };
   const projectDir = projectDataDir(common);
   if (runId) {
-    return readState(runDir(projectDir, runId));
+    const r = readState(runDir(projectDir, runId));
+    // 执行健康与评审健康分开呈现（P2-24）：state 不可读也不掩盖 review 层信息
+    return { ...r, review: classifyReviewIntegrity(projectDir, runId, r) };
   }
   const lockState = inspectLock(projectDir);
   return { ok: true, lock: lockState };
 }
 
-// accept：只能从 EVALS_PASSED → ACCEPTED（V16）。只更新对应 run，不占长生命周期锁。
-export function acceptRun({ repo, runId }) {
+function localUser() {
+  return { kind: 'local_user', claimed_id: null, identity_verified: false };
+}
+
+function newDecisionId() {
+  return `decision-${randomBytes(6).toString('hex')}`;
+}
+
+function newOperationId() {
+  return `review-op-${randomBytes(6).toString('hex')}`;
+}
+
+// 人工输入 [{ item, passed, note? }] 规范化为 Decision Record 形态；passed_by 只能是 local_user（P2-11）。
+function normalizeManualResults(results) {
+  return results.map((m) => ({
+    item: m.item,
+    passed: m.passed === true,
+    passed_by: localUser(),
+    note: m.note ?? null,
+  }));
+}
+
+// manual review 完整性（§3.5）：spec 声明的每一项必须有结果；不接受规格之外的额外条目。
+function checkManualReviewCoverage(spec, results) {
+  const required = spec?.manual_review ?? [];
+  const provided = new Set(results.map((m) => m.item));
+  const missing = required.filter((item) => !provided.has(item));
+  const extra = results.filter((m) => !required.includes(m.item)).map((m) => m.item);
+  return { ok: missing.length === 0 && extra.length === 0, missing, extra };
+}
+
+// accept（二期 §3.5，P2-15）：EVALS_PASSED -> ACCEPTED 保持一期语义，同时经 run review lock、
+// Operation Journal 与 decision slot 生成外部 Decision Record。重复调用幂等；legacy Accept 不补造 Record。
+export async function acceptRun({ repo, runId, manualReviewResults = [], note = null }) {
   const common = gitCommonDir(repo);
   if (!common) return { ok: false, message: '不是 Git 仓库' };
-  const stateDir = runDir(projectDataDir(common), runId);
+  const projectDir = projectDataDir(common);
+  const stateDir = runDir(projectDir, runId);
   const r = readState(stateDir);
   if (!r.ok) return { ok: false, message: `状态不可读：${r.reason}` };
-  if (r.state.status !== 'EVALS_PASSED') {
+
+  if (r.state.status === 'ACCEPTED' && isLegacyAccepted(r.state)) {
+    return { ok: true, already: true, legacy: true, state: r.state };
+  }
+  if (r.state.status !== 'EVALS_PASSED' && r.state.status !== 'ACCEPTED') {
     return { ok: false, message: `accept 只能从 EVALS_PASSED 进入；当前状态 ${r.state.status}` };
   }
-  const next = { ...r.state, status: 'ACCEPTED', accepted_at: new Date().toISOString() };
-  writeState(stateDir, next);
-  writeReport(stateDir, next);
-  return { ok: true, state: next };
+
+  const coverage = checkManualReviewCoverage(r.state.spec, manualReviewResults);
+  if (!coverage.ok) {
+    return {
+      ok: false, reason: 'manual_review_incomplete',
+      message: `manual review 结果不完整或含规格外条目；缺少 ${JSON.stringify(coverage.missing)}，多余 ${JSON.stringify(coverage.extra)}`,
+      missing: coverage.missing, extra: coverage.extra,
+    };
+  }
+
+  const decision = {
+    schema_version: 1,
+    decision_id: newDecisionId(),
+    run_id: runId,
+    goal_hash: r.state.goal_hash,
+    source_commit: r.state.candidate_commit,
+    outcome: 'accept',
+    manual_review_results: normalizeManualResults(manualReviewResults),
+    decided_at: new Date().toISOString(),
+    decided_by: localUser(),
+    authorization: null,
+    proposal_hash: null,
+    approval_bundle_hash: null,
+    basis: { original_goal_hash: r.state.goal_hash, supplemental_verification: null },
+    note,
+  };
+
+  const result = await submitDecision(projectDir, runId, {
+    operationId: newOperationId(),
+    decision,
+    expectedStateChecksum: r.checksum,
+    applyStateUpdate: buildAcceptStateUpdate(stateDir),
+  });
+  if (!result.ok) return { ...result, message: result.message ?? `accept 失败：${result.reason}` };
+
+  // committed Accept + state 落后（幂等命中但 state 未迁移）：按恢复矩阵补齐，补不齐 fail closed
+  let after = readState(stateDir);
+  if (after.ok && after.state.status === 'EVALS_PASSED') {
+    const recovered = await recoverRunReview(projectDir, runId);
+    if (!recovered.ok) return recovered;
+    after = readState(stateDir);
+  }
+
+  const review = classifyReviewIntegrity(projectDir, runId, after);
+  writeReport(stateDir, after.state, { decision: result.record, integrity: review });
+  return { ok: true, state: after.state, decision: result.record, idempotent: result.idempotent ?? false, review };
+}
+
+// abandon（二期 §3.5，PRD §10.2）：不修改 run state 或 checksum，只在 decision slot 上
+// 追加 finalized Decision Record；发布前锁内重读并要求 checksum 未变。
+export async function abandonRun({ repo, runId, note = null }) {
+  const common = gitCommonDir(repo);
+  if (!common) return { ok: false, message: '不是 Git 仓库' };
+  const projectDir = projectDataDir(common);
+  const stateDir = runDir(projectDir, runId);
+  const r = readState(stateDir);
+  if (!r.ok) return { ok: false, message: `状态不可读：${r.reason}` };
+  if (r.state.status !== 'EVALS_PASSED' && r.state.status !== 'STOPPED') {
+    return { ok: false, message: `abandon 只能对终态且未接受的 run 执行；当前状态 ${r.state.status}` };
+  }
+
+  const decision = {
+    schema_version: 1,
+    decision_id: newDecisionId(),
+    run_id: runId,
+    goal_hash: r.state.goal_hash,
+    source_commit: r.state.candidate_commit ?? r.state.last_checkpoint ?? r.state.base_commit,
+    outcome: 'abandon',
+    manual_review_results: [],
+    decided_at: new Date().toISOString(),
+    decided_by: localUser(),
+    authorization: null,
+    proposal_hash: null,
+    approval_bundle_hash: null,
+    basis: { original_goal_hash: r.state.goal_hash, supplemental_verification: null },
+    note,
+  };
+
+  const result = await submitDecision(projectDir, runId, {
+    operationId: newOperationId(),
+    decision,
+    expectedStateChecksum: r.checksum,
+    applyStateUpdate: buildStatePrecondition(stateDir),
+  });
+  if (!result.ok) return { ...result, message: result.message ?? `abandon 失败：${result.reason}` };
+
+  // Abandon 不写回旧 state：state 与 checksum 保持原值（P2-24）
+  const after = readState(stateDir);
+  return {
+    ok: true, state: after.state, decision: result.record,
+    idempotent: result.idempotent ?? false,
+    review: classifyReviewIntegrity(projectDir, runId, after),
+  };
 }
 
 // cancel：幂等（PRD 4.3）。活动进程发 SIGTERM；已 STOPPED/ACCEPTED 直接返回成功。

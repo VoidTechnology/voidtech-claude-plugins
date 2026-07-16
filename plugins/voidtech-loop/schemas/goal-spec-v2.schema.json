@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Goal Spec v2",
+  "description": "voidtech-loop Goal Spec v2（二期技术设计 §4.3）：在 v1 全部字段之上新增 agent_review、review_policy 与 provenance。v1 schema 保持独立且不原地改写；两版均严格拒绝未知字段，未知版本由 validator fail closed。",
+  "type": "object",
+  "required": ["schema_version", "goal_id", "task", "base_commit", "budgets", "evals"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 2 },
+    "goal_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "task": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "base_commit": { "type": "string", "pattern": "^[0-9a-fA-F]{7,40}$" },
+    "budgets": {
+      "type": "object",
+      "required": ["max_iterations"],
+      "additionalProperties": false,
+      "properties": {
+        "max_iterations": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "max_duration_seconds": { "type": "integer", "minimum": 60, "maximum": 86400 }
+      }
+    },
+    "setup": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "protected_paths": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "pattern": "^[^!]" }
+    },
+    "evals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "role", "command", "timeout_seconds"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "role": { "enum": ["target", "invariant"] },
+          "command": {
+            "anyOf": [
+              { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+              { "type": "string", "minLength": 1 }
+            ]
+          },
+          "shell": { "type": "boolean" },
+          "cwd": { "type": "string", "minLength": 1 },
+          "expected_exit": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 7200 },
+          "repeat": { "type": "integer", "minimum": 1, "maximum": 10 }
+        }
+      }
+    },
+    "manual_review": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "agent_review": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "criterion", "required", "evidence_scope"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "criterion": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "required": { "type": "boolean" },
+          "evidence_scope": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "enum": ["candidate_diff", "repository", "eval_results", "rounds", "evidence"] }
+          }
+        }
+      }
+    },
+    "review_policy": {
+      "type": "object",
+      "required": ["default_mode", "bounded_delegate_allowed"],
+      "additionalProperties": false,
+      "properties": {
+        "default_mode": { "const": "suggestion" },
+        "bounded_delegate_allowed": { "type": "boolean" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["parent_run"],
+      "additionalProperties": false,
+      "properties": {
+        "parent_run": {
+          "type": "object",
+          "required": ["run_id", "goal_hash", "source_commit"],
+          "additionalProperties": false,
+          "properties": {
+            "run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+            "goal_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+          }
+        },
+        "feedback": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["feedback_id", "feedback_hash"],
+            "additionalProperties": false,
+            "properties": {
+              "feedback_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+              "feedback_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
