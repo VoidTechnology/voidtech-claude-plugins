@@ -2,7 +2,8 @@
 
 ## 1. 前置条件
 
-- Claude Code 2.1.154 或更高版本
+- `voidtech-core`：Claude Code 2.1.154 或更高版本
+- `voidtech-loop`：Claude Code 2.1.210 或更高版本；当前 F3 阶段仅支持 macOS arm64，并依赖 Node.js 18+、Git 与 `jq`
 - 使用 MCP 插件时需要 Node.js 20.19 或更高版本
 - Apple MCP 仅支持安装了 Xcode 的 macOS
 
@@ -11,7 +12,7 @@ claude --version
 node --version
 ```
 
-## 2. 安装核心插件
+## 2. 安装核心插件与工程内循环
 
 项目的 `.claude/settings.json` 应合入 `templates/project-settings.json`（其中已为 `voidtech` marketplace 声明 `"autoUpdate": true`）。手动安装时执行：
 
@@ -19,6 +20,14 @@ node --version
 claude plugin marketplace add VoidTechnology/voidtech-claude-plugins
 claude plugin install voidtech-core@voidtech
 ```
+
+`voidtech-loop` 用于完成条件可由命令退出码判定的无人值守工程任务。满足 macOS arm64、Claude Code 2.1.210+、Node.js 18+、Git 与 `jq` 后再安装：
+
+```bash
+claude plugin install voidtech-loop@voidtech
+```
+
+不满足试点条件时跳过该插件，不影响 `voidtech-core`。loop 不自动 push、merge、创建 PR/MR 或改写用户分支；机器 eval 通过后仍需人工复核。
 
 ### 2.1 开启 marketplace 自动更新（必做）
 
@@ -52,6 +61,8 @@ claude plugin marketplace update voidtech
 claude plugin uninstall voidtech-toolkit@voidtech
 claude plugin install voidtech-core@voidtech
 ```
+
+满足上述试点条件、需要工程内循环时，再单独安装 `voidtech-loop@voidtech`。
 
 ## 3. 按需安装 MCP
 
@@ -138,4 +149,4 @@ claude plugin list
 /doctor
 ```
 
-预期结果：`voidtech-core` 已启用；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。
+预期结果：`voidtech-core` 已启用；试点环境中 `voidtech-loop` 已启用，`/skills` 可看到 `voidtech-loop:goal` 与 `voidtech-loop:goal-spec`；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。
