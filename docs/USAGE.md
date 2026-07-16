@@ -344,7 +344,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 
 `--check` 必须在缺陷存在时失败、目标达成后通过。`--max-iterations` 没有默认值，必须由用户指定；`--max-duration` 可选，默认 3600 秒。启动前会检查运行环境、Git、base commit 和基线 eval。若目标在基线已经满足，或基线 invariant 已经失败，循环不会启动。
 
-启动命令会在控制器转入后台后立即返回，并提示如何使用 `loop status` 查看 run ID、循环分支和当前状态。关闭当前 Claude Code 会话不会停止循环；需要中断时使用 `loop cancel <runId>`，不要依赖 Ctrl+C。
+启动分两阶段：校验、基线、加锁、建 worktree 都在前台完成，任何一步失败都会直接报错并以非零退出码返回；准备成功后后台控制器接管，启动命令直接输出 run ID 与循环分支。之后用 `loop status <runId>` 看进度。Goal Spec 含 `shell: true` 的 eval 或 `setup` 命令时，启动命令会完整展示这些命令并要求追加 `--allow-shell` 单独确认。关闭当前 Claude Code 会话不会停止循环；需要中断时使用 `loop cancel <runId>`，不要依赖 Ctrl+C。
 
 ### 9.3 复杂任务
 

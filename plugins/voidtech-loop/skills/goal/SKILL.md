@@ -25,8 +25,9 @@ disable-model-invocation: true
    任务复杂（多 target、invariant、protected paths、自定义 cwd/env）时，先让用户走 `/voidtech-loop:goal-spec` 生成 spec，再用 `--spec <file>` 启动。
 
 2. **不要替用户猜 `--max-iterations`**：它必须由用户显式给出。缺失时停下来问一次。
-3. 用 Bash 运行上述脚本。脚本自身完成启动体检（试点 OS、版本、Git、基线 eval）、获取项目锁、创建循环分支与 worktree，然后 **detach 后台守护进程**并立即返回。
-4. 把脚本输出的 run ID、循环分支和 `loop status` / `loop cancel` 提示原样转达给用户。**不要**声称任务已完成——完成与否由后续 eval 与人工 `accept` 决定。
+3. 用 Bash 运行上述脚本。脚本在**前台**完成启动体检（试点 OS、版本、Git、基线 eval）、获取项目锁、创建循环分支与 worktree 并写入初始状态，随后 detach 后台控制器、等其握手回执后返回：成功时直接输出 run ID，失败时输出具体失败阶段与原因（退出码非零）——失败不会假报“已启动”。
+4. spec 含 `shell: true` 的 eval 或 `setup` 命令时，脚本会完整展示这些命令并以退出码 2 要求确认；把命令清单转达给用户，得到明确同意后再追加 `--allow-shell` 重新启动，不得替用户默认加上。
+5. 把脚本输出的 run ID、循环分支和 `loop status` / `loop cancel` 提示原样转达给用户。**不要**声称任务已完成——完成与否由后续 eval 与人工 `accept` 决定。
 
 ## 边界
 

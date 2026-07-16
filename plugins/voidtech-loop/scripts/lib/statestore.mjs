@@ -110,6 +110,20 @@ export function acquireLock(projectDir, meta) {
   return { ok: true };
 }
 
+// 锁所有权移交（P0-1 两阶段启动）：detach 控制器接管由准备进程获取的锁，把判活身份换成自己。
+// 只允许同 run 接管；准备进程可能已退出（锁瞬时呈 stale），因此不要求 alive，但拒绝 free/异主。
+export function updateLockMeta(projectDir, runId, identity) {
+  const current = inspectLock(projectDir);
+  if (current.status === 'free') return { ok: false, reason: 'not_held' };
+  if (current.meta?.run_id !== runId) return { ok: false, reason: 'not_owner', holder: current.meta ?? null };
+  atomicWrite(join(lockDir(projectDir), 'meta.json'), JSON.stringify({
+    run_id: runId,
+    ...identity,
+    acquired_at: current.meta.acquired_at ?? new Date().toISOString(),
+  }, null, 2));
+  return { ok: true };
+}
+
 export function releaseLock(projectDir, runId) {
   const current = inspectLock(projectDir);
   if (current.status === 'free') return { ok: false, reason: 'not_held' };

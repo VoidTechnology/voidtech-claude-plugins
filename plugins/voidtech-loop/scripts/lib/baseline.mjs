@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { gitRun, removeWorktree } from './gitops.mjs';
-import { execEval } from './evalrunner.mjs';
+import { execEval, runSetup } from './evalrunner.mjs';
 
 export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
   const repoPath = resolve(repo ?? '.');
@@ -43,6 +43,14 @@ export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
       const clone = spawnSync('cp', ['-c', '-R', src, join(worktree, dep)], { encoding: 'utf8' });
       if (clone.status !== 0) {
         spawnSync('cp', ['-R', src, join(worktree, dep)], { encoding: 'utf8' });
+      }
+    }
+
+    // setup（P0-3）：基线 worktree 同样是干净检出，先补齐依赖再裁定；环境失败按 infra_error 上报
+    if (normalizedSpec.setup?.length) {
+      const setup = await runSetup(normalizedSpec.setup, worktree);
+      if (!setup.ok) {
+        return { verdict: 'infra_error', exitCode: 2, base_commit: baseSha, message: `基线环境 setup 失败：${setup.message}` };
       }
     }
 

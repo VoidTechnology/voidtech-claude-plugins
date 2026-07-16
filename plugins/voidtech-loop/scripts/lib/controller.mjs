@@ -18,14 +18,9 @@ import { writeReport } from './report.mjs';
 const NO_PROGRESS_LIMIT = 3;
 const CONTROLLER_PATHS = ['.claude'];
 
-export async function runControllerLoop(ctx) {
-  const {
-    repo, spec, goalHash, runId, branch, worktree, baseCommit,
-    stateDir, evidenceDir, overrideArgv = null, shouldStop = null,
-  } = ctx;
-
-  const startedAt = Date.now();
-  const state = {
+// 初始状态形态的唯一来源：prepareRun 落盘初始状态与控制器接管共用，禁止两处各写一份字段清单。
+export function buildInitialState({ repo, spec, goalHash, runId, branch, worktree, baseCommit }) {
+  return {
     state_version: STATE_VERSION,
     run_id: runId,
     goal_hash: goalHash,
@@ -38,7 +33,7 @@ export async function runControllerLoop(ctx) {
     stop_reason: null,
     stop_detail: null,
     iteration: 0,
-    started_at: new Date(startedAt).toISOString(),
+    started_at: new Date().toISOString(),
     updated_at: null,
     last_checkpoint: baseCommit,
     candidate_commit: null,
@@ -47,6 +42,18 @@ export async function runControllerLoop(ctx) {
     audit_recorded: [],
     controller: processIdentity(),
   };
+}
+
+export async function runControllerLoop(ctx) {
+  const {
+    repo, spec, goalHash, runId, branch, worktree, baseCommit,
+    stateDir, evidenceDir, overrideArgv = null, shouldStop = null,
+  } = ctx;
+
+  const state = buildInitialState({ repo, spec, goalHash, runId, branch, worktree, baseCommit });
+  const startedAt = Date.parse(state.started_at);
+  // 墙钟硬上限（P0-2）：deadline 贯穿 worker 与每条 eval；到点后 in-flight 子进程被截断，不再只在轮次间检查
+  const deadlineAt = startedAt + spec.budgets.max_duration_seconds * 1000;
   const persist = () => {
     state.updated_at = new Date().toISOString();
     writeState(stateDir, state);
@@ -186,12 +193,18 @@ export async function runControllerLoop(ctx) {
       candidateSha: cp.sha,
       goalHash,
       evidenceDir: join(evidenceDir, `iteration-${state.iteration}`),
+      shouldStop,
+      deadlineAt,
     });
     const snapEvalAfter = auditSnapshot(repo, [worktree]);
     const evalAudit = compareAudit(repo, snapEvalBefore, snapEvalAfter);
     state.audit_recorded.push(...evalAudit.recorded);
     if (!evalAudit.ok) {
       return stopped('failed', { kind: 'eval_audit_violation', violations: evalAudit.violations });
+    }
+    // cancel 在 eval 阶段到达（P0-2）：先于 verdict 解读收尾为 canceled，避免把截断误判为验收失败
+    if (shouldStop?.() || verdict.error === 'canceled') {
+      return stopped('canceled', { kind: 'user_stop' });
     }
     if (verdict.error) {
       return stopped('failed', { kind: 'eval_infra', error: verdict.error, message: verdict.message });

@@ -18,6 +18,8 @@ export const WORKER_SUMMARY_TOTAL_CAP = 32 * 1024;
 // captureStdout 的完整 stdout 上限：worker 的 --output-format json 必须整体可解析，
 // 8KiB 摘要截断会让大 result 字段恒解析失败（M2）；超过此上限同样按解析失败降级为 unavailable。
 const CAPTURE_STDOUT_CAP = 8 * 1024 * 1024;
+// 每条 setup 命令的固定超时（P0-3）：覆盖常见依赖安装（npm ci 等）；spec 不提供 per-setup 超时字段。
+export const SETUP_TIMEOUT_SECONDS = 900;
 
 // 子进程环境白名单（技术设计 §4）：凭据类环境变量不继承，eval 断开全局 git 配置。
 export function whitelistEnv() {
@@ -28,7 +30,7 @@ export function whitelistEnv() {
   return out;
 }
 
-export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash, evidenceDir, cloneDeps = [] }) {
+export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash, evidenceDir, cloneDeps = [], shouldStop = null, deadlineAt = null }) {
   const rev = gitRun(repo, ['rev-parse', '--verify', '--quiet', `${candidateSha}^{commit}`]);
   if (rev.status !== 0) {
     return { passed: false, error: 'invalid_candidate', message: `candidate 不是有效 commit：${candidateSha}` };
@@ -49,9 +51,24 @@ export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash
     }
 
     if (evidenceDir) mkdirSync(evidenceDir, { recursive: true });
+
+    // setup（P0-3）：一次性 worktree 从 candidate 干净检出，spec.setup 先补齐运行依赖；
+    // 失败按 setup_failed 上报——环境没准备好必须与“目标未满足”区分，不得混入 eval 裁定。
+    if (normalizedSpec.setup?.length) {
+      const setup = await runSetup(normalizedSpec.setup, worktree, {
+        evidenceDir, candidateSha: sha, goalHash, shouldStop, deadlineAt,
+      });
+      if (!setup.ok) {
+        return { passed: false, error: setup.canceled ? 'canceled' : 'setup_failed', message: setup.message };
+      }
+    }
+
     const results = [];
     for (const evalDef of normalizedSpec.evals) {
-      results.push(await execEval(evalDef, worktree, { evidenceDir, candidateSha: sha, goalHash }));
+      if (shouldStop?.()) {
+        return { passed: false, error: 'canceled', message: '收到取消信号，Eval Pack 提前终止' };
+      }
+      results.push(await execEval(evalDef, worktree, { evidenceDir, candidateSha: sha, goalHash, shouldStop, deadlineAt }));
     }
 
     const failed = results.filter((r) => !r.pass);
@@ -68,15 +85,44 @@ export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash
   }
 }
 
-// 执行单条 eval（含 repeat）；baseline 也走这里。
-// env：默认凭据清理白名单（eval 跑不可信代码）；worker 调用传入继承环境（claude -p 需认证）。
+// setup 命令执行（P0-3）：spec.setup 依次以 shell 在 worktree 内执行，用于补齐一次性检出缺失的依赖。
+// 复用 execEval 的超时、进程组清理与证据协议；任一命令非零退出即失败，环境错误不得混入 eval 裁定。
+export async function runSetup(commands, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, shouldStop = null, deadlineAt = null } = {}) {
+  for (const [idx, command] of commands.entries()) {
+    if (shouldStop?.()) return { ok: false, canceled: true, message: '收到取消信号，setup 提前终止' };
+    const evalDef = {
+      id: `setup-${idx + 1}`,
+      role: 'setup',
+      command,
+      shell: true,
+      cwd: '.',
+      expected_exit: 0,
+      timeout_seconds: SETUP_TIMEOUT_SECONDS,
+      repeat: 1,
+    };
+    const result = await execEval(evalDef, worktree, { evidenceDir, candidateSha, goalHash, shouldStop, deadlineAt });
+    if (!result.pass) {
+      return {
+        ok: false,
+        canceled: result.runs.some((r) => r.canceled) || Boolean(shouldStop?.()),
+        message: `setup 命令失败（${command}）：${result.summary.slice(0, 512)}`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+// 执行单条 eval（含 repeat）；baseline 与 setup 也走这里。
+// env：默认凭据清理白名单（eval/setup 跑不可信代码）；worker 调用传入继承环境（claude -p 需认证）。
 // captureStdout：worker 调用需要完整 stdout 解析 --output-format json（M2），常规 eval 不开启。
-// shouldStop：仅 worker 调用传入。轮询到 true 时主动终止 in-flight 子进程组，使 cancel 及时生效（L2）。
-export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null, captureStdout = false, shouldStop = null } = {}) {
+// shouldStop：轮询到 true 时主动终止 in-flight 子进程组，使 cancel 及时生效（L2/P0-2）。
+// deadlineAt：run 级墙钟截止时间戳（ms）；单次执行超时取 min(eval 超时, 剩余墙钟)，到点即截断（P0-2）。
+export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null, captureStdout = false, shouldStop = null, deadlineAt = null } = {}) {
   const runEnv = env ?? whitelistEnv();
   const runs = [];
   for (let n = 1; n <= evalDef.repeat; n++) {
-    const run = await runOnce(evalDef, worktree, runEnv, captureStdout, shouldStop);
+    if (n > 1 && shouldStop?.()) break;
+    const run = await runOnce(evalDef, worktree, runEnv, captureStdout, shouldStop, deadlineAt);
     if (evidenceDir) {
       const path = join(evidenceDir, `${evalDef.id}-run${n}.log`);
       writeEvidenceFile(path, evalDef, run, n, { candidateSha, goalHash });
@@ -88,9 +134,9 @@ export async function execEval(evalDef, worktree, { evidenceDir = null, candidat
       };
     }
     runs.push(run);
-    if (run.timed_out) break;
+    if (run.timed_out || run.canceled) break;
   }
-  const pass = runs.length === evalDef.repeat && runs.every((r) => !r.timed_out && r.exit === evalDef.expected_exit);
+  const pass = runs.length === evalDef.repeat && runs.every((r) => !r.timed_out && !r.canceled && r.exit === evalDef.expected_exit);
   const summary = buildSummary(evalDef, runs);
   const stdout = captureStdout ? (runs[runs.length - 1].stdout ?? '') : undefined;
   for (const r of runs) {
@@ -146,12 +192,23 @@ function writeEvidenceFile(path, evalDef, run, runNo, { candidateSha, goalHash }
   writeFileSync(path, header + body);
 }
 
-function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = null) {
+function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = null, deadlineAt = null) {
   return new Promise((resolvePromise) => {
     const cwd = join(worktree, evalDef.cwd);
     const [cmd, args] = evalDef.shell
       ? ['/bin/bash', ['-c', evalDef.command]]
       : [evalDef.command[0], evalDef.command.slice(1)];
+
+    // 墙钟硬上限（P0-2）：单次执行超时取 min(eval 超时, 剩余墙钟)；deadline 已过则不启动子进程
+    const timeoutMs = deadlineAt === null
+      ? evalDef.timeout_seconds * 1000
+      : Math.min(evalDef.timeout_seconds * 1000, deadlineAt - Date.now());
+    if (timeoutMs <= 0) {
+      const stream = makeStreamCapture();
+      stream.finalize();
+      resolvePromise({ exit: null, signal: null, duration_ms: 0, timed_out: true, deadline_exceeded: true, canceled: false, stream, stdout: captureStdout ? '' : undefined });
+      return;
+    }
 
     const stream = makeStreamCapture();
     // 与 head/tail 截断证据分离：captureStdout 单独保留完整 stdout（不混入 stderr），供 JSON 整体解析
@@ -183,14 +240,16 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = 
     child.stderr.on('data', stream.push);
 
     let timedOut = false;
+    let deadlineExceeded = false;
     let canceled = false;
     const killTimer = setTimeout(() => {
       timedOut = true;
+      deadlineExceeded = deadlineAt !== null && timeoutMs < evalDef.timeout_seconds * 1000;
       try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 组可能已退出 */ }
       setTimeout(() => {
         try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 同上 */ }
       }, 2000).unref();
-    }, evalDef.timeout_seconds * 1000);
+    }, timeoutMs);
 
     // cancel 轮询：worker 长时间运行期间收到 stop 请求时，及时终止其进程组（L2）
     const stopPoll = shouldStop
@@ -217,7 +276,7 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = 
       if (stopPoll) clearInterval(stopPoll);
       try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 残留兜底 */ }
       stream.finalize();
-      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, canceled, stream, stdout: fullStdout() });
+      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, deadline_exceeded: deadlineExceeded, canceled, stream, stdout: fullStdout() });
     });
   });
 }

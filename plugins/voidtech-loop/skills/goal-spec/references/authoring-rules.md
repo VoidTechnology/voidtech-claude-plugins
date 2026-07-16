@@ -12,7 +12,7 @@
 | `base_commit` | 是 | 7–40 位十六进制 commit；启动时若未显式 `--base` 则取当前 HEAD |
 | `budgets.max_iterations` | 是 | 1–200，必须由用户显式给出 |
 | `budgets.max_duration_seconds` | 否 | 60–86400，缺省规范化为 3600 |
-| `setup` | 否 | warm 安装命令 argv 数组（如 `[npm, ci]`）；进入 goal_hash |
+| `setup` | 否 | shell 命令字符串数组（如 `["npm ci"]`），在基线 worktree、循环 worktree 与每次 eval 的一次性 worktree 内各执行一遍以补齐依赖；单条命令超时 900s；产物必须被 `.gitignore` 覆盖，否则会被当作 worker 变更进入 checkpoint；与 shell eval 同属任意命令，启动时需 `--allow-shell` 确认；进入 goal_hash |
 | `protected_paths` | 否 | gitignore 语法（按 `git check-ignore` 语义匹配）；不支持 `!` 否定模式 |
 | `evals` | 是 | 至少一个，且至少一个 `role: target` |
 | `manual_review` | 否 | 人工复核项，进报告不进 eval |
@@ -25,7 +25,7 @@
 | `id` | 是 | kebab-case 稳定标识 |
 | `role` | 是 | `target` 或 `invariant` |
 | `command` | 是 | 默认 argv 数组（不经 shell）；数字/布尔参数必须加引号成字符串 |
-| `shell` | 否 | 声明为 `true` 时 `command` 必须是单个字符串，启动时需显式确认 |
+| `shell` | 否 | 声明为 `true` 时 `command` 必须是单个字符串；启动时 CLI 会完整展示全部 shell 命令并要求 `--allow-shell` 单独确认 |
 | `cwd` | 否 | 相对仓库根；不允许绝对路径或 `..` 逃逸；缺省为 `.` |
 | `expected_exit` | 否 | 0–255，缺省 0 |
 | `timeout_seconds` | 是 | 1–7200 |
