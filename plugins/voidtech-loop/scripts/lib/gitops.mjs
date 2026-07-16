@@ -202,9 +202,10 @@ export function checkpointGate(worktreePath, lastSha, { exclude = [] } = {}) {
 }
 
 // protected paths：gitignore 语义匹配（ls-files --exclude-from 组合，技术设计 §6）。
-export function protectedPathsHits(worktreePath, lastSha, patterns) {
+// exclude：控制器基础设施路径（如 .claude/）不参与匹配，与 checkpointGate/checkpoint 一致。
+export function protectedPathsHits(worktreePath, lastSha, patterns, { exclude = [] } = {}) {
   if (!patterns || patterns.length === 0) return [];
-  const changed = changedPaths(worktreePath, lastSha);
+  const changed = changedPaths(worktreePath, lastSha, { exclude });
   if (changed.length === 0) return [];
   const patternFile = join(mkdtempSync(join(tmpdir(), 'loop-protected-')), 'patterns');
   writeFileSync(patternFile, patterns.join('\n') + '\n');

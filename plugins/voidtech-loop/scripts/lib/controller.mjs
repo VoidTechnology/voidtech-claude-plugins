@@ -138,7 +138,7 @@ export async function runControllerLoop(ctx) {
     if (!audit.ok) {
       return stopped('failed', { kind: 'audit_violation', violations: audit.violations });
     }
-    const protectedHits = protectedPathsHits(worktree, state.last_checkpoint, spec.protected_paths);
+    const protectedHits = protectedPathsHits(worktree, state.last_checkpoint, spec.protected_paths, { exclude: CONTROLLER_PATHS });
     if (protectedHits.length > 0) {
       return stopped('blocked', { kind: 'protected_path', hits: protectedHits });
     }
