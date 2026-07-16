@@ -40,7 +40,7 @@ function slowEvalSpec(sha) {
     goal_id: 'slow',
     base_commit: sha,
     protected_paths: [],
-    evals: [{ id: 'slow', role: 'target', command: ['sleep', '30'], shell: false, cwd: '.', expected_exit: 0, repeat: 1, timeout_seconds: 120 }],
+    evals: [{ id: 'slow', role: 'target', command: ['sleep', '47'], shell: false, cwd: '.', expected_exit: 0, repeat: 1, timeout_seconds: 120 }],
   };
 }
 
@@ -96,8 +96,9 @@ test('P0-2：取消信号在 eval 运行中到达时，in-flight 子进程组被
 
 test('P0-2：cancel 在 VERIFYING 阶段生效，run 收尾为 STOPPED(canceled)', async () => {
   await withDataRoot(async () => {
-    // 基线时 progress=todo 快速失败（startable）；worker 写 done 后 eval 进入 30s sleep，取消在此期间到达
-    const { repo, sha } = makeRepo('#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ] || exit 1\nsleep 30\n');
+    // 基线时 progress=todo 快速失败（startable）；worker 写 done 后 eval 进入长 sleep，取消在此期间到达
+    // sleep 时长刻意避开 30：l2 测试用全局 pgrep -f "sleep 30" 断言进程组清理，并发撞名会误报残留
+    const { repo, sha } = makeRepo('#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ] || exit 1\nsleep 47\n');
     const stubDir = mkdtempSync(join(tmpdir(), 'cancel-stub-'));
     const stub = join(stubDir, 's.sh');
     writeFileSync(stub, '#!/bin/bash\necho done > progress.txt\n', { mode: 0o755 });
