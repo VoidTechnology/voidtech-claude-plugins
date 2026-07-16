@@ -4,12 +4,10 @@
 // 注入 worker 的规范化摘要每条 eval 不超过 8KiB、总量由控制器约束在 32KiB 内。
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
-import { gitRun, removeWorktree } from './gitops.mjs';
+import { resolveCommit, withEphemeralWorktree } from './gitops.mjs';
 
 const HEAD_CAP = 256 * 1024;
 const TAIL_CAP = 256 * 1024;
@@ -31,25 +29,14 @@ export function whitelistEnv() {
 }
 
 export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash, evidenceDir, cloneDeps = [], shouldStop = null, deadlineAt = null }) {
-  const rev = gitRun(repo, ['rev-parse', '--verify', '--quiet', `${candidateSha}^{commit}`]);
-  if (rev.status !== 0) {
+  const resolved = resolveCommit(repo, candidateSha);
+  if (!resolved.ok) {
     return { passed: false, error: 'invalid_candidate', message: `candidate 不是有效 commit：${candidateSha}` };
   }
-  const sha = rev.stdout.trim();
-  const worktree = mkdtempSync(join(tmpdir(), 'loop-verify-'));
-
-  try {
-    const add = gitRun(repo, ['worktree', 'add', '--detach', '--force', worktree, sha]);
-    if (add.status !== 0) {
-      return { passed: false, error: 'worktree_failed', message: add.stderr.trim() };
-    }
-
-    for (const dep of cloneDeps) {
-      const src = join(repo, dep);
-      const clone = spawnSync('cp', ['-c', '-R', src, join(worktree, dep)], { encoding: 'utf8' });
-      if (clone.status !== 0) spawnSync('cp', ['-R', src, join(worktree, dep)], { encoding: 'utf8' });
-    }
-
+  const sha = resolved.sha;
+  const ephemeral = await withEphemeralWorktree(repo, sha, {
+    prefix: 'loop-verify-', cloneDeps,
+  }, async (worktree) => {
     if (evidenceDir) mkdirSync(evidenceDir, { recursive: true });
 
     // setup（P0-3）：一次性 worktree 从 candidate 干净检出，spec.setup 先补齐运行依赖；
@@ -80,9 +67,11 @@ export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash
       results,
       failed,
     };
-  } finally {
-    removeWorktree(repo, worktree);
+  });
+  if (!ephemeral.ok) {
+    return { passed: false, error: 'worktree_failed', message: ephemeral.message };
   }
+  return ephemeral.value;
 }
 
 // setup 命令执行（P0-3）：spec.setup 依次以 shell 在 worktree 内执行，用于补齐一次性检出缺失的依赖。

@@ -2,27 +2,23 @@
 // worker 摘要 ≤32KiB）与失败证据的规范化结构。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { runEvalPack } from '../scripts/lib/evalrunner.mjs';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'evalrunner-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'fixture@voidtech.local');
-  git('config', 'user.name', 'fixture');
-  writeFileSync(join(repo, 'ok.sh'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'fail.sh'), '#!/bin/bash\necho boom >&2\nexit 7\n', { mode: 0o755 });
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  const sha = git('rev-parse', 'HEAD').stdout.trim();
-  return { repo, sha };
+  return makeTestRepo({
+    prefix: 'evalrunner-fixture-',
+    files: {
+      'ok.sh': { content: '#!/bin/bash\nexit 0\n', mode: 0o755 },
+      'fail.sh': { content: '#!/bin/bash\necho boom >&2\nexit 7\n', mode: 0o755 },
+    },
+  });
 }
 
 function makeSpec(sha, evals) {

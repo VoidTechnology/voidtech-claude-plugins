@@ -4,22 +4,19 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { runControllerLoop } from '../scripts/lib/controller.mjs';
 import { createLoopWorktree } from '../scripts/lib/gitops.mjs';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'l5-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'a@b.c');
-  git('config', 'user.name', 'x');
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\n[ "$(cat p.txt 2>/dev/null)" = done ]\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'p.txt'), 'todo\n');
-  git('add', '-A'); git('commit', '-q', '-m', 'base');
-  return { repo, sha: git('rev-parse', 'HEAD').stdout.trim() };
+  return makeTestRepo({
+    prefix: 'l5-fixture-',
+    files: {
+      'check.sh': { content: '#!/bin/bash\n[ "$(cat p.txt 2>/dev/null)" = done ]\n', mode: 0o755 },
+      'p.txt': 'todo\n',
+    },
+  });
 }
 
 test('L5: 循环到达终态后清理 guardDir 临时目录', async () => {

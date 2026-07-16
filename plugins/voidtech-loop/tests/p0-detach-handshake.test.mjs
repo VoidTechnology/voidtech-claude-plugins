@@ -10,33 +10,19 @@ import { spawn, spawnSync } from 'node:child_process';
 import { prepareRun } from '../scripts/lib/lifecycle.mjs';
 import { readState, inspectLock, releaseLock } from '../scripts/lib/statestore.mjs';
 import { preflight } from '../scripts/lib/preflight.mjs';
+import { makeTestRepo, withDataRoot } from './helpers.mjs';
 
 const LOOP_CLI = fileURLToPath(new URL('../scripts/loop.mjs', import.meta.url));
 const PF_OK = preflight().ok;
 
-function withDataRoot(fn) {
-  const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
-  process.env.CLAUDE_PLUGIN_DATA = root;
-  return Promise.resolve(fn(root)).finally(() => {
-    if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
-    else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(join(root, '..'), { recursive: true, force: true });
-  });
-}
-
 function makeRepo(progress = 'todo') {
-  const repo = mkdtempSync(join(tmpdir(), 'handshake-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'a@b.c');
-  git('config', 'user.name', 'x');
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'progress.txt'), `${progress}\n`);
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  return { repo, sha: git('rev-parse', 'HEAD').stdout.trim() };
+  return makeTestRepo({
+    prefix: 'handshake-fixture-',
+    files: {
+      'check.sh': { content: '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', mode: 0o755 },
+      'progress.txt': `${progress}\n`,
+    },
+  });
 }
 
 function simpleSpec(sha) {

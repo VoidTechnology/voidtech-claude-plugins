@@ -4,11 +4,11 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { runWorker } from '../scripts/lib/workerio.mjs';
 import { runControllerLoop } from '../scripts/lib/controller.mjs';
 import { createLoopWorktree } from '../scripts/lib/gitops.mjs';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function sleeperStub(seconds) {
   const dir = mkdtempSync(join(tmpdir(), 'l2-stub-'));
@@ -52,13 +52,10 @@ test('L2: shouldStop 期间 runWorker 及时终止 worker（不等超时）', as
 });
 
 test('L2: worker 运行期间收到 cancel → 控制器及时 STOPPED(canceled)', async () => {
-  const repo = mkdtempSync(join(tmpdir(), 'l2-repo-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main'); git('config', 'user.email', 'a@b.c'); git('config', 'user.name', 'x');
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
-  git('add', '-A'); git('commit', '-q', '-m', 'base');
-  const sha = git('rev-parse', 'HEAD').stdout.trim();
+  const { repo, sha } = makeTestRepo({
+    prefix: 'l2-repo-',
+    files: { 'check.sh': { content: '#!/bin/bash\nexit 1\n', mode: 0o755 } },
+  });
   const stub = sleeperStub(30);
   const stateDir = mkdtempSync(join(tmpdir(), 'l2-state-'));
   const v = validateSpecObject({

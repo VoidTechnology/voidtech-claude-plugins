@@ -6,35 +6,20 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { startLoop, prepareRun, runPreparedLoop, getStatus, finalizeInterruptedRun, failPreparedRun } from '../scripts/lib/lifecycle.mjs';
 import { buildInitialState } from '../scripts/lib/controller.mjs';
 import { projectDataDir, writeState, readState, acquireLock, inspectLock } from '../scripts/lib/statestore.mjs';
 import { gitCommonDir } from '../scripts/lib/gitops.mjs';
-
-function withDataRoot(fn) {
-  const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
-  process.env.CLAUDE_PLUGIN_DATA = root;
-  return Promise.resolve(fn(root)).finally(() => {
-    if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
-    else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(join(root, '..'), { recursive: true, force: true });
-  });
-}
+import { makeTestRepo, withDataRoot } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'finalize-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'a@b.c');
-  git('config', 'user.name', 'x');
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'progress.txt'), 'todo\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  return { repo, sha: git('rev-parse', 'HEAD').stdout.trim() };
+  return makeTestRepo({
+    prefix: 'finalize-fixture-',
+    files: {
+      'check.sh': { content: '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', mode: 0o755 },
+      'progress.txt': 'todo\n',
+    },
+  });
 }
 
 function fixingStub() {

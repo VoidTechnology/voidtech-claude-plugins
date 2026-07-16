@@ -2,25 +2,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
 import { runBaseline } from '../scripts/lib/baseline.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function makeFixtureRepo({ targetExit, invariantExit }) {
-  const repo = mkdtempSync(join(tmpdir(), 'goal-spec-fixture-'));
-  const git = (...args) =>
-    spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
-  git('init', '-q');
-  git('config', 'user.email', 'test@voidtech.local');
-  git('config', 'user.name', 'fixture');
-  writeFileSync(join(repo, 'target.sh'), `#!/bin/bash\nexit ${targetExit}\n`, { mode: 0o755 });
-  writeFileSync(join(repo, 'invariant.sh'), `#!/bin/bash\nexit ${invariantExit}\n`, { mode: 0o755 });
-  git('add', '-A');
-  git('commit', '-q', '-m', 'fixture');
-  const sha = git('rev-parse', 'HEAD').stdout.trim();
-  return { repo, sha };
+  return makeTestRepo({
+    prefix: 'goal-spec-fixture-',
+    files: {
+      'target.sh': { content: `#!/bin/bash\nexit ${targetExit}\n`, mode: 0o755 },
+      'invariant.sh': { content: `#!/bin/bash\nexit ${invariantExit}\n`, mode: 0o755 },
+    },
+  });
 }
 
 function makeSpec(sha) {

@@ -4,10 +4,10 @@
 
 import { spawnSync } from 'node:child_process';
 import {
-  mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, statSync, writeFileSync, lstatSync,
+  mkdirSync, mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, statSync, writeFileSync, lstatSync,
 } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const EMPTY_HOOKS = mkdtempSync(join(tmpdir(), 'loop-empty-hooks-'));
@@ -57,7 +57,41 @@ export function gitCommonDir(repo) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
+export function resolveCommit(repo, ref) {
+  const r = gitRun(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  if (r.status !== 0) return { ok: false, reason: 'invalid_commit', ref };
+  return { ok: true, sha: r.stdout.trim() };
+}
+
 // ---------- 循环分支与 worktree ----------
+
+// 一次性 detached worktree 的统一生命周期。依赖克隆只是 setup 前的 best-effort 缓存，
+// 克隆失败不改变执行语义；回调无论成功或抛错，worktree 都必须被清理。
+export async function withEphemeralWorktree(repo, commitSha, { prefix = 'loop-ephemeral-', cloneDeps = [] } = {}, callback) {
+  const worktree = mkdtempSync(join(tmpdir(), prefix));
+  const add = gitRun(repo, ['worktree', 'add', '--detach', '--force', worktree, commitSha]);
+  if (add.status !== 0) {
+    rmSync(worktree, { recursive: true, force: true });
+    return { ok: false, error: 'worktree_failed', message: add.stderr.trim() };
+  }
+  try {
+    cloneDependencyDirs(repo, worktree, cloneDeps);
+    return { ok: true, value: await callback(worktree) };
+  } finally {
+    removeWorktree(repo, worktree);
+  }
+}
+
+function cloneDependencyDirs(repo, worktree, cloneDeps) {
+  for (const dependencyPath of cloneDeps) {
+    const source = join(repo, dependencyPath);
+    if (!existsSync(source)) continue;
+    const destination = join(worktree, dependencyPath);
+    mkdirSync(dirname(destination), { recursive: true });
+    const clone = spawnSync('cp', ['-c', '-R', source, destination], { encoding: 'utf8' });
+    if (clone.status !== 0) spawnSync('cp', ['-R', source, destination], { encoding: 'utf8' });
+  }
+}
 
 export function createLoopWorktree(repo, slug, baseSha, { shortId } = {}) {
   const gen = shortId ?? (() => randomBytes(3).toString('hex'));

@@ -3,49 +3,27 @@
 // 至少一个 target 未成立且全部 invariant 成立 → startable；任一 eval 超时 → timeout（不得交付可启动结论）。
 // 执行与加固逻辑复用 evalrunner/gitops，本文件只保留裁定语义。
 
-import { mkdtempSync, existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
-import { gitRun, removeWorktree } from './gitops.mjs';
+import { resolve } from 'node:path';
+import { gitCommonDir, resolveCommit, withEphemeralWorktree } from './gitops.mjs';
 import { execEval, runSetup } from './evalrunner.mjs';
 
 export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
   const repoPath = resolve(repo ?? '.');
-  let worktree = null;
-
-  try {
-    const common = gitRun(repoPath, ['rev-parse', '--git-common-dir']);
-    if (common.status !== 0) {
-      return { verdict: 'infra_error', exitCode: 2, message: `不是 Git 仓库：${repoPath}` };
-    }
-
-    const rev = gitRun(repoPath, ['rev-parse', '--verify', '--quiet', `${normalizedSpec.base_commit}^{commit}`]);
-    if (rev.status !== 0) {
-      return {
-        verdict: 'invalid_base',
-        exitCode: 1,
-        message: `base_commit 无法解析为有效 commit：${normalizedSpec.base_commit}`,
-      };
-    }
-    const baseSha = rev.stdout.trim();
-
-    worktree = mkdtempSync(join(tmpdir(), 'goal-spec-baseline-'));
-    const add = gitRun(repoPath, ['worktree', 'add', '--detach', '--force', worktree, baseSha]);
-    if (add.status !== 0) {
-      return { verdict: 'infra_error', exitCode: 2, message: `创建验收 worktree 失败：${add.stderr.trim()}` };
-    }
-
-    for (const dep of cloneDeps) {
-      const src = join(repoPath, dep);
-      if (!existsSync(src)) continue;
-      // APFS clonefile；非 APFS 或跨卷时退化为普通拷贝
-      const clone = spawnSync('cp', ['-c', '-R', src, join(worktree, dep)], { encoding: 'utf8' });
-      if (clone.status !== 0) {
-        spawnSync('cp', ['-R', src, join(worktree, dep)], { encoding: 'utf8' });
-      }
-    }
-
+  if (!gitCommonDir(repoPath)) {
+    return { verdict: 'infra_error', exitCode: 2, message: `不是 Git 仓库：${repoPath}` };
+  }
+  const resolved = resolveCommit(repoPath, normalizedSpec.base_commit);
+  if (!resolved.ok) {
+    return {
+      verdict: 'invalid_base',
+      exitCode: 1,
+      message: `base_commit 无法解析为有效 commit：${normalizedSpec.base_commit}`,
+    };
+  }
+  const baseSha = resolved.sha;
+  const ephemeral = await withEphemeralWorktree(repoPath, baseSha, {
+    prefix: 'goal-spec-baseline-', cloneDeps,
+  }, async (worktree) => {
     // setup（P0-3）：基线 worktree 同样是干净检出，先补齐依赖再裁定；环境失败按 infra_error 上报
     if (normalizedSpec.setup?.length) {
       const setup = await runSetup(normalizedSpec.setup, worktree);
@@ -97,7 +75,9 @@ export async function runBaseline(normalizedSpec, { repo, cloneDeps = [] }) {
       results,
       message: `可启动：${unmetTargets.length} 个 target 未满足，全部 invariant 成立`,
     };
-  } finally {
-    if (worktree) removeWorktree(repoPath, worktree);
+  });
+  if (!ephemeral.ok) {
+    return { verdict: 'infra_error', exitCode: 2, message: `创建验收 worktree 失败：${ephemeral.message}` };
   }
+  return ephemeral.value;
 }

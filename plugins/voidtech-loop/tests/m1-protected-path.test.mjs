@@ -7,24 +7,20 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { runControllerLoop } from '../scripts/lib/controller.mjs';
 import { createLoopWorktree } from '../scripts/lib/gitops.mjs';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'm1-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'a@b.c');
-  git('config', 'user.name', 'x');
   // target：marker.txt 内容为 done 才通过；worker 改 marker.txt（非 *.json）
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\n[ "$(cat marker.txt 2>/dev/null)" = "done" ]\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'marker.txt'), 'todo\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  return { repo, sha: git('rev-parse', 'HEAD').stdout.trim() };
+  return makeTestRepo({
+    prefix: 'm1-fixture-',
+    files: {
+      'check.sh': { content: '#!/bin/bash\n[ "$(cat marker.txt 2>/dev/null)" = "done" ]\n', mode: 0o755 },
+      'marker.txt': 'todo\n',
+    },
+  });
 }
 
 test('M1: protected_paths 含 *.json 时，控制器不因自身注入的 .claude/settings.json 误停', async () => {

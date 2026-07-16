@@ -5,35 +5,19 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { buildSimpleSpec, tokenizeCheck } from '../scripts/lib/simplemode.mjs';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
 import { startLoop, acceptRun, cancelRun, getStatus, newFromCommit } from '../scripts/lib/lifecycle.mjs';
-
-// 每个测试独立的插件数据区，避免写真实 home
-function withDataRoot(fn) {
-  const prev = process.env.CLAUDE_PLUGIN_DATA;
-  const root = join(mkdtempSync(join(tmpdir(), 'loop-data-')), 'voidtech-loop');
-  process.env.CLAUDE_PLUGIN_DATA = root;
-  return Promise.resolve(fn(root)).finally(() => {
-    if (prev === undefined) delete process.env.CLAUDE_PLUGIN_DATA;
-    else process.env.CLAUDE_PLUGIN_DATA = prev;
-    rmSync(join(root, '..'), { recursive: true, force: true });
-  });
-}
+import { makeTestRepo, withDataRoot } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'lifecycle-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'a@b.c');
-  git('config', 'user.name', 'x');
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'progress.txt'), 'todo\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  return { repo, sha: git('rev-parse', 'HEAD').stdout.trim() };
+  return makeTestRepo({
+    prefix: 'lifecycle-fixture-',
+    files: {
+      'check.sh': { content: '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', mode: 0o755 },
+      'progress.txt': 'todo\n',
+    },
+  });
 }
 
 function stubThatFixes() {
@@ -204,10 +188,12 @@ test('V20：--base 从任意 commit 发起全新 run（新 runId/分支/哈希�
 
 test('启动体检：base 上 target 已满足时拒绝启动', async () => {
   await withDataRoot(async () => {
-    const { repo } = makeRepo();
+    const { repo, git } = makeRepo();
     // 让 target 在 base 就通过
-    spawnSync('bash', ['-c', `cd ${repo} && echo done > progress.txt && git add -A && GIT_CONFIG_GLOBAL=/dev/null git -c user.email=a@b.c -c user.name=x commit -q -m done`], { encoding: 'utf8' });
-    const sha2 = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+    writeFileSync(join(repo, 'progress.txt'), 'done\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'done');
+    const sha2 = git('rev-parse', 'HEAD').stdout.trim();
     try {
       const built = buildSimpleSpec({ task: 'already done', check: 'bash check.sh', maxIterations: 5, baseCommit: sha2 });
       const res = await startLoop({ repo, rawSpec: built.spec, overrideArgv: ['bash', '-c', 'true'], skipPreflight: true });

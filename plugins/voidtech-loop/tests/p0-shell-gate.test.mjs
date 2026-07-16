@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { preflight } from '../scripts/lib/preflight.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 const LOOP_CLI = fileURLToPath(new URL('../scripts/loop.mjs', import.meta.url));
 const GOAL_SPEC_CLI = fileURLToPath(new URL('../scripts/goal-spec.mjs', import.meta.url));
@@ -15,16 +16,7 @@ const PF_OK = preflight().ok;
 const SKIP = !PF_OK && '环境不满足 preflight，跳过 CLI 集成测试';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'gate-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...a) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'a@b.c');
-  git('config', 'user.name', 'x');
-  writeFileSync(join(repo, 'a.txt'), 'x\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  return { repo, sha: git('rev-parse', 'HEAD').stdout.trim() };
+  return makeTestRepo({ prefix: 'gate-fixture-', files: { 'a.txt': 'x\n' } });
 }
 
 function runGoal(repo, root, args) {

@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import {
   gitRun,
+  resolveCommit,
+  withEphemeralWorktree,
   createLoopWorktree,
   removeWorktree,
   auditSnapshot,
@@ -17,22 +19,70 @@ import {
   checkpoint,
   protectedPathsHits,
 } from '../scripts/lib/gitops.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'gitops-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'fixture@voidtech.local');
-  git('config', 'user.name', 'fixture');
-  writeFileSync(join(repo, 'app.txt'), 'v1\n');
-  mkdirSync(join(repo, 'tests/acceptance'), { recursive: true });
-  writeFileSync(join(repo, 'tests/acceptance/contract.txt'), 'frozen\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  const sha = git('rev-parse', 'HEAD').stdout.trim();
-  return { repo, sha, git };
+  return makeTestRepo({
+    prefix: 'gitops-fixture-',
+    files: {
+      'app.txt': 'v1\n',
+      'tests/acceptance/contract.txt': 'frozen\n',
+    },
+  });
 }
+
+test('resolveCommit：短 SHA 与完整 SHA 统一解析，非法引用返回明确失败', () => {
+  const { repo, sha } = makeRepo();
+  try {
+    assert.deepEqual(resolveCommit(repo, sha.slice(0, 12)), { ok: true, sha });
+    assert.deepEqual(resolveCommit(repo, sha), { ok: true, sha });
+    assert.equal(resolveCommit(repo, 'not-a-commit').ok, false);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('withEphemeralWorktree：集中创建、克隆依赖并在回调结束后清理', async () => {
+  const { repo, sha } = makeRepo();
+  const dependency = join(repo, 'node_modules', 'fixture', 'index.js');
+  mkdirSync(join(dependency, '..'), { recursive: true });
+  writeFileSync(dependency, 'module.exports = 1;\n');
+  let worktreePath;
+  try {
+    const result = await withEphemeralWorktree(repo, sha, {
+      prefix: 'gitops-ephemeral-',
+      cloneDeps: ['node_modules'],
+    }, async (worktree) => {
+      worktreePath = worktree;
+      assert.equal(readFileSync(join(worktree, 'app.txt'), 'utf8'), 'v1\n');
+      assert.equal(readFileSync(join(worktree, 'node_modules/fixture/index.js'), 'utf8'), 'module.exports = 1;\n');
+      writeFileSync(join(worktree, 'ephemeral.txt'), 'isolated\n');
+      return 'callback-value';
+    });
+    assert.deepEqual(result, { ok: true, value: 'callback-value' });
+    assert.equal(existsSync(worktreePath), false, '回调完成后必须清理一次性 worktree');
+    assert.equal(existsSync(join(repo, 'ephemeral.txt')), false, '一次性 worktree 副作用不得进入原仓库');
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('withEphemeralWorktree：回调抛错时仍清理 worktree', async () => {
+  const { repo, sha } = makeRepo();
+  let worktreePath;
+  try {
+    await assert.rejects(
+      withEphemeralWorktree(repo, sha, {}, async (worktree) => {
+        worktreePath = worktree;
+        throw new Error('fixture failure');
+      }),
+      /fixture failure/,
+    );
+    assert.equal(existsSync(worktreePath), false, '异常路径也必须清理一次性 worktree');
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
 
 test('createLoopWorktree：唯一分支 + detach worktree；分支碰撞时重新生成', () => {
   const { repo, sha, git } = makeRepo();

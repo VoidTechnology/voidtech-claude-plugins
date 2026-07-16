@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { validateSpecObject } from './validate.mjs';
 import { preflight } from './preflight.mjs';
 import { runBaseline } from './baseline.mjs';
-import { gitRun, gitCommonDir, createLoopWorktree } from './gitops.mjs';
+import { gitCommonDir, resolveCommit, createLoopWorktree } from './gitops.mjs';
 import { runControllerLoop, buildInitialState } from './controller.mjs';
 import { runSetup } from './evalrunner.mjs';
 import { writeReport } from './report.mjs';
@@ -45,9 +45,9 @@ export async function prepareRun({ repo, rawSpec, cloneDeps = [], preflightOpts 
   const common = gitCommonDir(repo);
   if (!common) return { ok: false, stage: 'git', message: '不是 Git 仓库' };
 
-  const rev = gitRun(repo, ['rev-parse', '--verify', '--quiet', `${normalized.base_commit}^{commit}`]);
-  if (rev.status !== 0) return { ok: false, stage: 'base', message: `base_commit 无效：${normalized.base_commit}` };
-  const baseSha = rev.stdout.trim();
+  const resolvedBase = resolveCommit(repo, normalized.base_commit);
+  if (!resolvedBase.ok) return { ok: false, stage: 'base', message: `base_commit 无效：${normalized.base_commit}` };
+  const baseSha = resolvedBase.sha;
   // goal_hash 必须对应冻结进状态的完整 SHA：输入为短 SHA 时，以完整 SHA 重新校验并重算哈希（P1-6），
   // 否则状态里的 spec 与其哈希对不上，事后无法验证 spec 未被篡改。
   if (baseSha !== normalized.base_commit) {
@@ -245,9 +245,9 @@ function isSamePid(controller) {
 
 // 从任意有效 commit 发起全新循环（PRD 4.3 / V20）：新 runId、新分支、新哈希，不改旧 run。
 export async function newFromCommit({ repo, rawSpec, baseCommit, overrideArgv = null, skipPreflight = false, preflightOpts = null }) {
-  const rev = gitRun(repo, ['rev-parse', '--verify', '--quiet', `${baseCommit}^{commit}`]);
-  if (rev.status !== 0) return { ok: false, stage: 'base', message: `--base 无效：${baseCommit}` };
-  const spec = { ...rawSpec, base_commit: rev.stdout.trim() };
+  const resolved = resolveCommit(repo, baseCommit);
+  if (!resolved.ok) return { ok: false, stage: 'base', message: `--base 无效：${baseCommit}` };
+  const spec = { ...rawSpec, base_commit: resolved.sha };
   return startLoop({ repo, rawSpec: spec, overrideArgv, skipPreflight, preflightOpts });
 }
 

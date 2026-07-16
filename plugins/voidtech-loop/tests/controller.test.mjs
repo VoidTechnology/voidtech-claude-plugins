@@ -6,26 +6,21 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { runControllerLoop } from '../scripts/lib/controller.mjs';
 import { createLoopWorktree, gitRun } from '../scripts/lib/gitops.mjs';
 import { validateSpecObject } from '../scripts/lib/validate.mjs';
 import { readState } from '../scripts/lib/statestore.mjs';
+import { makeTestRepo } from './helpers.mjs';
 
 function makeRepo() {
-  const repo = mkdtempSync(join(tmpdir(), 'ctrl-fixture-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  const git = (...args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', env });
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 'fixture@voidtech.local');
-  git('config', 'user.name', 'fixture');
   // target eval：progress.txt 内容为 done 则通过
-  writeFileSync(join(repo, 'check.sh'), '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', { mode: 0o755 });
-  writeFileSync(join(repo, 'progress.txt'), 'todo\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'base');
-  const sha = git('rev-parse', 'HEAD').stdout.trim();
-  return { repo, sha };
+  return makeTestRepo({
+    prefix: 'ctrl-fixture-',
+    files: {
+      'check.sh': { content: '#!/bin/bash\n[ "$(cat progress.txt 2>/dev/null)" = "done" ]\n', mode: 0o755 },
+      'progress.txt': 'todo\n',
+    },
+  });
 }
 
 function makeSpec(sha, { maxIterations = 5, protectedPaths = [] } = {}) {

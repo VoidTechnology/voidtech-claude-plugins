@@ -13,7 +13,7 @@ import { validateSpecObject } from './lib/validate.mjs';
 import { shellExecutionGate } from './lib/shellgate.mjs';
 import { adoptPreparedRun, failPreparedRun, prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun } from './lib/lifecycle.mjs';
 import { processIdentity } from './lib/statestore.mjs';
-import { gitRun } from './lib/gitops.mjs';
+import { resolveCommit } from './lib/gitops.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const HANDSHAKE_TIMEOUT_MS = 15_000;
@@ -52,8 +52,8 @@ function parseGoalArgs(argv) {
 }
 
 function currentHead(repo) {
-  const r = gitRun(repo, ['rev-parse', '--verify', 'HEAD']);
-  return r.status === 0 ? r.stdout.trim() : null;
+  const resolved = resolveCommit(repo, 'HEAD');
+  return resolved.ok ? resolved.sha : null;
 }
 
 function buildRawSpec(repo, opts) {
