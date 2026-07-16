@@ -168,8 +168,12 @@ templates/project-settings.json   项目 .claude/settings.json 合入样板
 | [docs/PORTABILITY-AUDIT.md](docs/PORTABILITY-AUDIT.md) | 可移植性与合规审计 |
 | [voidtech-loop PRD](docs/prd-voidtech-loop-2026-07-15.md) | 工程内循环的一期范围、用户路径与安全边界 |
 | [voidtech-loop 技术设计](docs/tech-design-voidtech-loop-2026-07-15.md) | 控制器、Git 隔离、验收与状态设计 |
+| [voidtech-loop 二期 PRD](docs/prd-voidtech-loop-phase-2-2026-07-16.md) | Agent-first Review、Decision Authority、授权级别与质量门 |
+| [voidtech-loop 二期技术设计](docs/tech-design-voidtech-loop-phase-2-2026-07-16.md) | Operation Journal、Execution Plan、补充验证与 snapshot review |
+| [voidtech-loop 二期实施计划](docs/implementation-plan-voidtech-loop-phase-2-2026-07-16.md) | 按依赖拆分的工程里程碑、任务、验收与检查点 |
 | [ADR-0001](docs/decisions/0001-split-core-and-optional-mcp.md) | 核心与可选 MCP 拆分 |
 | [ADR-0002](docs/decisions/0002-rename-core-skills.md) | 核心技能命名 |
+| [ADR-0003](docs/decisions/0003-agent-first-review-and-decision-authority.md) | Agent-first Review 与确定性 Decision Authority |
 
 ## 本地开发与验证
 
