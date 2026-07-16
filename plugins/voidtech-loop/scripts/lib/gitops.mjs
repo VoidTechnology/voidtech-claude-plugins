@@ -129,8 +129,10 @@ function fileHash(path) {
   }
 }
 
-// 比对不变量：窗口内零变化；refs/remotes/* 的纯前进只记录不终止（PRD 4.2.3）。
-export function compareAudit(repo, before, after) {
+// 比对不变量：窗口内零变化。例外：refs/remotes/* 的任何变化（前进/分叉/删除/新增）只记录不终止——
+// worker 碰不到远端跟踪引用（guard 拦 fetch/remote），它们反映上游状态、与 candidate/checkpoint
+// 完整性无关（如上游分支合并后删除、force-push）。曾因把这类良性删除判违规而误杀正常循环（M6）。
+export function compareAudit(_repo, before, after) {
   const violations = [];
   const recorded = [];
 
@@ -151,19 +153,13 @@ export function compareAudit(repo, before, after) {
     const a = after.refs[name];
     if (b === a) continue;
     if (name.startsWith('refs/remotes/')) {
-      if (b === undefined || (a !== undefined && isAncestor(repo, b, a))) {
-        recorded.push({ kind: 'remote_ref', item: name, before: b ?? null, after: a ?? null });
-        continue;
-      }
+      recorded.push({ kind: 'remote_ref', item: name, before: b ?? null, after: a ?? null });
+      continue;
     }
     violations.push({ kind: 'ref', item: name, before: b ?? null, after: a ?? null });
   }
 
   return { ok: violations.length === 0, violations, recorded };
-}
-
-function isAncestor(repo, maybeAncestor, sha) {
-  return gitRun(repo, ['merge-base', '--is-ancestor', maybeAncestor, sha]).status === 0;
 }
 
 // ---------- 变更枚举与 checkpoint 闸门 ----------
