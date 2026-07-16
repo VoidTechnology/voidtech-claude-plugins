@@ -3,7 +3,7 @@
 // 快照重拍 → eval（前后审计比对）→ 裁定。worker 不能决定自己是否完成，也不能选择是否执行 checker。
 
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
@@ -51,17 +51,22 @@ export async function runControllerLoop(ctx) {
     state.updated_at = new Date().toISOString();
     writeState(stateDir, state);
   };
+  const cleanupTransient = () => {
+    try { rmSync(guardDir, { recursive: true, force: true }); } catch { /* 尽力而为 */ }
+  };
   const stopped = (reason, detail) => {
     state.status = 'STOPPED';
     state.stop_reason = reason;
     state.stop_detail = detail;
     persist();
     writeReport(stateDir, state);
+    cleanupTransient();
     return state;
   };
 
   // 冻结 protected patterns 供守卫使用（不放入 worktree，避免进入 diff）
   const guardDir = mkdtempSync(join(tmpdir(), 'loop-guard-'));
+  state.guard_dir = guardDir;
   const patternsFile = join(guardDir, 'protected-patterns');
   writeFileSync(patternsFile, spec.protected_paths.join('\n') + '\n');
   writeWorkerSettings(worktree, { protectedPatternsFile: patternsFile });
@@ -96,7 +101,9 @@ export async function runControllerLoop(ctx) {
       lastCheckpoint: state.last_checkpoint,
       failedSummaries,
     });
-    const worker = await runWorker({ worktree, prompt, timeoutSeconds: remaining, overrideArgv });
+    const worker = await runWorker({ worktree, prompt, timeoutSeconds: remaining, overrideArgv, shouldStop });
+    // cancel 在 worker 运行期间到达：worker 进程组已被终止，及时收尾为 canceled（L2）
+    if (shouldStop?.() || worker.canceled) return stopped('canceled', { kind: 'user_stop' });
 
     const round = {
       iteration: state.iteration,
@@ -207,6 +214,7 @@ export async function runControllerLoop(ctx) {
       state.candidate_commit = cp.sha;
       persist();
       writeReport(stateDir, state);
+      cleanupTransient();
       return state;
     }
 

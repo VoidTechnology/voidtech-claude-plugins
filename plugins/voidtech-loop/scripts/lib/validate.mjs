@@ -29,7 +29,8 @@ export function validateSpecText(text) {
     if (err instanceof YamlError) {
       return { ok: false, errors: [{ path: '$', message: `YAML 解析失败：${err.message}` }] };
     }
-    throw err;
+    // 任何其他解析异常（如深层递归的 RangeError）也降级为干净的校验失败，而非向上抛出令 CLI 崩溃
+    return { ok: false, errors: [{ path: '$', message: `YAML 解析异常：${err.message ?? err}` }] };
   }
   return validateSpecObject(raw);
 }
@@ -177,9 +178,12 @@ export function canonicalJson(value) {
     return `[${value.map(canonicalJson).join(',')}]`;
   }
   if (value !== null && typeof value === 'object') {
-    const keys = Object.keys(value).sort();
+    // 跳过 undefined 值的键，与 JSON.stringify 落盘语义一致：否则 checksum 计入 "key:undefined"，
+    // 而落盘丢弃该键，重读时 checksum 不符被误判 corrupt（L6）。
+    const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort();
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
   }
+  if (value === undefined) return 'null';
   return JSON.stringify(value);
 }
 

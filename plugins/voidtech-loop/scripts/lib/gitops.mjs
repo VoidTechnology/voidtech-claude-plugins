@@ -11,6 +11,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const EMPTY_HOOKS = mkdtempSync(join(tmpdir(), 'loop-empty-hooks-'));
+// 进程退出时清理这个每进程一次的空 hooks 目录，避免长期累积泄漏（L5）
+process.on('exit', () => {
+  try { rmSync(EMPTY_HOOKS, { recursive: true, force: true }); } catch { /* 退出期尽力而为 */ }
+});
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 // 敏感文件名黑名单与模板例外（PRD 5.4）

@@ -36,11 +36,17 @@ function isSeqItem(content) {
   return content === '-' || content.startsWith('- ');
 }
 
-function parseBlock(lines, i, indent) {
+// 嵌套深度上限：防止畸形/恶意 spec 的深层缩进触发递归下降解析器栈溢出（未捕获的 RangeError）。
+const MAX_DEPTH = 64;
+
+function parseBlock(lines, i, indent, depth = 0) {
+  if (depth > MAX_DEPTH) {
+    throw new YamlError(`嵌套深度超过上限 ${MAX_DEPTH}`, lines[i].line);
+  }
   if (lines[i].indent !== indent) {
     throw new YamlError('缩进与所属块不一致', lines[i].line);
   }
-  return isSeqItem(lines[i].content) ? parseSeq(lines, i, indent) : parseMap(lines, i, indent);
+  return isSeqItem(lines[i].content) ? parseSeq(lines, i, indent, depth) : parseMap(lines, i, indent, depth);
 }
 
 // 映射键必须写成自有数据属性："__proto__" 走普通赋值会改写对象原型（原型污染）。
@@ -53,7 +59,7 @@ function setOwn(obj, key, value) {
   });
 }
 
-function parseMap(lines, i, indent) {
+function parseMap(lines, i, indent, depth = 0) {
   const obj = {};
   while (i < lines.length && lines[i].indent === indent && !isSeqItem(lines[i].content)) {
     const { content, line } = lines[i];
@@ -68,7 +74,7 @@ function parseMap(lines, i, indent) {
     if (rest !== '') {
       setOwn(obj, key, parseScalarOrFlow(rest, line));
     } else if (i < lines.length && lines[i].indent > indent) {
-      const [v, next] = parseBlock(lines, i, lines[i].indent);
+      const [v, next] = parseBlock(lines, i, lines[i].indent, depth + 1);
       setOwn(obj, key, v);
       i = next;
     } else {
@@ -81,7 +87,7 @@ function parseMap(lines, i, indent) {
   return [obj, i];
 }
 
-function parseSeq(lines, i, indent) {
+function parseSeq(lines, i, indent, depth = 0) {
   const arr = [];
   while (i < lines.length && lines[i].indent === indent && isSeqItem(lines[i].content)) {
     const { content, line } = lines[i];
@@ -89,7 +95,7 @@ function parseSeq(lines, i, indent) {
     if (rest === '') {
       i++;
       if (i < lines.length && lines[i].indent > indent) {
-        const [v, next] = parseBlock(lines, i, lines[i].indent);
+        const [v, next] = parseBlock(lines, i, lines[i].indent, depth + 1);
         arr.push(v);
         i = next;
       } else {
@@ -103,7 +109,7 @@ function parseSeq(lines, i, indent) {
         window.push(lines[j]);
         j++;
       }
-      const [v, consumed] = parseMap(window, 0, keyIndent);
+      const [v, consumed] = parseMap(window, 0, keyIndent, depth + 1);
       if (consumed !== window.length) {
         throw new YamlError('序列项内存在无法归属的内容', window[consumed].line);
       }
