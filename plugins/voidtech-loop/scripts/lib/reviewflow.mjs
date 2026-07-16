@@ -17,7 +17,9 @@ import { buildReviewFactPack, persistFactPack, computeInputManifestHash } from '
 import { createReviewSnapshot, destroyReviewSnapshot, bindSnapshotToManifest } from './reviewsnapshot.mjs';
 import { buildInitialReviewContext } from './reviewcontext.mjs';
 import { runReviewer, buildReviewerPrompt } from './reviewerio.mjs';
-import { persistProposal } from './reviewproposal.mjs';
+import { persistProposal, validateReviewProposal } from './reviewproposal.mjs';
+import { createRevisionDraft, renderDraftApprovalView, decideValidationKind, REVISION_DRAFT_ID } from './reviewapproval.mjs';
+import { artifactHash } from './reviewstore.mjs';
 
 const REVIEWABLE = ['EVALS_PASSED', 'STOPPED'];
 
@@ -136,24 +138,58 @@ export async function runSuggestionReview({ repo, runId, direction = null, overr
     });
     if (!reviewed.ok) return { ok: false, reason: reviewed.reason, detail: reviewed.detail ?? null, audit: reviewed.audit ?? null };
 
-    const saved = persistProposal(projectDir, runId, reviewed.proposal);
+    // revise + revision 请求：控制器组装只追加草稿；组装失败不阻断建议本身，如实报告
+    let proposal = reviewed.proposal;
+    let draftInfo = null;
+    let draftFailure = null;
+    if (proposal.recommended_outcome === 'revise' && reviewed.revision_request) {
+      const draft = createRevisionDraft({
+        projectDir, runId, state, proposal,
+        proposalHash: reviewed.proposal_hash, // 绑定注入 revision_draft 之前的判断内容
+        revisionRequest: reviewed.revision_request, inputManifestHash,
+        validationKind: decideValidationKind(state, reviewed.revision_request),
+      });
+      if (draft.ok) {
+        proposal = { ...proposal, revision_draft: { draft_id: REVISION_DRAFT_ID, draft_version: draft.bundle.draft_version } };
+        const revalidated = validateReviewProposal(proposal, { manifest, inputManifestHash, spec: state.spec, trackedSet: snapshot.tracked_set });
+        if (!revalidated.ok) return { ok: false, reason: 'proposal_invalid', detail: revalidated };
+        draftInfo = draft;
+      } else {
+        draftFailure = draft;
+      }
+    }
+    const proposalHash = artifactHash(proposal);
+
+    const saved = persistProposal(projectDir, runId, proposal);
     if (!saved.ok) return { ok: false, reason: saved.reason };
-    atomicWrite(auditPath(projectDir, runId, reviewed.proposal.proposal_id), JSON.stringify({
+    atomicWrite(auditPath(projectDir, runId, proposal.proposal_id), JSON.stringify({
       ...reviewed.audit,
-      proposal_hash: reviewed.proposal_hash,
+      proposal_hash: proposalHash,
       input_manifest_hash: inputManifestHash,
       fact_pack_id: manifest.fact_pack_id,
       correction: direction !== null,
       direction,
+      draft_failure: draftFailure ? draftFailure.reason : null,
     }, null, 2));
+
+    let summary = renderProposalSummary(proposal, { runId, correction: direction !== null });
+    if (draftInfo) {
+      summary += `\n\n${renderDraftApprovalView({
+        runId, state, bundle: draftInfo.bundle, spec: draftInfo.spec,
+        feedback: draftInfo.feedback, plan: draftInfo.plan,
+      })}`;
+    } else if (draftFailure) {
+      summary += `\n\n（reviewer 请求了 Revise 草稿，但组装被机械阻断：${draftFailure.reason}；可带方向重提案或人工决定）`;
+    }
 
     return {
       ok: true,
-      proposal: reviewed.proposal,
-      proposal_hash: reviewed.proposal_hash,
+      proposal,
+      proposal_hash: proposalHash,
       audit: reviewed.audit,
       fact_pack_id: manifest.fact_pack_id,
-      summary: renderProposalSummary(reviewed.proposal, { runId, correction: direction !== null }),
+      draft: draftInfo ? { draft_id: REVISION_DRAFT_ID, draft_version: draftInfo.bundle.draft_version } : null,
+      summary,
     };
   } finally {
     if (snapshot) destroyReviewSnapshot(snapshot);
@@ -194,6 +230,9 @@ export function renderProposalSummary(proposal, { runId, correction = false }) {
   L.push('可执行动作（不会自动执行任何一项）：');
   L.push(`  loop accept ${runId} [--manual-passed] [--note <text>]   # 接受该 run`);
   L.push(`  loop abandon ${runId} [--reason <text>]                  # 放弃该 run`);
+  if (proposal.revision_draft) {
+    L.push(`  loop approve ${runId} [--approve-execution]             # 查看/批准 Revision Draft（见下方展示）`);
+  }
   if (!correction) {
     L.push(`  loop review ${runId} --direction "<方向意见>"            # 不同意时带方向重提案（最多一次）`);
   }

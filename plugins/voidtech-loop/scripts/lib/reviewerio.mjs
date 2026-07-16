@@ -24,6 +24,12 @@ const JUDGMENT_INSTRUCTIONS = `你是 voidtech-loop 的独立审查 agent（fres
    "findings":[{"id":"<kebab>","category":"<kebab>","severity":"blocking|major|minor|info","summary":"...","evidence_refs":["spec"|"diff"|"diff:<path>"|"evidence:<id>"|"round:<n>"]}],
    "agent_review_results":[{"id":"<spec 声明的 agent_review id>","verdict":"pass|fail|insufficient_evidence","evidence_refs":[...],"rationale":"..."}],
    "escalations":[{"id":"<kebab>","reason_category":"product-goal-change|target-invariant-change|out-of-scope-change|manual-review-removal|external-feedback-judgment|privacy-legal-security|direction-fork|missing-context|taste-identity-physical|unauthorized-command|budget-permission-run","summary":"..."}]}
+- 当且仅当 recommended_outcome 为 "revise" 时，可附加一个 "revision" 字段。你只能"追加"新检查，
+  不能修改或删除任何既有内容（既有规格由控制器逐字节保留，你提交的修改会被机械拒绝）：
+  "revision":{"appended_evals":[{"id":"<kebab 新 id>","role":"target|invariant","command":["argv"...]或"shell 字符串","shell":false,"timeout_seconds":N}],
+              "appended_agent_review":[{"id":"<kebab 新 id>","criterion":"...","required":true,"evidence_scope":["candidate_diff"|"repository"|"eval_results"|"rounds"|"evidence"]}],
+              "finding_mapping":{"<finding id>":["<新 id>", ...]}}
+  每个应当被修复验证的 finding 必须映射到至少一个新检查；无法机器验证的 finding 不映射（会如实列为未映射内容）。
 - evidence_refs 只能引用 FACTS 中真实存在的来源；不得虚构。
 - 你不拥有 accept/freeze/启动权限；你输出的是提案，不是决定。`;
 
@@ -94,7 +100,10 @@ export async function runReviewer({
     if (!validation.ok) {
       return { ok: false, reason: 'proposal_invalid', detail: validation, audit };
     }
-    return { ok: true, proposal, proposal_hash: artifactHash(proposal), audit };
+    // revision 请求原样上交调用方（不可信输入）：草稿组装与"只追加"约束由 reviewapproval 机械执行
+    const revisionRequest = (proposal.recommended_outcome === 'revise'
+      && judgment.revision && typeof judgment.revision === 'object') ? judgment.revision : null;
+    return { ok: true, proposal, proposal_hash: artifactHash(proposal), audit, revision_request: revisionRequest };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

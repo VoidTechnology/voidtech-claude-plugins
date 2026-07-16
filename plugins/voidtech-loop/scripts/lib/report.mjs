@@ -125,6 +125,11 @@ export function renderReport(state, review = null) {
         : `local_user（identity_verified: false）`;
       push(`- **decision**：${d.outcome}　\`${d.decision_id}\`　by ${actor}　at ${d.decided_at}`);
       if (d.note) push(`- **note**：${d.note}`);
+      // P2-22：verification-only Accept 同时追溯原 goal hash、补充验证 hash、candidate 与结果
+      if (d.basis?.supplemental_verification) {
+        const sv = d.basis.supplemental_verification;
+        push(`- **补充验证**：原 candidate \`${sv.commit.slice(0, 10)}\` 通过补充规格（原 goal hash \`${d.basis.original_goal_hash.slice(0, 12)}…\`，补充验证 hash \`${sv.goal_hash.slice(0, 12)}…\`，结果 ${sv.result}，evidence \`${sv.evidence_hash.slice(0, 12)}…\`）；旧 Goal Spec 未被修改`);
+      }
       if (d.manual_review_results.length) {
         push(`- **manual review 结果**：`);
         for (const m of d.manual_review_results) push(`  - [${m.passed ? 'x' : ' '}] ${m.item}${m.note ? `（${m.note}）` : ''}`);

@@ -13,6 +13,7 @@ import { validateSpecObject } from './lib/validate.mjs';
 import { shellExecutionGate } from './lib/shellgate.mjs';
 import { adoptPreparedRun, failPreparedRun, prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun, abandonRun } from './lib/lifecycle.mjs';
 import { runSuggestionReview } from './lib/reviewflow.mjs';
+import { approveRevision } from './lib/reviewapproval.mjs';
 import { processIdentity } from './lib/statestore.mjs';
 import { resolveCommit } from './lib/gitops.mjs';
 
@@ -30,6 +31,8 @@ const HELP = `用法：loop <命令> [参数]
   abandon <runId>             放弃终态 run（不修改执行事实，追加 Decision Record）
   review <runId>              对终态 run 启动独立审查 agent（建议模式，不自动执行任何决定）
     --direction "<text>"      不同意上次建议时带方向意见重提案（每 run 最多一次）
+  approve <runId>             展示当前 Revision Draft（来源、变化摘要、未映射内容、执行计划）
+    --approve-execution       批准当前展示版本并执行 baseline 与原子冻结；成功只输出启动命令
 
 goal 选项：
   --base <commit>             指定 base commit（默认当前 HEAD）
@@ -299,6 +302,36 @@ async function cmdReview(repo, argv) {
   return 0;
 }
 
+async function cmdApprove(repo, argv) {
+  const runId = argv[0];
+  if (!runId) { console.error('用法：loop approve <runId> [--approve-execution] [--manual-passed]'); return 2; }
+
+  // verification-only 通过即接受原 run：manual review 与 accept 同规，须显式确认
+  let manualReviewResults = [];
+  if (argv.includes('--manual-passed')) {
+    const status = getStatus({ repo, runId });
+    if (!status.ok) { console.error(`状态不可读：${status.reason}`); return 1; }
+    manualReviewResults = (status.state.spec?.manual_review ?? []).map((item) => ({ item, passed: true }));
+  }
+
+  const r = await approveRevision({
+    repo, runId, approveExecution: argv.includes('--approve-execution'), manualReviewResults,
+  });
+  if (!r.ok) { console.error(r.message ?? r.reason); return 1; }
+  if (r.displayed) {
+    console.log(r.view);
+    return 0;
+  }
+  if (r.outcome === 'verification_passed') {
+    console.log(r.message);
+    return 0;
+  }
+  console.log(`Revision Bundle 已原子冻结（decision ${r.decision.decision_id}）。`);
+  console.log('新 run 不会自动启动；确认后显式执行：');
+  console.log(`  ${r.start_command}`);
+  return 0;
+}
+
 async function cmdAbandon(repo, argv) {
   const runId = argv[0];
   if (!runId) { console.error('用法：loop abandon <runId> [--reason <text>]'); return 2; }
@@ -322,6 +355,7 @@ async function main() {
     case 'accept': return cmdAccept(repo, rest);
     case 'abandon': return cmdAbandon(repo, rest);
     case 'review': return cmdReview(repo, rest);
+    case 'approve': return cmdApprove(repo, rest);
     case undefined:
     case '-h':
     case '--help':

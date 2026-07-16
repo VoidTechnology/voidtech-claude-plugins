@@ -20,6 +20,16 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/loop.mjs review <runId>
 1. **直接落人工决定**：`loop accept <runId>` 或 `loop abandon <runId> --reason "<理由>"`；
 2. **带方向重提案**（每 run 最多一次）：`loop review <runId> --direction "<你的方向意见>"`。
 
+建议为 Revise 且生成了草稿时，批准走一次性命令（批准"当前展示版本"，草稿任何变化都使批准失效）：
+
+```text
+loop approve <runId>                      # 只展示：来源、变化摘要、未映射内容、完整执行计划
+loop approve <runId> --approve-execution  # 批准并执行验证；[--manual-passed] 同 accept 语义
+```
+
+- **verification-only**（EVALS_PASSED 后只补验证）：验证全过 → 直接接受原 run，不建新 run；验证失败 → 自动生成 correction 草稿且阻断 Accept；超时/环境错误 → 可对同一版本精确重试；
+- **coding Revise**（STOPPED 后改工程路径等）：baseline 通过 → 原子冻结 Revision Bundle，只输出显式启动命令，新 run 永不自动启动。
+
 ## 边界（向用户如实说明）
 
 - reviewer 是 fresh session：不复用 worker 会话、不信任 worker 自述，只依据冻结事实；

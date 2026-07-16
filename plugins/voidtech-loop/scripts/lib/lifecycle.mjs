@@ -17,7 +17,8 @@ import {
   projectDataDir, readState, writeState, acquireLock, releaseLock,
   inspectLock, takeoverStaleLock, processIdentity, updateLockMeta, STATE_VERSION,
 } from './statestore.mjs';
-import { submitDecision } from './decisionstore.mjs';
+import { submitDecision, readCommittedDecision } from './decisionstore.mjs';
+import { latestVerificationBlocker } from './supplementalverification.mjs';
 import {
   classifyReviewIntegrity, recoverRunReview, isLegacyAccepted,
   buildAcceptStateUpdate, buildStatePrecondition,
@@ -257,6 +258,24 @@ export async function acceptRun({ repo, runId, manualReviewResults = [], note = 
   }
   if (r.state.status !== 'EVALS_PASSED' && r.state.status !== 'ACCEPTED') {
     return { ok: false, message: `accept 只能从 EVALS_PASSED 进入；当前状态 ${r.state.status}` };
+  }
+
+  // 已有 finalized accept（含 supplemental accept）：直接幂等返回，不比较请求参数
+  const existing = readCommittedDecision(projectDir, runId);
+  if (existing.ok && existing.exists && existing.record.outcome === 'accept' && r.state.status === 'ACCEPTED') {
+    return { ok: true, already: true, idempotent: true, state: r.state, decision: existing.record };
+  }
+
+  // P2-21：最近一次补充验证为 correction_required / inconclusive 时，普通 Accept 被阻断
+  if (r.state.status === 'EVALS_PASSED') {
+    const blocker = latestVerificationBlocker(projectDir, runId);
+    if (blocker) {
+      return {
+        ok: false, reason: 'supplemental_verification_blocking', blocker,
+        message: `补充验证最近一次结果为 ${blocker.result}（${blocker.detail ?? ''}）；`
+          + `请先完成 correction Revise、重试验证或 abandon，再考虑 Accept`,
+      };
+    }
   }
 
   const coverage = checkManualReviewCoverage(r.state.spec, manualReviewResults);
