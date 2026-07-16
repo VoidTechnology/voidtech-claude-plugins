@@ -205,6 +205,15 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = 
     let stdoutBytes = 0;
     const fullStdout = () => (stdoutChunks ? Buffer.concat(stdoutChunks).toString('utf8') : undefined);
     const started = Date.now();
+    // spawn 失败时 Node 会先后发出 'error' 与 'close' 两个事件：finalize/resolve 必须幂等，
+    // 否则第二次 digest 抛 ERR_CRYPTO_HASH_FINALIZED 成为 uncaughtException（M5 spike 发现）。
+    let settled = false;
+    const settle = (payload) => {
+      if (settled) return;
+      settled = true;
+      stream.finalize();
+      resolvePromise(payload);
+    };
     let child;
     try {
       child = spawn(cmd, args, {
@@ -214,8 +223,7 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = 
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
-      stream.finalize();
-      resolvePromise({ exit: null, signal: null, duration_ms: 0, timed_out: false, spawn_error: String(err), stream, stdout: fullStdout() });
+      settle({ exit: null, signal: null, duration_ms: 0, timed_out: false, spawn_error: String(err), stream, stdout: fullStdout() });
       return;
     }
 
@@ -257,15 +265,13 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = 
     child.on('error', (err) => {
       clearTimeout(killTimer);
       if (stopPoll) clearInterval(stopPoll);
-      stream.finalize();
-      resolvePromise({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, canceled, spawn_error: String(err), stream, stdout: fullStdout() });
+      settle({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, canceled, spawn_error: String(err), stream, stdout: fullStdout() });
     });
     child.on('close', (code, signal) => {
       clearTimeout(killTimer);
       if (stopPoll) clearInterval(stopPoll);
       try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 残留兜底 */ }
-      stream.finalize();
-      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, deadline_exceeded: deadlineExceeded, canceled, stream, stdout: fullStdout() });
+      settle({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, deadline_exceeded: deadlineExceeded, canceled, stream, stdout: fullStdout() });
     });
   });
 }

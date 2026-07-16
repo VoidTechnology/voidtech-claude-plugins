@@ -12,6 +12,7 @@ import { preflight } from './lib/preflight.mjs';
 import { validateSpecObject } from './lib/validate.mjs';
 import { shellExecutionGate } from './lib/shellgate.mjs';
 import { adoptPreparedRun, failPreparedRun, prepareRun, runPreparedLoop, startLoop, getStatus, cancelRun, acceptRun, abandonRun } from './lib/lifecycle.mjs';
+import { runSuggestionReview } from './lib/reviewflow.mjs';
 import { processIdentity } from './lib/statestore.mjs';
 import { resolveCommit } from './lib/gitops.mjs';
 
@@ -26,6 +27,9 @@ const HELP = `用法：loop <命令> [参数]
   status [runId]              查看项目锁或指定 run 状态
   cancel <runId>              取消运行中的循环（幂等）
   accept <runId>              将 EVALS_PASSED 的 run 标记为 ACCEPTED
+  abandon <runId>             放弃终态 run（不修改执行事实，追加 Decision Record）
+  review <runId>              对终态 run 启动独立审查 agent（建议模式，不自动执行任何决定）
+    --direction "<text>"      不同意上次建议时带方向意见重提案（每 run 最多一次）
 
 goal 选项：
   --base <commit>             指定 base commit（默认当前 HEAD）
@@ -273,6 +277,28 @@ async function cmdAccept(repo, argv) {
   return 0;
 }
 
+async function cmdReview(repo, argv) {
+  const runId = argv[0];
+  if (!runId) { console.error('用法：loop review <runId> [--direction "<text>"]'); return 2; }
+  const dirIdx = argv.indexOf('--direction');
+  const direction = dirIdx >= 0 ? (argv[dirIdx + 1] ?? null) : null;
+
+  console.log('正在启动独立审查 session（fresh、无工具、只读冻结事实）……');
+  const r = await runSuggestionReview({ repo, runId, direction });
+  if (!r.ok) { console.error(r.message ?? r.reason); return 1; }
+  if (r.already_decided) {
+    console.log(r.legacy
+      ? `run ${runId} 已是一期 legacy ACCEPTED，无待决事项`
+      : `run ${runId} 已有 finalized decision（${r.record.outcome}，${r.record.decision_id}），review 返回既有结果`);
+    return 0;
+  }
+  console.log('');
+  console.log(r.summary);
+  console.log('');
+  console.log(`（审计视图：本次 session 成本 $${r.audit.cost_usd ?? 'unavailable'}，耗时 ${Math.round((r.audit.duration_ms ?? 0) / 1000)}s；proposal 与 hash 见插件数据区 reviews/${runId}/proposals/）`);
+  return 0;
+}
+
 async function cmdAbandon(repo, argv) {
   const runId = argv[0];
   if (!runId) { console.error('用法：loop abandon <runId> [--reason <text>]'); return 2; }
@@ -295,6 +321,7 @@ async function main() {
     case 'cancel': return cmdCancel(repo, rest);
     case 'accept': return cmdAccept(repo, rest);
     case 'abandon': return cmdAbandon(repo, rest);
+    case 'review': return cmdReview(repo, rest);
     case undefined:
     case '-h':
     case '--help':
