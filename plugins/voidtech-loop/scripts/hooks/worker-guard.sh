@@ -15,8 +15,22 @@ deny() {
   exit 2
 }
 
-realpath_py() {
-  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+# 语义对齐 python 的 os.path.realpath：目标路径可以不存在（Write 新文件），
+# 解析已存在前缀的符号链接后拼回剩余部分。node 是 preflight 声明的硬依赖。
+realpath_norm() {
+  node -e '
+    const fs = require("fs"), path = require("path");
+    let cur = path.resolve(process.argv[1]), suffix = "";
+    for (;;) {
+      try { console.log(path.join(fs.realpathSync(cur), suffix)); break; }
+      catch {
+        const parent = path.dirname(cur);
+        if (parent === cur) { console.log(path.join(cur, suffix)); break; }
+        suffix = path.join(path.basename(cur), suffix);
+        cur = parent;
+      }
+    }
+  ' "$1"
 }
 
 case "$TOOL" in
@@ -34,8 +48,8 @@ case "$TOOL" in
       /*) ABS="$FILE" ;;
       *) ABS="$ROOT/$FILE" ;;
     esac
-    RES=$(realpath_py "$ABS")
-    ROOTRES=$(realpath_py "$ROOT")
+    RES=$(realpath_norm "$ABS")
+    ROOTRES=$(realpath_norm "$ROOT")
     case "$RES" in
       "$ROOTRES"/*) ;;
       *) deny "写路径越界循环 worktree：${FILE}" ;;
