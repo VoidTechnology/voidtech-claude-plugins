@@ -61,7 +61,7 @@ ${failedBlock}
 }
 
 // 有界 worker invocation：默认走非 bare claude -p；override 注入 stub（argv 数组，上下文文件路径作为最后一个参数）。
-export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = DEFAULT_MAX_TURNS, overrideArgv = null }) {
+export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = DEFAULT_MAX_TURNS, overrideArgv = null, shouldStop = null }) {
   let command;
   if (overrideArgv) {
     const ctxDir = mkdtempSync(join(tmpdir(), 'loop-worker-ctx-'));
@@ -89,12 +89,13 @@ export async function runWorker({ worktree, prompt, timeoutSeconds, maxTurns = D
   // worker 是我们信任的 claude -p 调用，需继承认证环境（keychain/OAuth）；
   // 凭据清理只作用于 eval（跑待验证的不可信代码），不作用于 worker。
   // captureStdout：cost/denials 必须从完整 JSON stdout 解析，8KiB 截断摘要会让大 result 字段恒解析失败（M2）。
-  const result = await execEval(evalDef, worktree, { env: workerEnv(), captureStdout: true });
+  const result = await execEval(evalDef, worktree, { env: workerEnv(), captureStdout: true, shouldStop });
   const run = result.runs[0];
   const parsed = parseWorkerJson(result.stdout ?? '');
   return {
-    ok: !result.timed_out && run.exit === 0 && !run.spawn_error,
+    ok: !result.timed_out && !run.canceled && run.exit === 0 && !run.spawn_error,
     exit: run.exit,
+    canceled: run.canceled ?? false,
     timed_out: result.timed_out,
     spawn_error: run.spawn_error ?? null,
     duration_ms: run.duration_ms,

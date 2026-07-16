@@ -71,11 +71,12 @@ export async function runEvalPack(normalizedSpec, { repo, candidateSha, goalHash
 // 执行单条 eval（含 repeat）；baseline 也走这里。
 // env：默认凭据清理白名单（eval 跑不可信代码）；worker 调用传入继承环境（claude -p 需认证）。
 // captureStdout：worker 调用需要完整 stdout 解析 --output-format json（M2），常规 eval 不开启。
-export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null, captureStdout = false } = {}) {
+// shouldStop：仅 worker 调用传入。轮询到 true 时主动终止 in-flight 子进程组，使 cancel 及时生效（L2）。
+export async function execEval(evalDef, worktree, { evidenceDir = null, candidateSha = null, goalHash = null, env = null, captureStdout = false, shouldStop = null } = {}) {
   const runEnv = env ?? whitelistEnv();
   const runs = [];
   for (let n = 1; n <= evalDef.repeat; n++) {
-    const run = await runOnce(evalDef, worktree, runEnv, captureStdout);
+    const run = await runOnce(evalDef, worktree, runEnv, captureStdout, shouldStop);
     if (evidenceDir) {
       const path = join(evidenceDir, `${evalDef.id}-run${n}.log`);
       writeEvidenceFile(path, evalDef, run, n, { candidateSha, goalHash });
@@ -145,7 +146,7 @@ function writeEvidenceFile(path, evalDef, run, runNo, { candidateSha, goalHash }
   writeFileSync(path, header + body);
 }
 
-function runOnce(evalDef, worktree, runEnv, captureStdout = false) {
+function runOnce(evalDef, worktree, runEnv, captureStdout = false, shouldStop = null) {
   return new Promise((resolvePromise) => {
     const cwd = join(worktree, evalDef.cwd);
     const [cmd, args] = evalDef.shell
@@ -182,6 +183,7 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false) {
     child.stderr.on('data', stream.push);
 
     let timedOut = false;
+    let canceled = false;
     const killTimer = setTimeout(() => {
       timedOut = true;
       try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 组可能已退出 */ }
@@ -190,16 +192,32 @@ function runOnce(evalDef, worktree, runEnv, captureStdout = false) {
       }, 2000).unref();
     }, evalDef.timeout_seconds * 1000);
 
+    // cancel 轮询：worker 长时间运行期间收到 stop 请求时，及时终止其进程组（L2）
+    const stopPoll = shouldStop
+      ? setInterval(() => {
+        if (!shouldStop()) return;
+        canceled = true;
+        clearInterval(stopPoll);
+        try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 组可能已退出 */ }
+        setTimeout(() => {
+          try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 同上 */ }
+        }, 2000).unref();
+      }, 300)
+      : null;
+    stopPoll?.unref?.();
+
     child.on('error', (err) => {
       clearTimeout(killTimer);
+      if (stopPoll) clearInterval(stopPoll);
       stream.finalize();
-      resolvePromise({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, spawn_error: String(err), stream, stdout: fullStdout() });
+      resolvePromise({ exit: null, signal: null, duration_ms: Date.now() - started, timed_out: false, canceled, spawn_error: String(err), stream, stdout: fullStdout() });
     });
     child.on('close', (code, signal) => {
       clearTimeout(killTimer);
+      if (stopPoll) clearInterval(stopPoll);
       try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 残留兜底 */ }
       stream.finalize();
-      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, stream, stdout: fullStdout() });
+      resolvePromise({ exit: code, signal, duration_ms: Date.now() - started, timed_out: timedOut, canceled, stream, stdout: fullStdout() });
     });
   });
 }

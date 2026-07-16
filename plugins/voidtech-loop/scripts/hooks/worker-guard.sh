@@ -36,8 +36,9 @@ realpath_norm() {
 case "$TOOL" in
   Bash)
     CMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
-    GIT_WRITE='(add|commit|push|pull|fetch|merge|rebase|reset|branch|checkout|switch|update-ref|symbolic-ref|worktree|config|tag|stash|cherry-pick|revert|clean|filter-branch|gc|prune|reflog|remote|submodule)'
-    if grep -qE "(^|[;&|[:space:]\(])git([[:space:]]+-[Cc][[:space:]]*[^[:space:]]+)*([[:space:]]+-[^[:space:]]+)*[[:space:]]+${GIT_WRITE}([[:space:]]|$)" <<<"$CMD"; then
+    GIT_WRITE='(add|commit|push|pull|fetch|merge|rebase|reset|branch|checkout|switch|restore|update-ref|update-index|symbolic-ref|worktree|config|tag|stash|cherry-pick|revert|clean|filter-branch|gc|prune|reflog|remote|submodule|am|apply|mv|rm|notes|replace)'
+    # 锚点集含 / 以覆盖绝对路径调用（/usr/bin/git ...）；best-effort，硬边界仍在控制器后置校验
+    if grep -qE "(^|[;&|[:space:]\(/])git([[:space:]]+-[Cc][[:space:]]*[^[:space:]]+)*([[:space:]]+-[^[:space:]]+)*[[:space:]]+${GIT_WRITE}([[:space:]]|$)" <<<"$CMD"; then
       deny "worker 无 Git 写权限（loop 策略）：${CMD}"
     fi
     ;;
