@@ -18,6 +18,8 @@ const SCHEMA_FILES = {
   revision_manifest: 'revision-manifest.schema.json',
   verification_record: 'verification-record.schema.json',
   delegation_grant: 'delegation-grant.schema.json',
+  review_fact_pack: 'review-fact-pack.schema.json',
+  review_proposal: 'review-proposal.schema.json',
 };
 
 const schemaCache = new Map();

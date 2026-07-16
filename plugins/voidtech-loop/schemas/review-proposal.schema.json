@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop review proposal v1",
+  "description": "Review Agent 的唯一输出（二期技术设计 §8.2）。proposal 是 agent 判断，不是 Decision Record：不含任何可直接执行的命令、路径写入或权限字段；自由文本永不作为命令、路径或权限输入。evidence_refs 必须解析到 Fact Pack。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "proposal_id", "review_session_id", "input_manifest_hash",
+    "delegation_grant_hash", "recommended_outcome", "findings",
+    "agent_review_results", "coverage", "escalations", "revision_draft"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "proposal_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "review_session_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "input_manifest_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "delegation_grant_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] },
+    "recommended_outcome": { "enum": ["accept", "abandon", "revise", "escalate"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "severity", "summary", "evidence_refs"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "category": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "severity": { "enum": ["blocking", "major", "minor", "info"] },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
+        }
+      }
+    },
+    "agent_review_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "verdict", "evidence_refs", "rationale"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "verdict": { "enum": ["pass", "fail", "insufficient_evidence"] },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+          },
+          "rationale": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "changed_files_total", "changed_files_inspected", "evidence_items_total", "evidence_items_inspected", "budget_used_bytes", "budget_limit_bytes", "limitations"],
+      "properties": {
+        "status": { "enum": ["complete", "budget_limited", "source_limited", "binary_limited"] },
+        "changed_files_total": { "type": "integer", "minimum": 0 },
+        "changed_files_inspected": { "type": "integer", "minimum": 0 },
+        "evidence_items_total": { "type": "integer", "minimum": 0 },
+        "evidence_items_inspected": { "type": "integer", "minimum": 0 },
+        "budget_used_bytes": { "type": "integer", "minimum": 0 },
+        "budget_limit_bytes": { "type": "integer", "minimum": 0 },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "escalations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason_category", "summary"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "reason_category": {
+            "enum": [
+              "product-goal-change", "target-invariant-change", "out-of-scope-change",
+              "manual-review-removal", "external-feedback-judgment", "privacy-legal-security",
+              "direction-fork", "missing-context", "taste-identity-physical",
+              "unauthorized-command", "budget-permission-run"
+            ]
+          },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      }
+    },
+    "revision_draft": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["draft_id", "draft_version"],
+          "properties": {
+            "draft_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+            "draft_version": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop review fact pack manifest v1",
+  "description": "Review Fact Pack 完整索引（二期技术设计 §7.1）：只保存 locator、字节数与 hash，不复制正文。input_manifest_hash = canonical manifest JSON 的 SHA-256。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "fact_pack_id", "run_id", "goal_hash", "state_checksum",
+    "base_commit", "candidate_commit", "terminal_state", "spec", "diff",
+    "rounds", "evidence", "snapshot", "delegation_grant_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "fact_pack_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "run_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "goal_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "state_checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "base_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "candidate_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "terminal_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "stop_reason", "iteration", "rounds_total", "evals_total", "evidence_total", "last_checkpoint", "started_at", "updated_at", "cost_unavailable", "cost_total_usd"],
+      "properties": {
+        "status": { "enum": ["EVALS_PASSED", "STOPPED", "ACCEPTED"] },
+        "stop_reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "iteration": { "type": "integer", "minimum": 0 },
+        "rounds_total": { "type": "integer", "minimum": 0 },
+        "evals_total": { "type": "integer", "minimum": 0 },
+        "evidence_total": { "type": "integer", "minimum": 0 },
+        "last_checkpoint": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "started_at": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "updated_at": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "cost_unavailable": { "type": "boolean" },
+        "cost_total_usd": { "anyOf": [{ "type": "number" }, { "type": "null" }] }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "total_bytes", "sha256"],
+      "properties": {
+        "locator": { "const": "spec" },
+        "total_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "total_bytes", "sha256", "files"],
+      "properties": {
+        "locator": { "const": "diff" },
+        "total_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "additions", "deletions", "binary"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "additions": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+              "deletions": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+              "binary": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["iteration", "locator", "no_change", "checkpoint", "eval_passed", "failed_ids"],
+        "properties": {
+          "iteration": { "type": "integer", "minimum": 1 },
+          "locator": { "type": "string", "minLength": 1 },
+          "no_change": { "type": "boolean" },
+          "checkpoint": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "eval_passed": { "anyOf": [{ "type": "boolean" }, { "type": "null" }] },
+          "failed_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "locator", "file_bytes", "file_sha256", "stream_total_bytes", "stream_sha256", "truncated"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "locator": { "type": "string", "minLength": 1 },
+          "file_bytes": { "type": "integer", "minimum": 0 },
+          "file_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "stream_total_bytes": { "type": "integer", "minimum": 0 },
+          "stream_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "tracked_files_manifest_hash"],
+      "properties": {
+        "snapshot_id": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "tracked_files_manifest_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] }
+      }
+    },
+    "delegation_grant_hash": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }] }
+  }
+}
