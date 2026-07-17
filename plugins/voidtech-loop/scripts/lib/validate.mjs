@@ -167,6 +167,11 @@ function checkCwd(cwd, path) {
   return [];
 }
 
+// 供 review corpus 入库脱敏检查复用（Task 6.1）：与 spec 扫描共用同一规则，不维护第二套模式。
+export function scanSecretLiterals(value, path = '$') {
+  return scanSecrets(value, path);
+}
+
 function scanSecrets(value, path) {
   const errors = [];
   if (typeof value === 'string') {

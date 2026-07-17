@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "voidtech-loop review corpus case v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "run_id", "kind", "support_envelope", "seeded", "enrolled_at", "reference", "agent_result", "contaminated", "contamination_reason", "adjudication"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "case_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["blind_dogfood", "calibration_seeded", "boundary_synthetic"] },
+    "support_envelope": { "type": "object" },
+    "seeded": { "anyOf": [{ "type": "null" }, { "type": "object" }] },
+    "enrolled_at": { "type": "string" },
+    "reference": { "anyOf": [{ "type": "null" }, { "type": "object" }] },
+    "agent_result": { "anyOf": [{ "type": "null" }, { "type": "object" }] },
+    "contaminated": { "type": "boolean" },
+    "contamination_reason": { "anyOf": [{ "type": "null" }, { "type": "string" }] },
+    "adjudication": { "anyOf": [{ "type": "null" }, { "type": "object" }] }
+  }
+}
