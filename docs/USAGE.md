@@ -1,6 +1,6 @@
 # VoidTech 插件使用指南
 
-本指南覆盖 `voidtech-core` 的 25 个技能、2 个专业 subagent，以及 `voidtech-loop` 的 2 个工程内循环技能。前者服务日常回合式协作，后者只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南覆盖 `voidtech-core` 的 25 个技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前者服务日常回合式协作，后者只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -50,7 +50,7 @@
 @voidtech-core:product-manager 把这个想法整理成 MVP PRD
 ```
 
-下面的可见性表只统计 `voidtech-core`。这里说的是 Claude 能不能看到并调用技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。`voidtech-loop` 的 `goal` 和 `goal-spec` 都只能由用户显式调用。
+下面的可见性表只统计 `voidtech-core`。这里说的是 Claude 能不能看到并调用技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。`voidtech-loop` 的 `goal`、`goal-spec` 和 `review` 都只能由用户显式调用。
 
 | 可见性 | 含义 | 技能 |
 |---|---|---|
@@ -279,6 +279,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 | 给团队加一个新技能 | `write-skills` |
 | 让 agent 在后台反复推进一个可由单条命令验收的任务 | `/voidtech-loop:goal` |
 | 把多目标、守护条件和人工复核项编译成循环规格 | `/voidtech-loop:goal-spec` |
+| 让独立审查 agent 评审终态 run 并给出接受/放弃/修订建议 | `/voidtech-loop:review` |
 
 ## 7. 与外部工具和 MCP 配合
 
@@ -375,10 +376,41 @@ goal → RUNNING → VERIFYING → EVALS_PASSED → 人工复核 → ACCEPTED
 ```
 
 - `EVALS_PASSED` 只说明指定 commit 通过当前 Goal Spec 的 target 与 invariant，不代表产品方向正确，也不代表代码已经合入。
-- `accept` 只把 run 从 `EVALS_PASSED` 标记为 `ACCEPTED`；合入仍由人执行。
+- `accept` 把 run 从 `EVALS_PASSED` 标记为 `ACCEPTED`，同时生成可审计的 Decision Record；重复 accept 幂等返回既有决定；spec 含 `manual_review` 时必须 `--manual-passed` 逐项显式确认。合入仍由人执行。
 - 循环不会自动 push、merge、创建 PR/MR、rebase、删除分支或改写用户分支。
 - worker 只能进行只读 Git 操作；checkpoint commit 由控制器生成。
 - 一期提供的是固定 best-effort 隔离，不承诺 OS 级文件系统或网络沙箱。
 - 一个项目同一时间只允许一个活动循环；取消后不提供 resume，需要从已有 checkpoint 或其他 commit 发起新 run。
 
-完整产品范围见 [voidtech-loop PRD](prd-voidtech-loop-2026-07-15.md)，控制器与隔离设计见 [技术设计](tech-design-voidtech-loop-2026-07-15.md)。
+### 9.5 独立审查与决定（二期建议模式）
+
+run 到达终态（`EVALS_PASSED` / `STOPPED`）后，可以让独立审查 agent 完成评审劳动（需要 Claude Code ≥ 2.1.211）：
+
+```text
+/voidtech-loop:review <runId>
+```
+
+审查 agent 是**全新 session、无任何工具、只读冻结事实**：不复用 worker 会话、不信任 worker 自述，repo 与日志内容一律视为数据而非指令。它产出结构化建议（Accept / Abandon / Revise / Escalate）与证据引用，并明确列出可执行动作——任何决定都不会自动执行，新 run 永不自动启动。
+
+人的三条路径（原 proposal 都会保留）：
+
+```text
+loop accept <runId> [--manual-passed] [--note <text>]   # 接受（生成 Decision Record）
+loop abandon <runId> [--reason <text>]                  # 放弃（不修改执行事实）
+loop review <runId> --direction "<方向意见>"             # 不同意时带方向重提案（每 run 最多一次）
+```
+
+建议为 Revise 时会生成只追加的 Revision Draft（既有 target/invariant/manual review/out-of-scope 由控制器逐字节保留，审查 agent 无法修改）。批准走一次性命令：
+
+```text
+loop approve <runId>                      # 只展示：来源、变化摘要、未映射内容、完整执行计划
+loop approve <runId> --approve-execution  # 批准当前展示版本并执行验证
+```
+
+- **verification-only**（EVALS_PASSED 后只补验证）：验证全过 → 直接接受原 run，不创建新 run；验证失败 → 自动生成 correction 草稿并阻断普通 Accept；超时/环境错误 → 可对同一版本精确重试。
+- **coding Revise**（STOPPED 后调整工程路径等）：baseline 通过 → 原子冻结 Revision Bundle，只输出显式启动命令。
+- 草稿任何变化都会使已有批准失效并要求重新展示；`--manual-passed` 语义与 accept 相同。
+
+**有界委托（agent 自动落决定）当前未开放**：只有盲评质量门（≥30 个合格 blind case 全门 PASS，`node plugins/voidtech-loop/scripts/review-quality.mjs <projectDir>` 可查）通过后才作为独立发布动作开启。盲评操作流程见[团队指引](guide-voidtech-loop-blind-review-2026-07-17.md)。
+
+完整产品范围见 [voidtech-loop PRD](prd-voidtech-loop-2026-07-15.md) 与[二期 PRD](prd-voidtech-loop-phase-2-2026-07-16.md)，控制器与隔离设计见[技术设计](tech-design-voidtech-loop-2026-07-15.md)与[二期技术设计](tech-design-voidtech-loop-phase-2-2026-07-16.md)。

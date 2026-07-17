@@ -1,5 +1,31 @@
 # Changelog
 
+## voidtech-loop 0.3.0 - 2026-07-17
+
+二期 Agent-first Review 建议模式交付：独立审查 agent 完成评审劳动，人保留方向权与否决权；全部决定由人显式执行，新 run 永不自动启动。有界委托（自动落决定）本版**未开放**，等待盲评质量门数据（≥30 合格 blind case 全门 PASS）。
+
+### Added
+
+- 新命令 `loop review <runId>`（及 `/voidtech-loop:review` 技能）：对终态 run 启动 fresh、无工具、只读冻结事实的审查 agent，产出结构化建议与证据引用；不同意可 `--direction` 带方向重提案（每 run 最多一次，原 proposal 保留）。
+- 新命令 `loop approve <runId> [--approve-execution] [--manual-passed]`：展示并一次批准 Revision Draft（来源、变化摘要、未映射内容、完整执行计划；hash 只进审计视图）。verification-only 草稿验证通过直接接受原 run（不建新 run）；coding 草稿经 baseline 后原子冻结并只输出显式启动命令。
+- 新命令 `loop abandon <runId> [--reason]`：不经 reviewer 直接放弃终态 run；不修改执行事实，只追加 Decision Record。
+- Goal Spec v2（`agent_review` / `review_policy` / `provenance`）与 v1 严格共存：v1 canonicalization 与 `goal_hash` 逐字节兼容（golden 集锁定），简单模式继续生成 v1，未知版本拒绝。
+- 审查控制面新地基：Review Operation Journal（prepared/committed + 崩溃恢复矩阵）、per-run review lock、decision slot（first-finalized-wins、幂等/冲突）、Approval Bundle 版本化 conditional hash match、Revision/Supplemental Bundle 同目录原子发布、canonical Execution Plan 与 Delegation Grant（exact plan hash，本版仅存储与判定器，未接入自动决定）。
+- Review Fact Pack（manifest + 预算化 controller retrieval + candidate snapshot 路径边界）与 Review Proposal 契约（无可执行字段、evidence ref 必须解析到冻结事实）。
+- 盲评质量基建：预登记 case registry（reference 先于揭示、污染标记、揭示后冻结）与 `scripts/review-quality.mjs` 分层指标报告（blind/seeded/boundary 隔离、原始计数、GO/NO-GO/INSUFFICIENT）。
+- reviewer invocation spike 报告：`--tools ""` 是唯一有效的整体工具移除（`--allowedTools ""` 只是权限门，只读 Bash 仍会执行）；执行事实一律以 controller 计账为准，不采信 reviewer 自述。
+
+### Changed
+
+- `accept` 迁入事务层：保留 `EVALS_PASSED -> ACCEPTED`，同时生成外部 Decision Record（`decided_by` 诚实区分 human/agent，`identity_verified: false`）；重复 accept 从拒绝改为幂等返回既有决定；spec 含 `manual_review` 时需 `--manual-passed` 逐项显式确认。
+- `status` 与报告分别呈现 `run_integrity` 与 `review_integrity`；一期已 accept 的存量 run 按 `legacy_accepted` 读取，不补造 Decision Record。
+- `--allow-shell` 语义升级：确认对象从布尔开关变为完整 canonical Execution Plan（shell/argv/setup 同权进 hash），确认即批准该精确计划；CLI 表面契约不变。
+- review 功能要求 Claude Code ≥ 2.1.211（`--tools` 语义经实测验证）；`goal` 等一期功能版本要求不变。
+
+### Fixed
+
+- evalrunner：子进程 spawn 失败时 `error`+`close` 双事件二次 finalize 抛 `ERR_CRYPTO_HASH_FINALIZED` 导致控制器 uncaughtException 崩溃；改为幂等 settle 并补回归测试。
+
 ## voidtech-loop 0.2.0 - 2026-07-16
 
 ### Changed

@@ -149,4 +149,4 @@ claude plugin list
 /doctor
 ```
 
-预期结果：`voidtech-core` 已启用；试点环境中 `voidtech-loop` 已启用，`/skills` 可看到 `voidtech-loop:goal` 与 `voidtech-loop:goal-spec`；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。
+预期结果：`voidtech-core` 已启用；试点环境中 `voidtech-loop` 已启用，`/skills` 可看到 `voidtech-loop:goal`、`voidtech-loop:goal-spec` 与 `voidtech-loop:review`；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。

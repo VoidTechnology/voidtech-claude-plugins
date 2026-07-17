@@ -2,7 +2,7 @@
 
 > VoidTech 内部 Claude Code 插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
 
-`voidtech-core v0.11.2` · `voidtech-loop v0.2.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210） · 内部分发
+`voidtech-core v0.11.2` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · 内部分发
 
 VoidTech 团队的 Claude Code Marketplace。`voidtech-core` 固化团队工程方法，`voidtech-loop` 负责有机器验收条件的无人值守工程循环；高权限 MCP 仍按需启用。
 
