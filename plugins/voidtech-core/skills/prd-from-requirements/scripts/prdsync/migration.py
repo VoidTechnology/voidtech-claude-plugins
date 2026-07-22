@@ -367,10 +367,14 @@ def commit_migration(root, confirmations) -> dict:
     revision_id, records, columns = sync.normalize(
         workbook, SOURCE_ID, sync.DEFAULT_FINGERPRINT_COLUMNS)
 
-    # 自动候选按 locator 对齐到序号行,无序号行依序继承人工确认编号。
+    # 自动候选按 locator 对齐到序号行。人工项按 sheet 内出现次序显式对齐到 itemKey
+    # （不依赖 records 与 manualItems 两个列表的全局顺序偶然一致）。
     auto_by_locator = {(candidate["sheet"], str(candidate["row"])): candidate["requirementId"]
                        for candidate in report["autoCandidates"]}
-    manual_ids = iter(confirmations[item["itemKey"]] for item in report["manualItems"])
+    manual_keys_by_sheet = {}
+    for item in report["manualItems"]:
+        manual_keys_by_sheet.setdefault(item["sheet"], []).append(item["itemKey"])
+    manual_cursor = {sheet: 0 for sheet in manual_keys_by_sheet}
 
     # 完备性：revision 0 的每条 occurrence（自动 + 人工确认）都获得生效裁决。
     occurrences = []
@@ -380,7 +384,12 @@ def commit_migration(root, confirmations) -> dict:
         if key in auto_by_locator:
             requirement_id, basis, confidence = auto_by_locator[key], "migration-backfill", "machine"
         else:
-            requirement_id, basis, confidence = next(manual_ids), "manual-confirmation", "confirmed"
+            sheet = locator["sheet"]
+            index = manual_cursor[sheet]
+            item_key = manual_keys_by_sheet[sheet][index]
+            manual_cursor[sheet] = index + 1
+            requirement_id, basis, confidence = (
+                confirmations[item_key], "manual-confirmation", "confirmed")
         occurrences.append({
             "sourceOccurrenceId": record["sourceOccurrenceId"],
             "requirementId": requirement_id,

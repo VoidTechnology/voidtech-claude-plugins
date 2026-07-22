@@ -38,6 +38,7 @@ from .canonical_store import (
 )
 
 SYNC_STATE_RELPATH = "_source/sync-state.json"
+REGISTRY_RELPATH = "_source/source-registry.json"
 
 # 规范化契约版本与固定策略（技术设计 §3.5）。
 NORMALIZED_SCHEMA_VERSION = 1
@@ -85,6 +86,23 @@ class RebaselineRequired(Exception):
         super().__init__(
             f"{source_id}: effectiveNormalizationDigest changed "
             f"({applied_digest} -> {candidate_digest}); rebaseline required")
+
+
+class SourceNotInitialized(Exception):
+    """对未迁移的 legacy 工作树（无 sync-state 或该源未注册）调用同步：
+    完备性不变式要求先迁移，绝不以 KeyError/TypeError 裸奔。"""
+
+    def __init__(self, source_id):
+        self.source_id = source_id
+        super().__init__(f"{source_id}: worktree not migrated / source not registered")
+
+
+class SourceRetired(Exception):
+    """源已退休：唯一语义是不再接受新 revision（ADR-0004 §3.6）。"""
+
+    def __init__(self, source_id):
+        self.source_id = source_id
+        super().__init__(f"{source_id}: source is retired; no new revision accepted")
 
 
 # ---------------------------------------------------------------- xlsx 读取
@@ -200,10 +218,11 @@ def _revision_id(records) -> str:
     return "rev-" + normalized_content_digest(records).split(":", 1)[1][:12]
 
 
-def normalize(workbook_path, source_id, fingerprint_columns=None):
-    """把 xlsx 规范化为不可变观测记录。返回 (revision_id, records,
-    fingerprint_columns)。每条 record 含 sourceOccurrenceId、recordKey、
-    duplicateOrdinal、locator、normalizedText，不含 requirementId。"""
+def normalize_records(workbook_path, source_id, fingerprint_columns=None):
+    """同 `normalize`，但每条 record 额外带一份 `columns`（规范化后的业务列）。
+
+    `columns` 不进入不可变 revision（不影响 recordKey/revisionId/序列化），仅供
+    归并阶段按模块等业务列定位；`normalize` 返回前会剥离它。"""
     fingerprint_columns = list(fingerprint_columns or DEFAULT_FINGERPRINT_COLUMNS)
     records = []
     ordinals = {}
@@ -218,6 +237,7 @@ def normalize(workbook_path, source_id, fingerprint_columns=None):
             "duplicateOrdinal": ordinal,
             "locator": row["locator"],
             "normalizedText": columns.get(_PRIMARY_TEXT_COLUMN, ""),
+            "columns": columns,
         })
     revision_id = _revision_id(records)
     for record in records:
@@ -225,6 +245,31 @@ def normalize(workbook_path, source_id, fingerprint_columns=None):
         record["sourceOccurrenceId"] = (
             f"{source_id}@{revision_id}/occ-{hex_key}.{record['duplicateOrdinal']}")
     return revision_id, records, fingerprint_columns
+
+
+def normalize(workbook_path, source_id, fingerprint_columns=None):
+    """把 xlsx 规范化为不可变观测记录。返回 (revision_id, records,
+    fingerprint_columns)。每条 record 含 sourceOccurrenceId、recordKey、
+    duplicateOrdinal、locator、normalizedText，不含 requirementId。"""
+    revision_id, records, fingerprint_columns = normalize_records(
+        workbook_path, source_id, fingerprint_columns)
+    for record in records:
+        record.pop("columns", None)
+    return revision_id, records, fingerprint_columns
+
+
+def columns_by_occurrence(root, source_id, revision_id):
+    """重放某 revision 的原始文件，返回 {sourceOccurrenceId: 规范化业务列}。
+
+    归并阶段用来按模块等业务列定位 occurrence（normalized.jsonl 只存身份指纹，
+    不存原始列）；occurrence ID 由内容确定性派生，重放结果与落盘 revision 一致。"""
+    rev_dir = revision_dir(root, source_id, revision_id)
+    manifest = read_json(rev_dir / "revision-manifest.json")
+    norm_manifest = read_json(rev_dir / "normalization-manifest.json")
+    workbook = rev_dir / manifest["originalFileName"]
+    _, records, _ = normalize_records(
+        workbook, source_id, norm_manifest["fingerprintColumns"])
+    return {record["sourceOccurrenceId"]: record["columns"] for record in records}
 
 
 # ---------------------------------------------------------------- 契约摘要
@@ -346,13 +391,36 @@ def _applied_normalization_manifest(root, source_id, applied_revision):
                      / "normalization-manifest.json")
 
 
+def _require_initialized(root, source_id):
+    """未迁移工作树 / 未注册源一律显式失败，绝不裸奔 KeyError。"""
+    state_path = root / SYNC_STATE_RELPATH
+    if not state_path.exists():
+        raise SourceNotInitialized(source_id)
+    state = read_json(state_path)
+    cursors = state.get("sources", {}).get(source_id)
+    if not isinstance(cursors, dict) or "appliedRevision" not in cursors:
+        raise SourceNotInitialized(source_id)
+    return state, cursors
+
+
+def _require_not_retired(root, source_id):
+    registry_path = root / REGISTRY_RELPATH
+    if not registry_path.exists():
+        return
+    registry = read_json(registry_path)
+    entry = next((s for s in registry.get("sources", [])
+                  if s.get("sourceId") == source_id), None)
+    if entry is not None and entry.get("status") == "retired":
+        raise SourceRetired(source_id)
+
+
 def sync_source(root, source_id, input_path, *, fingerprint_columns=None) -> dict:
     """只读同步一个源。见模块 docstring 的契约。"""
     root = Path(root)
     input_path = Path(input_path)
 
-    state = read_json(root / SYNC_STATE_RELPATH)
-    cursors = state["sources"][source_id]
+    state, cursors = _require_initialized(root, source_id)
+    _require_not_retired(root, source_id)
     applied = cursors["appliedRevision"]
     applied_norm = _applied_normalization_manifest(root, source_id, applied)
 
@@ -361,22 +429,33 @@ def sync_source(root, source_id, input_path, *, fingerprint_columns=None) -> dic
     else:
         columns = list(applied_norm["fingerprintColumns"])
 
+    # 规范化契约不一致的只读拒绝，无需持锁（不写任何状态）。
     candidate_digest = effective_normalization_digest(columns)
     if candidate_digest != applied_norm["effectiveNormalizationDigest"]:
         raise RebaselineRequired(source_id, applied_norm["effectiveNormalizationDigest"],
                                  candidate_digest)
 
-    revision_id, records, columns = normalize(input_path, source_id, columns)
-    if revision_id == applied:
-        return {"noOp": True, "revisionId": applied}
+    # 游标推进与 revision 落盘必须在 writer lock 内（§2.2 锁内 compare-and-write）；
+    # 他人持锁时 acquire 抛 LockHeld。
+    handle = writer_lock.acquire(root, "op-sync-readonly")
+    try:
+        state = read_json(root / SYNC_STATE_RELPATH)
+        cursors = state["sources"][source_id]
+        applied = cursors["appliedRevision"]
 
-    _write_revision(root, source_id, revision_id, input_path, records, columns)
-    diff = _raw_diff(load_normalized(root, source_id, applied), records)
+        revision_id, records, columns = normalize(input_path, source_id, columns)
+        if revision_id == applied:
+            return {"noOp": True, "revisionId": applied}
 
-    # 只读同步只推进 observed/pending；appliedRevision、主本与生命周期不动。
-    cursors["observedRevision"] = revision_id
-    cursors["pendingRevision"] = revision_id
-    atomic_write_json(root / SYNC_STATE_RELPATH, state)
+        _write_revision(root, source_id, revision_id, input_path, records, columns)
+        diff = _raw_diff(load_normalized(root, source_id, applied), records)
+
+        # 只读同步只推进 observed/pending；appliedRevision、主本与生命周期不动。
+        cursors["observedRevision"] = revision_id
+        cursors["pendingRevision"] = revision_id
+        atomic_write_json(root / SYNC_STATE_RELPATH, state)
+    finally:
+        handle.release()
 
     return {"noOp": False, "revisionId": revision_id, "rawDiff": diff}
 
