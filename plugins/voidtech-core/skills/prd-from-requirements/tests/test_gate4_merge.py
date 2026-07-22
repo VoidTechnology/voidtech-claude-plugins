@@ -159,6 +159,36 @@ class WithdrawalCandidateTest(unittest.TestCase):
         self.assertEqual(transitions[-1]["to"], "withdrawn")
 
 
+class AllocationPrefixTest(unittest.TestCase):
+    """多前缀工作树的编号分配：前缀按上下文指定，取该前缀最大号 + 1。"""
+
+    def test_per_prefix_max_not_global_max(self):
+        existing = {"SAAS-049", "MBR-296", "PTL-215"}
+        self.assertEqual(merge._allocate_ids(existing, 2, prefix="SAAS"),
+                         ["SAAS-050", "SAAS-051"])
+        self.assertEqual(merge._allocate_ids(existing, 1, prefix="PTL"),
+                         ["PTL-216"])
+
+    def test_default_falls_back_to_global_max_prefix(self):
+        self.assertEqual(merge._allocate_ids({"SAAS-049", "MBR-296"}, 1),
+                         ["MBR-297"])
+
+    def test_commit_allocates_with_sheet_prefix(self):
+        # 单前缀工作树上验证公共路径仍然正确（sheet 投票 → TST）。
+        root, tmp = _migrated_worktree(self)
+        v2 = tmp / "v2.xlsx"
+        build_xlsx(v2, data_rows=ROWS_V2)
+        sync.sync_source(root, SOURCE_ID, v2)
+        proposal = merge.propose_sync(root, SOURCE_ID)
+        decisions = {a["occurrences"][0]: "TST-002" for a in proposal["ambiguities"]}
+        decisions.update({m["sourceOccurrenceId"]: "new" for m in proposal["mappings"]
+                          if m["classification"] == "new"})
+        merge.commit_proposal(root, proposal["proposalId"], decisions=decisions)
+        ids = {r["requirementId"]
+               for r in journal_projector.project(root)["mappings"].values()}
+        self.assertIn("TST-007", ids)
+
+
 class Gate3DebtTest(unittest.TestCase):
     def test_sync_source_requires_writer_lock(self):
         root, tmp = _migrated_worktree(self)

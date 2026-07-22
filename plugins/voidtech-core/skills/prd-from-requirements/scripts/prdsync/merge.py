@@ -312,8 +312,12 @@ def propose_sync(root, source_id):
 
 # ---------------------------------------------------------------- 编号分配
 
-def _allocate_ids(existing_ids, count):
-    """防重复编号：新编号 = 该前缀现有最大号 + 1，绝不复用。"""
+def _allocate_ids(existing_ids, count, prefix=None):
+    """防重复编号：新编号 = **该前缀**现有最大号 + 1，绝不复用。
+
+    prefix 为 None 时退回「全局最大号所属前缀」——仅在无法从上下文推断前缀时
+    使用（单前缀工作树下两者等价）。
+    """
     if count == 0:
         return []
     parsed = []
@@ -321,7 +325,9 @@ def _allocate_ids(existing_ids, count):
         match = _REQ_ID_RE.match(req)
         if match:
             parsed.append((match.group(1), int(match.group(2))))
-    prefix, top = max(parsed, key=lambda item: item[1]) if parsed else ("TST", 0)
+    if prefix is None:
+        prefix = max(parsed, key=lambda item: item[1])[0] if parsed else "TST"
+    top = max((number for p, number in parsed if p == prefix), default=0)
     return [f"{prefix}-{top + k:03d}" for k in range(1, count + 1)]
 
 
@@ -411,9 +417,37 @@ def _commit_sync(root, proposal, decisions):
         else:
             resolved[occ] = (decisions[occ], "manual-confirmation", "confirmed")
 
-    new_ids = _allocate_ids(_existing_ids(ctx), len(to_allocate))
-    for occ, requirement_id in zip(to_allocate, new_ids):
-        resolved[occ] = (requirement_id, "manual-confirmation", "confirmed")
+    # 新编号前缀跟随所属 sheet：以同 sheet 已裁决 occurrence 的编号前缀投票，
+    # 多前缀工作树（如 SAAS/MBR/PTL 并存）不会把新需求编进别的系统。
+    occ_sheet = {}
+    for record in pending_records:
+        locator = record.get("locator") or {}
+        occ_sheet[record["sourceOccurrenceId"]] = (
+            locator.get("sheet") if isinstance(locator, dict) else None)
+    sheet_votes = {}
+    for occ, (requirement_id, _basis, _conf) in resolved.items():
+        match = _REQ_ID_RE.match(requirement_id or "")
+        sheet = occ_sheet.get(occ)
+        if match and sheet:
+            votes = sheet_votes.setdefault(sheet, {})
+            votes[match.group(1)] = votes.get(match.group(1), 0) + 1
+
+    def _prefix_for(occ):
+        votes = sheet_votes.get(occ_sheet.get(occ), {})
+        if not votes:
+            return None
+        return max(sorted(votes), key=lambda p: votes[p])
+
+    existing = set(_existing_ids(ctx))
+    by_prefix = {}
+    for occ in to_allocate:
+        by_prefix.setdefault(_prefix_for(occ), []).append(occ)
+    for prefix in sorted(by_prefix, key=lambda p: p or ""):
+        occs = by_prefix[prefix]
+        new_ids = _allocate_ids(existing, len(occs), prefix=prefix)
+        existing.update(new_ids)
+        for occ, requirement_id in zip(occs, new_ids):
+            resolved[occ] = (requirement_id, "manual-confirmation", "confirmed")
 
     # 完备性：candidate revision 的每条 occurrence 都获得生效裁决（按 occurrence
     # 出现次序，稳定确定性）。
