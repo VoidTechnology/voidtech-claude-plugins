@@ -171,9 +171,12 @@ templates/project-settings.json   项目 .claude/settings.json 合入样板
 | [voidtech-loop 二期 PRD](docs/prd-voidtech-loop-phase-2-2026-07-16.md) | Agent-first Review、Decision Authority、授权级别与质量门 |
 | [voidtech-loop 二期技术设计](docs/tech-design-voidtech-loop-phase-2-2026-07-16.md) | Operation Journal、Execution Plan、补充验证与 snapshot review |
 | [voidtech-loop 二期实施计划](docs/implementation-plan-voidtech-loop-phase-2-2026-07-16.md) | 按依赖拆分的工程里程碑、任务、验收与检查点 |
+| [PRD 同步与 Atlas 技术设计](docs/tech-design-prd-sync-and-logic-atlas-2026-07-21.md) | 并发模型、operation/proposal schema、发布恢复矩阵与实施顺序 |
 | [ADR-0001](docs/decisions/0001-split-core-and-optional-mcp.md) | 核心与可选 MCP 拆分 |
 | [ADR-0002](docs/decisions/0002-rename-core-skills.md) | 核心技能命名 |
 | [ADR-0003](docs/decisions/0003-agent-first-review-and-decision-authority.md) | Agent-first Review 与确定性 Decision Authority |
+| [ADR-0004](docs/decisions/0004-prd-source-sync-and-requirement-identity.md) | PRD 源需求同步与需求身份 |
+| [ADR-0005](docs/decisions/0005-logic-atlas-read-model.md) | Logic Atlas 读模型 |
 
 ## 本地开发与验证
 
