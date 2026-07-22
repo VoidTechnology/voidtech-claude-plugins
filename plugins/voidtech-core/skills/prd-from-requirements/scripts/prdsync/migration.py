@@ -24,11 +24,14 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from . import operation_engine as engine
+from . import sync
 from . import writer_lock
 from .base_cas import MATRIX_RELPATH
 from .canonical_store import canonical_json_bytes
 
 SOURCE_ID = "requirements-xlsx"
+# revision 0 的 occurrence 定位命名空间（analyze 阶段的内部候选 ID 作用域）；
+# 落盘 revision 的真实 ID 由 sync 规范化器按内容派生（见 commit_migration）。
 REVISION_0 = "rev-0"
 ORIGINAL_RELDIR = "_source/original"
 
@@ -40,7 +43,6 @@ _GENERATOR_VERSION = "1.0.0"
 MANIFEST_RELPATH = "prd-worktree.json"
 REGISTRY_RELPATH = "_source/source-registry.json"
 SYNC_STATE_RELPATH = "_source/sync-state.json"
-NORMALIZED_RELPATH = f"_source/revisions/{SOURCE_ID}/{REVISION_0}/normalized.jsonl"
 
 _MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -283,9 +285,10 @@ def analyze(root) -> dict:
     }
 
 
-def _plan_files(occurrences):
+def _plan_files(revision_id, records, fingerprint_columns, workbook):
     """迁移 operation 的文件动作全集：一次性建立机器清单、注册表、同步游标与
-    revision 0 规范化产物。sync-state 先写 pending，提交点再推进 applied。"""
+    revision 0 规范化产物（复用 sync 规范化器写入 normalized.jsonl 与两套
+    manifest）。sync-state 先写 pending，提交点再推进 applied。"""
     manifest = {
         "worktreeSchemaVersion": 1,
         "capabilities": {"sourceSync": True, "logicAtlas": False},
@@ -299,30 +302,22 @@ def _plan_files(occurrences):
         "schemaVersion": 1,
     }
     sync_state = {
-        "sources": {SOURCE_ID: {"observedRevision": REVISION_0,
+        "sources": {SOURCE_ID: {"observedRevision": revision_id,
                                 "appliedRevision": None,
-                                "pendingRevision": REVISION_0}},
+                                "pendingRevision": revision_id}},
         "schemaVersion": 1,
     }
-    normalized_lines = []
-    for occ in occurrences:
-        normalized_lines.append(canonical_json_bytes({
-            "occurrenceId": occ["sourceOccurrenceId"],
-            "recordKey": "sha256:" + hashlib.sha256(
-                occ["sourceOccurrenceId"].encode("utf-8")).hexdigest(),
-            "requirementId": occ["requirementId"],
-            "normalizedText": occ["normalizedText"],
-        }).decode("utf-8").rstrip("\n"))
-    normalized = ("\n".join(normalized_lines) + "\n").encode("utf-8")
-    return [
+    plan = [
         {"path": MANIFEST_RELPATH, "action": "write",
          "content": canonical_json_bytes(manifest)},
         {"path": REGISTRY_RELPATH, "action": "write",
          "content": canonical_json_bytes(registry)},
         {"path": SYNC_STATE_RELPATH, "action": "write",
          "content": canonical_json_bytes(sync_state)},
-        {"path": NORMALIZED_RELPATH, "action": "write", "content": normalized},
     ]
+    plan.extend(sync.revision_files_plan(
+        SOURCE_ID, revision_id, workbook, records, fingerprint_columns))
+    return plan
 
 
 def _journal_records(occurrences):
@@ -366,30 +361,38 @@ def commit_migration(root, confirmations) -> dict:
     if missing:
         raise MigrationBlocked(missing)
 
+    # revision 0 与 sync 共用同一规范化器：normalized.jsonl 只保存观测,
+    # 裁决身份靠 locator crosswalk 从矩阵分析结果继承。
+    workbook = _find_workbook(root)
+    revision_id, records, columns = sync.normalize(
+        workbook, SOURCE_ID, sync.DEFAULT_FINGERPRINT_COLUMNS)
+
+    # 自动候选按 locator 对齐到序号行,无序号行依序继承人工确认编号。
+    auto_by_locator = {(candidate["sheet"], str(candidate["row"])): candidate["requirementId"]
+                       for candidate in report["autoCandidates"]}
+    manual_ids = iter(confirmations[item["itemKey"]] for item in report["manualItems"])
+
     # 完备性：revision 0 的每条 occurrence（自动 + 人工确认）都获得生效裁决。
     occurrences = []
-    for candidate in report["autoCandidates"]:
+    for record in records:
+        locator = record["locator"]
+        key = (locator["sheet"], str(locator["row"]))
+        if key in auto_by_locator:
+            requirement_id, basis, confidence = auto_by_locator[key], "migration-backfill", "machine"
+        else:
+            requirement_id, basis, confidence = next(manual_ids), "manual-confirmation", "confirmed"
         occurrences.append({
-            "sourceOccurrenceId": candidate["sourceOccurrenceId"],
-            "requirementId": candidate["requirementId"],
-            "normalizedText": f"{candidate['requirementId']} {candidate['module']}".strip(),
-            "basis": "migration-backfill",
-            "confidence": "machine",
-        })
-    for item in report["manualItems"]:
-        occurrences.append({
-            "sourceOccurrenceId": item["sourceOccurrenceId"],
-            "requirementId": confirmations[item["itemKey"]],
-            "normalizedText": f"{item['itemKey']} {item['module']}".strip(),
-            "basis": "manual-confirmation",
-            "confidence": "confirmed",
+            "sourceOccurrenceId": record["sourceOccurrenceId"],
+            "requirementId": requirement_id,
+            "basis": basis,
+            "confidence": confidence,
         })
 
-    plan = _plan_files(occurrences)
+    plan = _plan_files(revision_id, records, columns, workbook)
     operation_id = "op-migration"
     proposal = engine.build_proposal(
         root, proposal_id="prop-migration", proposal_kind="migration",
-        candidate_revision=REVISION_0,
+        candidate_revision=revision_id,
         mappings=_proposal_mappings(occurrences),
         affected_files=[entry["path"] for entry in plan],
         generator_version=_GENERATOR_VERSION)
@@ -398,7 +401,7 @@ def commit_migration(root, confirmations) -> dict:
     try:
         engine.create_operation(
             root, proposal, operation_id=operation_id, operation_kind="migration",
-            plan=plan, target_source=SOURCE_ID, target_revision=REVISION_0)
+            plan=plan, target_source=SOURCE_ID, target_revision=revision_id)
         engine.commit_segment(root, operation_id, _journal_records(occurrences))
         engine.validate_operation(root, operation_id)
         engine.publish(root, operation_id)
