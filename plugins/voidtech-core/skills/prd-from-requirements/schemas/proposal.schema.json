@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposalId", "proposalKind", "status", "operationBaseDigest", "candidateRevision", "mappings", "ambiguities", "lifecycleActions", "affectedFiles", "proposalDigest", "generatorVersion", "schemaVersion"],
+  "properties": {
+    "proposalId": { "type": "string", "pattern": "^prop-[a-z0-9][a-z0-9-]*$" },
+    "proposalKind": { "enum": ["sync", "maintain", "migration", "rebaseline"] },
+    "status": { "enum": ["open", "confirmed", "expired", "superseded"] },
+    "operationBaseDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "candidateRevision": { "type": ["string", "null"], "pattern": "^rev-[a-z0-9][a-z0-9-]*$" },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sourceOccurrenceId", "requirementId", "classification", "confidence"],
+        "properties": {
+          "sourceOccurrenceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*@rev-[a-z0-9][a-z0-9-]*/occ-[0-9a-f]+\\.\\d+$" },
+          "requirementId": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*-\\d+$" },
+          "classification": { "enum": ["source-backfill", "content-enhancement", "scope-change", "source-conflict", "split-candidate", "new", "unchanged", "format-only", "withdrawal-candidate", "resurrection-candidate"] },
+          "confidence": { "enum": ["auto", "high", "low"] }
+        }
+      }
+    },
+    "ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "detail"],
+        "properties": {
+          "kind": { "enum": ["identity", "duplicate", "split", "merge", "conflict"] },
+          "detail": { "type": "string", "minLength": 1 },
+          "occurrences": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*@rev-[a-z0-9][a-z0-9-]*/occ-[0-9a-f]+\\.\\d+$" }
+          },
+          "candidateRequirementIds": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-\\d+$" }
+          }
+        }
+      }
+    },
+    "lifecycleActions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirementId", "scopeId", "lifecycleAction"],
+        "properties": {
+          "requirementId": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-\\d+$" },
+          "scopeId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "lifecycleAction": { "enum": ["withdraw", "deprecate", "supersede", "remove", "reactivate", "cancel-deprecation"] },
+          "effectiveAt": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([+-]\\d{2}:\\d{2}|Z)$" },
+          "replacementRequirementId": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*-\\d+$" }
+        }
+      }
+    },
+    "affectedFiles": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" }
+    },
+    "proposalDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "generatorVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "schemaVersion": { "const": 1 }
+  }
+}

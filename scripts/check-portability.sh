@@ -346,6 +346,16 @@ else
   pass "未发现常见明文密钥"
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+  if python3 -m unittest discover plugins/voidtech-core/skills/prd-from-requirements/tests >/dev/null 2>&1; then
+    pass "prd-from-requirements unittest 套件"
+  else
+    fail "prd-from-requirements unittest 套件未通过"
+  fi
+else
+  fail "缺少命令 python3（prd-from-requirements 测试需要）"
+fi
+
 if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; then
   audit_dir=$(mktemp -d "${TMPDIR:-/tmp}/voidtech-plugin-audit.XXXXXX")
   if CLAUDE_CONFIG_DIR="$audit_dir" claude plugin marketplace add ./ >/dev/null && \

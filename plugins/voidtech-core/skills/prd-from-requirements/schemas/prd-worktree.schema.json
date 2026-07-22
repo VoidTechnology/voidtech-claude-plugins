@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "prd-worktree",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["worktreeSchemaVersion", "capabilities", "logicAtlasStage", "schemaVersions"],
+  "properties": {
+    "worktreeSchemaVersion": { "const": 1 },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceSync", "logicAtlas"],
+      "properties": {
+        "sourceSync": { "type": "boolean" },
+        "logicAtlas": { "type": "boolean" }
+      }
+    },
+    "logicAtlasStage": { "enum": ["markdown", "html", "polish", null] },
+    "schemaVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "proposal", "journal", "normalization", "logicModel"],
+      "properties": {
+        "operation": { "type": "integer", "minimum": 1 },
+        "proposal": { "type": "integer", "minimum": 1 },
+        "journal": { "type": "integer", "minimum": 1 },
+        "normalization": { "type": "integer", "minimum": 1 },
+        "logicModel": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "capabilities": { "properties": { "logicAtlas": { "const": false } } },
+        "logicAtlasStage": { "const": null }
+      }
+    },
+    {
+      "properties": {
+        "capabilities": { "properties": { "logicAtlas": { "const": true } } },
+        "logicAtlasStage": { "enum": ["markdown", "html", "polish"] }
+      }
+    }
+  ]
+}

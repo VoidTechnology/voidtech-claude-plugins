@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "sync-state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sources", "schemaVersion"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]*$": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["observedRevision", "appliedRevision", "pendingRevision"],
+              "properties": {
+                "observedRevision": { "type": ["string", "null"], "pattern": "^rev-[a-z0-9][a-z0-9-]*$" },
+                "appliedRevision": { "type": ["string", "null"], "pattern": "^rev-[a-z0-9][a-z0-9-]*$" },
+                "pendingRevision": { "type": ["string", "null"], "pattern": "^rev-[a-z0-9][a-z0-9-]*$" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["lastAppliedChangeId"],
+              "properties": {
+                "lastAppliedChangeId": { "type": ["string", "null"], "pattern": "^CHG-[0-9A-Za-z-]+$" }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

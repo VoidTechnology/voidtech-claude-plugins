@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "source-registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sources", "schemaVersion"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sourceId", "kind", "mode", "defaultAssertionRole", "status"],
+        "properties": {
+          "sourceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "kind": { "enum": ["workbook", "interview-notes", "change-stream", "document"] },
+          "mode": { "enum": ["versioned", "immutable", "append-only"] },
+          "defaultAssertionRole": { "enum": ["normative", "corroborating", "contextual"] },
+          "status": { "enum": ["active", "retired"] }
+        }
+      }
+    }
+  }
+}

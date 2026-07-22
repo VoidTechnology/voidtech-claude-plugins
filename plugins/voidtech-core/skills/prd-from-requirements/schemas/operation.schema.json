@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "operation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operationId", "operationKind", "phase", "commitPoint", "operationBaseDigest", "proposalId", "proposalDigest", "segmentPath", "targetSource", "targetRevision", "files", "toolVersions", "schemaVersion"],
+  "properties": {
+    "operationId": { "type": "string", "pattern": "^op-[a-z0-9][a-z0-9-]*$" },
+    "operationKind": { "enum": ["sync", "maintain", "migration", "rebaseline"] },
+    "phase": { "enum": ["prepared", "validated", "publishing", "committed", "aborted", "publish-conflict", "conflict"] },
+    "commitPoint": { "enum": ["appliedRevision", "operationState"] },
+    "operationBaseDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "proposalId": { "type": "string", "pattern": "^prop-[a-z0-9][a-z0-9-]*$" },
+    "proposalDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "segmentPath": { "type": "string", "pattern": "^_source/reconciliation/decisions/\\d{6}-op-[a-z0-9][a-z0-9-]*\\.jsonl$" },
+    "targetSource": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "targetRevision": { "type": ["string", "null"], "pattern": "^rev-[a-z0-9][a-z0-9-]*$" },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "action", "oldDigest", "newDigest", "stagedPath", "backupPath"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^(?!_source/reconciliation/)(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+          "action": { "enum": ["write", "delete"] },
+          "oldDigest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+          "newDigest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+          "stagedPath": { "type": ["string", "null"], "pattern": "^_source/reconciliation/operations/op-[a-z0-9][a-z0-9-]*/staging/(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+          "backupPath": { "type": ["string", "null"], "pattern": "^_source/reconciliation/operations/op-[a-z0-9][a-z0-9-]*/backup/(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "action": { "const": "write" },
+              "oldDigest": { "const": null },
+              "backupPath": { "const": null },
+              "newDigest": { "type": "string" },
+              "stagedPath": { "type": "string" }
+            }
+          },
+          {
+            "properties": {
+              "action": { "const": "write" },
+              "oldDigest": { "type": "string" },
+              "backupPath": { "type": "string" },
+              "newDigest": { "type": "string" },
+              "stagedPath": { "type": "string" }
+            }
+          },
+          {
+            "properties": {
+              "action": { "const": "delete" },
+              "oldDigest": { "type": "string" },
+              "backupPath": { "type": "string" },
+              "newDigest": { "const": null },
+              "stagedPath": { "const": null }
+            }
+          }
+        ]
+      }
+    },
+    "toolVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalizer", "generator"],
+      "properties": {
+        "normalizer": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "generator": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      }
+    },
+    "schemaVersion": { "const": 1 }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "operationKind": { "enum": ["sync", "migration", "rebaseline"] },
+        "targetSource": { "type": "string" },
+        "targetRevision": { "type": "string" },
+        "commitPoint": { "const": "appliedRevision" }
+      }
+    },
+    {
+      "properties": {
+        "operationKind": { "const": "maintain" },
+        "targetSource": { "const": null },
+        "targetRevision": { "const": null },
+        "commitPoint": { "const": "operationState" }
+      }
+    }
+  ]
+}

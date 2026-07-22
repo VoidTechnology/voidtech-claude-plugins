@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "normalization-manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["normalizedSchemaVersion", "normalizerVersion", "adapterConfigDigest", "fingerprintColumns", "strategy", "effectiveNormalizationDigest", "schemaVersion"],
+  "properties": {
+    "normalizedSchemaVersion": { "type": "integer", "minimum": 1 },
+    "normalizerVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "adapterConfigDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "fingerprintColumns": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+    },
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unicode", "whitespace", "dates", "formulas", "mergedCells", "trailingEmpty"],
+      "properties": {
+        "unicode": { "enum": ["NFC"] },
+        "whitespace": { "enum": ["collapse"] },
+        "dates": { "enum": ["iso-from-serial"] },
+        "formulas": { "enum": ["computed-value"] },
+        "mergedCells": { "enum": ["backfill"] },
+        "trailingEmpty": { "enum": ["strip"] }
+      }
+    },
+    "effectiveNormalizationDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "schemaVersion": { "const": 1 }
+  }
+}
