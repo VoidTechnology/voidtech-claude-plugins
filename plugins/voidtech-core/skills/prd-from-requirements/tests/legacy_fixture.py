@@ -45,6 +45,13 @@ ROWS_DUP = ROWS_BASE + [
     (7, "模块乙", "会员导入"),
 ]
 
+# REMOVED：删去「订单导出」（TST-005）——撤回候选用。
+ROWS_REMOVED = ROWS_BASE[:-1]
+
+# BACKFILL：带外变更的需求随后出现在主表中（来源回填用）。
+BACKFILL_TEXT = "邮件补充-数据导出"
+ROWS_BACKFILL = ROWS_BASE + [(6, "模块乙", BACKFILL_TEXT)]
+
 _MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
