@@ -52,6 +52,59 @@ ROWS_REMOVED = ROWS_BASE[:-1]
 BACKFILL_TEXT = "邮件补充-数据导出"
 ROWS_BACKFILL = ROWS_BASE + [(6, "模块乙", BACKFILL_TEXT)]
 
+# ---------------------------------------------------------------- Logic Atlas 工装
+
+ATLAS_MODULE_PRD = """# 模块甲 PRD
+
+## 3. 需求范围
+
+### 3.4 模块交互（机器可解析）
+
+| 目标模块 | 方向 | 触发 | 失败传播 |
+|---|---|---|---|
+| 02-module-b | 调用 | 客户下单后查询订单 | 提示稍后重试 |
+
+## 5. 核心用户路径
+
+### 5.0 页面契约（机器可解析）
+
+| 页面 | 入口 | 角色 | 前置条件 | 用户动作 | 系统结果 |
+|---|---|---|---|---|---|
+| 客户列表页 | 主导航 | 管理员 | 已登录 | 查看客户列表 | 展示分页客户 |
+| 客户详情页 | 客户列表页 | 管理员 | 客户存在 | 查看详情 | 展示客户资料 |
+
+## 7. 字段与数据规则
+
+### 7.0 数据读写（机器可解析）
+
+| 数据对象 | 操作 | 权威来源 | 同步方式 |
+|---|---|---|---|
+| 客户 | 读 | 01-module-a | 实时 |
+| 客户 | 写 | 01-module-a | 实时 |
+"""
+
+# 交互目标不存在的变体——模型校验必须 fail closed。
+ATLAS_MODULE_PRD_BROKEN = ATLAS_MODULE_PRD.replace("02-module-b", "99-ghost-module")
+
+MODULE_A_PRD_RELPATH = "01-test-system/01-module-a/prd.md"
+
+
+def write_atlas_module(root, content=ATLAS_MODULE_PRD):
+    (Path(root) / MODULE_A_PRD_RELPATH).write_text(content, encoding="utf-8")
+
+
+def enable_logic_atlas(root, stage="markdown"):
+    """置位 Atlas 能力开关（fixture 直写 prd-worktree.json，模拟阶段交付置位）。"""
+    import json as _json
+    manifest_path = Path(root) / "prd-worktree.json"
+    manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["capabilities"]["logicAtlas"] = True
+    manifest["logicAtlasStage"] = stage
+    manifest["schemaVersions"]["logicModel"] = 1
+    manifest_path.write_text(
+        _json.dumps(manifest, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":")) + "\n", encoding="utf-8")
+
 _MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"

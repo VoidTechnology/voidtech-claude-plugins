@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "logic-model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["logicModelSchemaVersion", "generatorVersion", "scopes", "nodes", "edges", "gaps", "coverage"],
+  "properties": {
+    "logicModelSchemaVersion": { "const": 1 },
+    "generatorVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scopeId", "kind", "title"],
+        "properties": {
+          "scopeId": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["worktree", "system", "module"] },
+          "title": { "type": "string", "minLength": 1 },
+          "path": { "type": ["string", "null"], "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+          "parentScopeId": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodeId", "kind", "scopeId", "title", "status", "sources"],
+        "properties": {
+          "nodeId": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["page", "dataObject", "requirement", "flow", "state", "permission"] },
+          "scopeId": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["original", "adjudicated", "inferred", "recommended-default", "missing"] },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+                "anchor": { "type": ["string", "null"] },
+                "requirementIds": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-\\d+$" } },
+                "oqIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+              }
+            }
+          },
+          "detail": { "type": ["object", "null"] }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["edgeId", "kind", "from", "to", "status", "sources"],
+        "properties": {
+          "edgeId": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["navigates", "reads", "writes", "interacts", "transition", "traces"] },
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["original", "adjudicated", "inferred", "recommended-default", "missing"] },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+                "anchor": { "type": ["string", "null"] },
+                "requirementIds": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-\\d+$" } },
+                "oqIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+              }
+            }
+          },
+          "detail": { "type": ["object", "null"] }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gapId", "scopeId", "kind", "detail"],
+        "properties": {
+          "gapId": { "type": "string", "minLength": 1 },
+          "scopeId": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["missing-section", "interval-traceability", "unparsed", "missing-source"] },
+          "detail": { "type": "string", "minLength": 1 },
+          "backlogRef": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["moduleCount", "pageCount", "edgeCount", "requirementCount", "gapCount"],
+      "properties": {
+        "moduleCount": { "type": "integer", "minimum": 0 },
+        "pageCount": { "type": "integer", "minimum": 0 },
+        "edgeCount": { "type": "integer", "minimum": 0 },
+        "requirementCount": { "type": "integer", "minimum": 0 },
+        "gapCount": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
