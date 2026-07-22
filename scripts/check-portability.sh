@@ -346,11 +346,18 @@ else
   pass "未发现常见明文密钥"
 fi
 
+# 已过门的 fixture 模块清单（技术设计 §11：每阶段只需通过本门）。
+# 每过一门在此追加该门模块；未过门的红灯 fixture 只接入对应 loop goal 的 target eval。
+DELIVERED_GATE_TESTS=(
+  test_schemas test_manifest_checks
+  test_writer_lock test_operation_engine test_journal_projector test_effective_view
+)
 if command -v python3 >/dev/null 2>&1; then
-  if python3 -m unittest discover plugins/voidtech-core/skills/prd-from-requirements/tests >/dev/null 2>&1; then
-    pass "prd-from-requirements unittest 套件"
+  if (cd plugins/voidtech-core/skills/prd-from-requirements/tests && \
+      python3 -m unittest "${DELIVERED_GATE_TESTS[@]}" >/dev/null 2>&1); then
+    pass "prd-from-requirements 已过门 unittest 套件"
   else
-    fail "prd-from-requirements unittest 套件未通过"
+    fail "prd-from-requirements 已过门 unittest 套件未通过"
   fi
 else
   fail "缺少命令 python3（prd-from-requirements 测试需要）"
