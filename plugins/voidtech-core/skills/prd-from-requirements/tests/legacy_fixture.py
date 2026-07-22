@@ -17,20 +17,32 @@ MANUAL_KEY = "TST-003+a"
 AUTO_COUNT = 5
 MANUAL_COUNT = 1
 
-_SHARED = ["需求表-测试", "序号", "模块", "需求点", "模块甲", "客户新增",
-           "客户列表", "客户详情", "站内通知-无序号补充", "模块乙",
-           "订单列表", "订单导出"]
+# 数据行：(序号|None, 模块, 需求点)。None = 无序号行。
+ROWS_BASE = [
+    (1, "模块甲", "客户新增"),
+    (2, "模块甲", "客户列表"),
+    (3, "模块甲", "客户详情"),
+    (None, "模块甲", "站内通知-无序号补充"),   # → TST-003+a
+    (4, "模块乙", "订单列表"),
+    (5, "模块乙", "订单导出"),
+]
 
-_ROWS = [
-    # (row, [(col, kind, value)]); kind: "s"=shared string 下标, "n"=数字
-    (1, [("A", "s", 0)]),
-    (2, [("A", "s", 1), ("B", "s", 2), ("C", "s", 3)]),
-    (3, [("A", "n", 1), ("B", "s", 4), ("C", "s", 5)]),
-    (4, [("A", "n", 2), ("B", "s", 4), ("C", "s", 6)]),
-    (5, [("A", "n", 3), ("B", "s", 4), ("C", "s", 7)]),
-    (6, [("B", "s", 4), ("C", "s", 8)]),          # 无序号行 → TST-003+a
-    (7, [("A", "n", 4), ("B", "s", 9), ("C", "s", 10)]),
-    (8, [("A", "n", 5), ("B", "s", 9), ("C", "s", 11)]),
+# V2：一处正文修改（客户列表→支持导出）、一条新增（订单退款）且插在中部——
+# 后续行的物理行号全部偏移，用于验证 recordKey 与行号无关。
+ROWS_V2 = [
+    (1, "模块甲", "客户新增"),
+    (2, "模块甲", "客户列表-支持导出"),
+    (6, "模块乙", "订单退款"),
+    (3, "模块甲", "客户详情"),
+    (None, "模块甲", "站内通知-无序号补充"),
+    (4, "模块乙", "订单列表"),
+    (5, "模块乙", "订单导出"),
+]
+
+# DUP：两条业务内容完全相同的行（序号不同）——duplicateOrdinal 消歧用。
+ROWS_DUP = ROWS_BASE + [
+    (6, "模块乙", "会员导入"),
+    (7, "模块乙", "会员导入"),
 ]
 
 _MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -38,9 +50,32 @@ _REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def _sheet_xml() -> str:
+def _layout(data_rows):
+    """把数据行编译为 (shared_strings, sheet_rows)：标题 + 表头 + 数据。"""
+    shared = ["需求表-测试", "序号", "模块", "需求点"]
+
+    def sid(text):
+        if text not in shared:
+            shared.append(text)
+        return shared.index(text)
+
+    sheet_rows = [
+        (1, [("A", "s", 0)]),
+        (2, [("A", "s", 1), ("B", "s", 2), ("C", "s", 3)]),
+    ]
+    for offset, (seq, module, text) in enumerate(data_rows):
+        cells = []
+        if seq is not None:
+            cells.append(("A", "n", seq))
+        cells.append(("B", "s", sid(module)))
+        cells.append(("C", "s", sid(text)))
+        sheet_rows.append((3 + offset, cells))
+    return shared, sheet_rows
+
+
+def _sheet_xml(sheet_rows) -> str:
     rows = []
-    for row_num, cells in _ROWS:
+    for row_num, cells in sheet_rows:
         parts = []
         for col, kind, value in cells:
             ref = f"{col}{row_num}"
@@ -53,8 +88,9 @@ def _sheet_xml() -> str:
             f'<worksheet xmlns="{_MAIN_NS}"><sheetData>{"".join(rows)}</sheetData></worksheet>')
 
 
-def build_xlsx(path: Path) -> None:
-    shared_items = "".join(f"<si><t>{text}</t></si>" for text in _SHARED)
+def build_xlsx(path: Path, data_rows=None, date_time=(2026, 7, 1, 0, 0, 0)) -> None:
+    shared, sheet_rows = _layout(ROWS_BASE if data_rows is None else data_rows)
+    shared_items = "".join(f"<si><t>{text}</t></si>" for text in shared)
     members = {
         "[Content_Types].xml": (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -82,14 +118,14 @@ def build_xlsx(path: Path) -> None:
             "</Relationships>"),
         "xl/sharedStrings.xml": (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            f'<sst xmlns="{_MAIN_NS}" count="{len(_SHARED)}" uniqueCount="{len(_SHARED)}">'
+            f'<sst xmlns="{_MAIN_NS}" count="{len(shared)}" uniqueCount="{len(shared)}">'
             f"{shared_items}</sst>"),
-        "xl/worksheets/sheet1.xml": _sheet_xml(),
+        "xl/worksheets/sheet1.xml": _sheet_xml(sheet_rows),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, content in members.items():
-            info = zipfile.ZipInfo(name, date_time=(2026, 7, 1, 0, 0, 0))
+            info = zipfile.ZipInfo(name, date_time=date_time)
             archive.writestr(info, content)
 
 
