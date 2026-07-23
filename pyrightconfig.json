@@ -1,0 +1,16 @@
+{
+  "include": [
+    "plugins/voidtech-core/skills/prd-from-requirements/scripts",
+    "plugins/voidtech-core/skills/prd-from-requirements/tests"
+  ],
+  "exclude": [
+    "**/__pycache__"
+  ],
+  "extraPaths": [
+    "plugins/voidtech-core/skills/prd-from-requirements/scripts",
+    "plugins/voidtech-core/skills/prd-from-requirements/tests"
+  ],
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "error"
+}
