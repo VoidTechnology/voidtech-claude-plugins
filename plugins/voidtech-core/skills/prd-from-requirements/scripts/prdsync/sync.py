@@ -123,9 +123,10 @@ def _shared_strings(archive: zipfile.ZipFile):
 def _read_data_rows(workbook_path: Path):
     """按工作表出现顺序返回数据行列表：{locator, columns, sequence}。
 
-    表头行以 `_HEADER_TO_LOGICAL` 识别（须同时含 module 与 requirement-text
-    列）；其后有非空 requirement-text 的行为数据行（trailingEmpty 策略：
-    空正文行不计入）。无序号行照常进入（序号列缺省为空串）。
+    表头行以 `_HEADER_TO_LOGICAL` 识别：必须命中 requirement-text 且至少命中
+    两个逻辑列（module 列可缺失，数据行 module 取空串）。数据行判定：有序号
+    或有正文（有序号但正文列为空的行如实收录为空观测）。mergedCells 按锚点
+    值回填（§3.5 strategy），无序号行照常进入（序号列缺省为空串）。
     """
     result = []
     with zipfile.ZipFile(workbook_path) as archive:
@@ -147,14 +148,43 @@ def _read_data_rows(workbook_path: Path):
     return result
 
 
+def _col_index(letters: str) -> int:
+    value = 0
+    for ch in letters:
+        value = value * 26 + (ord(ch) - ord("A") + 1)
+    return value
+
+
+def _index_to_col(index: int) -> str:
+    letters = ""
+    while index > 0:
+        index, rem = divmod(index - 1, 26)
+        letters = chr(ord("A") + rem) + letters
+    return letters
+
+
+def _cell_rc(ref: str):
+    match = re.match(r"([A-Z]+)(\d+)$", ref)
+    if not match:
+        return None
+    return int(match.group(2)), match.group(1)
+
+
 def _extract_sheet(result, sheet_name, sheet_root, strings):
-    col_to_logical = None
+    # 先建整表网格，再做 mergedCells 回填（§3.5 strategy: backfill）——
+    # 合并区域的值只存在锚点单元格,续行按锚点值回填,否则真实原表中
+    # 合并正文的需求行会被当作空行丢弃。
+    grid, row_numbers = {}, []
+    last_row = 0
     for row in sheet_root.findall(".//m:sheetData/m:row", _NS):
+        # 隐式行号（流式写入器可省略 r 属性）按文档顺序递增，
+        # 绝不塌缩到同一行号（否则多行单元格互相覆盖，静默丢数据）。
         try:
-            row_num = int(row.attrib.get("r", "0") or 0)
+            row_num = int(row.attrib.get("r") or last_row + 1)
         except ValueError:
-            row_num = 0
-        cells = {}
+            row_num = last_row + 1
+        last_row = row_num
+        row_numbers.append(row_num)
         for cell in row.findall("m:c", _NS):
             col = _col_letters(cell.attrib.get("r", ""))
             value_node = cell.find("m:v", _NS)
@@ -166,25 +196,69 @@ def _extract_sheet(result, sheet_name, sheet_root, strings):
                     raw = strings[int(raw)]
                 except (ValueError, IndexError):
                     pass
-            cells[col] = raw
+            grid[(row_num, col)] = raw
+
+    for merge in sheet_root.findall(".//m:mergeCells/m:mergeCell", _NS):
+        ref = merge.attrib.get("ref", "")
+        if ":" not in ref:
+            continue
+        start_rc = _cell_rc(ref.split(":", 1)[0])
+        end_rc = _cell_rc(ref.split(":", 1)[1])
+        if not start_rc or not end_rc:
+            continue
+        (row_1, col_1), (row_2, col_2) = start_rc, end_rc
+        # 防爆界：损坏/恶意 workbook 可声明 A1:XFD1048576 级别的合并区域，
+        # 无界回填会在任何校验前耗尽内存。真实合并区域远小于此上限。
+        area = (row_2 - row_1 + 1) * (_col_index(col_2) - _col_index(col_1) + 1)
+        if area > 4096 or area <= 0:
+            continue
+        anchor = grid.get((row_1, col_1), "")
+        if not str(anchor).strip():
+            continue
+        for r in range(row_1, row_2 + 1):
+            for ci in range(_col_index(col_1), _col_index(col_2) + 1):
+                key = (r, _index_to_col(ci))
+                if not str(grid.get(key, "")).strip():
+                    grid[key] = anchor
+
+    by_row = {}
+    for (row_num, col), value in grid.items():
+        by_row.setdefault(row_num, {})[col] = value
+
+    # 合并区域可能覆盖 sheetData 中被省略的行——遍历「物理行 ∪ 回填行」，
+    # 否则合并正文的需求行又会被静默丢弃（回填机制存在的意义就没了）。
+    all_rows = sorted(set(row_numbers) | set(by_row))
+
+    col_to_logical = None
+    for row_num in all_rows:
+        cells = by_row.get(row_num, {})
 
         if col_to_logical is None:
             mapping = {col: _HEADER_TO_LOGICAL[value.strip()]
                        for col, value in cells.items()
                        if value.strip() in _HEADER_TO_LOGICAL}
             logicals = set(mapping.values())
-            if {"module", _PRIMARY_TEXT_COLUMN} <= logicals:
+            # 表头识别：必须命中需求正文列，且至少命中两个逻辑列——单靠正文
+            # 段落里出现「需求点」字面量的行不得劫持表头。「模块」列缺失时
+            # （真实原表常见，如 Example 的「序号,客户端,…,需求点」），数据行
+            # 的 module 统一取空串参与规范化。
+            if _PRIMARY_TEXT_COLUMN in logicals and len(logicals) >= 2:
                 col_to_logical = mapping
             continue
 
         columns = {logical: cells[col]
                    for col, logical in col_to_logical.items() if col in cells}
-        if not columns.get(_PRIMARY_TEXT_COLUMN, "").strip():
+        columns.setdefault("module", "")
+        sequence = columns.get("sequence", "").strip()
+        # 数据行判定：有序号或有正文。真实原表存在「有序号但正文列为空、
+        # 内容写在相邻列」的行（如 Example PTL-206/207）——观测必须忠实
+        # 收录该行（正文如实为空），否则矩阵对账的输入合计对不上。
+        if not sequence and not columns.get(_PRIMARY_TEXT_COLUMN, "").strip():
             continue
         result.append({
             "locator": {"sheet": sheet_name, "row": row_num},
             "columns": columns,
-            "sequence": columns.get("sequence", "").strip(),
+            "sequence": sequence,
         })
 
 

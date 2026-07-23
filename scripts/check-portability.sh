@@ -354,6 +354,8 @@ DELIVERED_GATE_TESTS=(
   test_gate2_migration test_gate2_example
   test_gate3_sync test_gate3_rebaseline
   test_gate4_merge test_gate4_sources
+  test_gate5_atlas test_gate5_proof_perf
+  test_review_fixes
 )
 if command -v python3 >/dev/null 2>&1; then
   if (cd plugins/voidtech-core/skills/prd-from-requirements/tests && \

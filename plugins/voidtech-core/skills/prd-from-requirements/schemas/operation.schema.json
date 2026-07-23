@@ -23,12 +23,12 @@
         "additionalProperties": false,
         "required": ["path", "action", "oldDigest", "newDigest", "stagedPath", "backupPath"],
         "properties": {
-          "path": { "type": "string", "pattern": "^(?!_source/reconciliation/)(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+          "path": { "type": "string", "pattern": "^(?!_source/reconciliation/)(?!/)(?!.*\\.\\.)[^\\\\\\x00-\\x1f\\x7f\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+$" },
           "action": { "enum": ["write", "delete"] },
           "oldDigest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
           "newDigest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
-          "stagedPath": { "type": ["string", "null"], "pattern": "^_source/reconciliation/operations/op-[a-z0-9][a-z0-9-]*/staging/(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
-          "backupPath": { "type": ["string", "null"], "pattern": "^_source/reconciliation/operations/op-[a-z0-9][a-z0-9-]*/backup/(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" }
+          "stagedPath": { "type": ["string", "null"], "pattern": "^_source/reconciliation/operations/op-[a-z0-9][a-z0-9-]*/staging/(?!.*\\.\\.)[^\\\\\\x00-\\x1f\\x7f\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+$" },
+          "backupPath": { "type": ["string", "null"], "pattern": "^_source/reconciliation/operations/op-[a-z0-9][a-z0-9-]*/backup/(?!.*\\.\\.)[^\\\\\\x00-\\x1f\\x7f\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+$" }
         },
         "oneOf": [
           {

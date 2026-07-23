@@ -120,6 +120,7 @@ def _context(root):
                 continue
             applied[occ] = {
                 "text": record["normalizedText"],
+                "key": record["recordKey"],
                 "req": mapping["requirementId"],
                 "role": mapping["assertionRole"],
                 "source": source_id,
@@ -204,11 +205,6 @@ def withdrawal_candidates(root):
 
 # ---------------------------------------------------------------- 三方归并 proposal
 
-def _text_to_source_req(ctx):
-    idx = {}
-    for info in ctx["applied"].values():
-        idx.setdefault(info["text"], info["req"])
-    return idx
 
 
 def _text_to_change(ctx):
@@ -244,30 +240,57 @@ def propose_sync(root, source_id):
         r["sourceOccurrenceId"]: ctx["mappings"][r["sourceOccurrenceId"]]["requirementId"]
         for r in applied_records if r["sourceOccurrenceId"] in ctx["mappings"]}
 
-    text_src = _text_to_source_req(ctx)
     text_chg = _text_to_change(ctx)
-    pending_texts = {r["normalizedText"] for r in pending_records}
 
     mappings = []
     ambiguities = []
     affected = [SYNC_STATE_RELPATH]
 
-    # 分桶：字节等价 → 自动通道；否则待定（added）。
+    # 分桶（ADR-0004 §3/§6）：自动通道只接受「唯一 recordKey 的字节级等价」。
+    # 空正文或同 revision 内 recordKey 重复的记录一律降级为歧义，永不自动裁决
+    # ——否则多条空正文/复制粘贴行会被归并到同一编号，静默改写需求身份。
+    applied_by_key = {}
+    for applied_occ, info in ctx["applied"].items():
+        applied_by_key.setdefault(info["key"], []).append(applied_occ)
+    pending_key_counts = {}
+    for record in pending_records:
+        pending_key_counts[record["recordKey"]] = (
+            pending_key_counts.get(record["recordKey"], 0) + 1)
+
     added = []
+    consumed_applied = set()
     for record in pending_records:
         occ = record["sourceOccurrenceId"]
         text = record["normalizedText"]
-        if text in text_src:
-            mappings.append(_map_entry(occ, text_src[text], "unchanged", "auto"))
-        elif text in text_chg:
+        key = record["recordKey"]
+        unique = (text.strip() != "" and pending_key_counts[key] == 1)
+        if unique and len(applied_by_key.get(key, [])) == 1:
+            matched = applied_by_key[key][0]
+            consumed_applied.add(matched)
+            mappings.append(_map_entry(occ, ctx["applied"][matched]["req"],
+                                       "unchanged", "auto"))
+        elif unique and key not in applied_by_key and text in text_chg:
             mappings.append(_map_entry(occ, text_chg[text][1], "source-backfill", "auto"))
+        elif key in applied_by_key or pending_key_counts[key] > 1:
+            candidate_ids = sorted({ctx["applied"][o]["req"]
+                                    for o in applied_by_key.get(key, [])})
+            ambiguities.append({
+                "kind": "duplicate",
+                "detail": "recordKey 重复或正文为空，无法自动裁决身份"
+                          "（重复行/空正文通常是源数据质量问题，需人工确认）",
+                "occurrences": [occ],
+                "candidateRequirementIds": candidate_ids,
+            })
         else:
             added.append(record)
 
-    # 该源 applied revision 中字节消失的 occurrence。
+    # 该源 applied revision 中 recordKey 整体消失的 occurrence（未被自动通道
+    # 消费、且候选 revision 完全不含该 key）。key 仍在但计数不齐的情形已经
+    # 全部进入歧义确认，由人裁决，不在此自动判定。
     disappeared = [r for r in applied_records
-                   if r["normalizedText"] not in pending_texts
-                   and r["sourceOccurrenceId"] in applied_occ_req]
+                   if r["sourceOccurrenceId"] in applied_occ_req
+                   and r["sourceOccurrenceId"] not in consumed_applied
+                   and r["recordKey"] not in pending_key_counts]
 
     # 歧义确认：added occurrence 与同模块内消失的既有需求配对（绝不自动裁决）。
     claimed = set()

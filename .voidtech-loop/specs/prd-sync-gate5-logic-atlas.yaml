@@ -1,0 +1,61 @@
+schema_version: 1
+goal_id: prd-sync-gate5-logic-atlas
+task: "实现 plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/atlas.py：Logic Atlas 确定性编译器与分层内容门。compile（只消费模块 prd.md 三张机器可解析表——表头见 templates/module-prd.md 的 3.4/5.0/7.0 节——与 _generated/requirements-ledger.jsonl，输出过 schemas/logic-model.schema.json，缺失结构进 gaps 不补齐，读取栅栏先行）、build_plan（markdown 阶段四件套 + html 阶段自包含 logic-atlas.html，manifest 含三摘要，视图自述快照短哈希）、publish（经 operation_engine maintain operation 提交，校验失败 AtlasValidationError 零写入）、check_freshness（严格只读，三摘要比对，pending 不参与）、gate_requirements（legacy/markdown/html/polish 四阶段步骤裁剪，步骤 id 与阻塞性见 fixture docstring）、proof_inherits（七键继承纯函数）。接口契约固化在 tests/test_gate5_atlas.py 与 tests/test_gate5_proof_perf.py 的模块 docstring。设计见 docs/decisions/0005-logic-atlas-read-model.md 与技术设计 §10。性能门：Example 工作树 compile+build_plan < 5s。复用 prdsync 既有模块（base_cas 的摘要函数、effective_view 读取栅栏、engine 发布协议），只使用 Python 标准库；不得修改 tests/、schemas/、docs/、templates/。门 2/3/4 既有测试保持全绿。"
+base_commit: dd538df
+budgets:
+  max_iterations: 20
+  max_duration_seconds: 14400
+protected_paths:
+  - /docs/
+  - /scripts/
+  - /templates/
+  - /README.md
+  - /CLAUDE.md
+  - /.voidtech-loop/
+  - /plugins/voidtech-loop/
+  - /plugins/voidtech-mcp-apple/
+  - /plugins/voidtech-mcp-common/
+  - plugins/voidtech-core/skills/prd-from-requirements/schemas/
+  - plugins/voidtech-core/skills/prd-from-requirements/tests/
+  - plugins/voidtech-core/skills/prd-from-requirements/templates/
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/xlsx-to-markdown.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/check-prd-tree.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/generate-dashboard.py
+evals:
+  - id: gate5-atlas-fixtures
+    role: target
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_gate5_atlas
+      - test_gate5_proof_perf
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 1200
+  - id: delivered-gates-stay-green
+    role: invariant
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_schemas
+      - test_manifest_checks
+      - test_writer_lock
+      - test_operation_engine
+      - test_journal_projector
+      - test_effective_view
+      - test_gate2_migration
+      - test_gate2_example
+      - test_gate3_sync
+      - test_gate3_rebaseline
+      - test_gate4_merge
+      - test_gate4_sources
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 900
+manual_review:
+  - logic-atlas.md / .html 的阅读体验与信息编排（fixture 只验证结构与自述,呈现质量属人工判断）
+  - 浏览器级验证与渲染器验证证明的 CI 接线（ADR-0005 §8,属插件 CI 范围,本门只交付继承判定纯函数）
+out_of_scope:
+  - 受限自然化的模型调用(text-naturalizer 接入属 skill 层;本门只交付步骤裁剪中的非阻塞标记与原文回退位)
+  - check-prd-tree.py 的 --operation-id 改造与 markdown_validator 拆分(后续维护工作)
+  - 按主题解释入口(ADR-0005 第四阶段)

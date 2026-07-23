@@ -128,12 +128,13 @@ def _layout(data_rows):
         if seq is not None:
             cells.append(("A", "n", seq))
         cells.append(("B", "s", sid(module)))
-        cells.append(("C", "s", sid(text)))
+        if text is not None:  # None = 该行正文单元格缺失（空观测/合并续行）
+            cells.append(("C", "s", sid(text)))
         sheet_rows.append((3 + offset, cells))
     return shared, sheet_rows
 
 
-def _sheet_xml(sheet_rows) -> str:
+def _sheet_xml(sheet_rows, merges=()) -> str:
     rows = []
     for row_num, cells in sheet_rows:
         parts = []
@@ -144,11 +145,17 @@ def _sheet_xml(sheet_rows) -> str:
             else:
                 parts.append(f'<c r="{ref}"><v>{value}</v></c>')
         rows.append(f'<row r="{row_num}">{"".join(parts)}</row>')
+    merge_xml = ""
+    if merges:
+        refs = "".join(f'<mergeCell ref="{ref}"/>' for ref in merges)
+        merge_xml = f'<mergeCells count="{len(merges)}">{refs}</mergeCells>'
     return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            f'<worksheet xmlns="{_MAIN_NS}"><sheetData>{"".join(rows)}</sheetData></worksheet>')
+            f'<worksheet xmlns="{_MAIN_NS}"><sheetData>{"".join(rows)}</sheetData>'
+            f"{merge_xml}</worksheet>")
 
 
-def build_xlsx(path: Path, data_rows=None, date_time=(2026, 7, 1, 0, 0, 0)) -> None:
+def build_xlsx(path: Path, data_rows=None, date_time=(2026, 7, 1, 0, 0, 0),
+               merges=()) -> None:
     shared, sheet_rows = _layout(ROWS_BASE if data_rows is None else data_rows)
     shared_items = "".join(f"<si><t>{text}</t></si>" for text in shared)
     members = {
@@ -180,7 +187,7 @@ def build_xlsx(path: Path, data_rows=None, date_time=(2026, 7, 1, 0, 0, 0)) -> N
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             f'<sst xmlns="{_MAIN_NS}" count="{len(shared)}" uniqueCount="{len(shared)}">'
             f"{shared_items}</sst>"),
-        "xl/worksheets/sheet1.xml": _sheet_xml(sheet_rows),
+        "xl/worksheets/sheet1.xml": _sheet_xml(sheet_rows, merges),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:

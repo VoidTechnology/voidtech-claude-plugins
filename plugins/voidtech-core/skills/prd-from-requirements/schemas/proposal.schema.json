@@ -61,7 +61,7 @@
     },
     "affectedFiles": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._][A-Za-z0-9._/-]*$" }
+      "items": { "type": "string", "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\\\x00-\\x1f\\x7f\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+$" }
     },
     "proposalDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "generatorVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },

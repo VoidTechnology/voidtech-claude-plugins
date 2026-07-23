@@ -1,0 +1,55 @@
+schema_version: 1
+goal_id: prd-sync-gate2-migration
+task: "实现 plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/migration.py：存量迁移分析器（只读 dry-run）与确认提交流程（单一 migration operation）。接口契约固化在 tests/test_gate2_migration.py 与 tests/test_gate2_example.py 的模块 docstring 中；设计约束见 docs/tech-design-prd-sync-and-logic-atlas-2026-07-21.md §8.1 与 docs/decisions/0004-prd-source-sync-and-requirement-identity.md「分阶段落地·第一阶段」。必须复用 prdsync 既有模块（operation_engine、writer_lock、base_cas、journal_projector、canonical_store、schema_validator），经 operation_engine 提交 migration operation，不得绕过暂存发布协议；只使用 Python 标准库；不得修改 tests/、schemas/、docs/ 下任何文件。"
+base_commit: 0cf9723
+budgets:
+  max_iterations: 25
+  max_duration_seconds: 14400
+protected_paths:
+  - /docs/
+  - /scripts/
+  - /templates/
+  - /README.md
+  - /CLAUDE.md
+  - /.voidtech-loop/
+  - /plugins/voidtech-loop/
+  - /plugins/voidtech-mcp-apple/
+  - /plugins/voidtech-mcp-common/
+  - plugins/voidtech-core/skills/prd-from-requirements/schemas/
+  - plugins/voidtech-core/skills/prd-from-requirements/tests/
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/xlsx-to-markdown.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/check-prd-tree.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/generate-dashboard.py
+evals:
+  - id: gate2-migration-fixtures
+    role: target
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_gate2_migration
+      - test_gate2_example
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 900
+  - id: foundation-suite-stays-green
+    role: invariant
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_schemas
+      - test_manifest_checks
+      - test_writer_lock
+      - test_operation_engine
+      - test_journal_projector
+      - test_effective_view
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 600
+manual_review:
+  - Example dry-run 的 4 条人工项语义是否与矩阵「待人工核对项」一致（数量已由 eval 机械验证）
+  - migration.py 的 proposal 载荷是否遵守 proposal schema 的冻结字段（schema 校验已内嵌于 operation_engine）
+out_of_scope:
+  - 只读同步、rebaseline（门 3）
+  - 三方归并与生命周期工况（门 4）
+  - Logic Atlas（门 5）
+  - 对真实 Example 工作树的任何写入

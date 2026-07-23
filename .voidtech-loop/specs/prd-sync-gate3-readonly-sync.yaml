@@ -1,0 +1,55 @@
+schema_version: 1
+goal_id: prd-sync-gate3-readonly-sync
+task: "实现 plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/sync.py：只读同步（不可变 revision 导入、规范化哈希 no-op、raw diff、observed/pending 游标）与 rebaseline（§8.2 六步：契约摘要触发、同一原始文件重建 baseline、crosswalk 身份继承、appliedRevision 推进、重同步零业务变更）。接口契约固化在 tests/test_gate3_sync.py 与 tests/test_gate3_rebaseline.py 的模块 docstring。注意：migration.py 的 revision 0 生成必须重构为与 sync 共用同一 normalizer，满足规范化契约（normalized.jsonl 不含 requirementId、recordKey 仅由业务列内容计算、revision-manifest 与 normalization-manifest 过 schema）——门 2 既有测试必须保持全绿。设计见 docs/tech-design-prd-sync-and-logic-atlas-2026-07-21.md §3.4/§3.5/§8.2 与 docs/decisions/0004 §2/§3/§6。复用 prdsync 既有模块，经 operation_engine 提交 rebaseline operation（operationKind=rebaseline），只使用 Python 标准库；不得修改 tests/、schemas/、docs/。"
+base_commit: ec25402
+budgets:
+  max_iterations: 20
+  max_duration_seconds: 14400
+protected_paths:
+  - /docs/
+  - /scripts/
+  - /templates/
+  - /README.md
+  - /CLAUDE.md
+  - /.voidtech-loop/
+  - /plugins/voidtech-loop/
+  - /plugins/voidtech-mcp-apple/
+  - /plugins/voidtech-mcp-common/
+  - plugins/voidtech-core/skills/prd-from-requirements/schemas/
+  - plugins/voidtech-core/skills/prd-from-requirements/tests/
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/xlsx-to-markdown.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/check-prd-tree.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/generate-dashboard.py
+evals:
+  - id: gate3-sync-fixtures
+    role: target
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_gate3_sync
+      - test_gate3_rebaseline
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 900
+  - id: delivered-gates-stay-green
+    role: invariant
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_schemas
+      - test_manifest_checks
+      - test_writer_lock
+      - test_operation_engine
+      - test_journal_projector
+      - test_effective_view
+      - test_gate2_migration
+      - test_gate2_example
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 900
+manual_review:
+  - migration revision 0 重构后,Example dry-run 语义是否仍与矩阵一致(计数已由门 2 invariant 机械把关)
+out_of_scope:
+  - 三方归并、变更分类与生命周期候选(门 4)
+  - Logic Atlas(门 5)
+  - 修改 PRD 主本(只读同步阶段禁止)

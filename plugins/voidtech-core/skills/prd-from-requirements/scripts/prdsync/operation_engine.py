@@ -169,8 +169,12 @@ def set_proposal_status(root, proposal_id, status):
 # ---------------------------------------------------------------- 路径安全
 
 def _check_rel_path(rel: str):
-    if rel.startswith("/"):
+    if rel.startswith("/") or os.path.isabs(rel):
         raise PathViolation(f"absolute path rejected: {rel}")
+    # Windows 盘符绝对路径（C:/evil）与 NTFS ADS（file:stream）：拒绝首段含冒号，
+    # 使拒绝不依赖运行平台或文件系统状态。
+    if re.match(r"^[A-Za-z]+:", rel):
+        raise PathViolation(f"drive/scheme-like path rejected: {rel}")
     parts = rel.split("/")
     if any(part in ("", ".", "..") for part in parts):
         raise PathViolation(f"path traversal rejected: {rel}")
@@ -372,8 +376,20 @@ def _publish_entry(root, entry, hook):
         os.remove(target)
 
 
+def _revalidate_manifest_paths(root, manifest):
+    """发布/恢复消费磁盘上的 manifest 前复验路径约束（防手改/篡改的 manifest
+    把写入引出工作树）——创建时的校验不能替代恢复路径上的校验。"""
+    errors = manifest_checks.check_operation_derived_paths(manifest)
+    if errors:
+        raise PathViolation(f"manifest derived paths invalid: {errors}")
+    for entry in manifest["files"]:
+        _check_rel_path(entry["path"])
+        _check_containment(root, entry["path"])
+
+
 def _continue_publish(root, manifest, hook=None, force_conflicts=False):
     root = Path(root)
+    _revalidate_manifest_paths(root, manifest)
     operation_id = manifest["operationId"]
     progress = _load_progress(root, operation_id)
     for entry in manifest["files"]:
@@ -439,6 +455,7 @@ def _rollback_published(root, manifest):
     """保留第三方修改：逆序回滚本 operation 已发布的文件——新建动作删除目标，
     改写与删除动作从 backup 恢复（§4）。"""
     root = Path(root)
+    _revalidate_manifest_paths(root, manifest)
     entries = {entry["path"]: entry for entry in manifest["files"]}
     for path in reversed(_load_progress(root, manifest["operationId"])):
         entry = entries[path]

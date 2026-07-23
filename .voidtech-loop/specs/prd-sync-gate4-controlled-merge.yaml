@@ -1,0 +1,58 @@
+schema_version: 1
+goal_id: prd-sync-gate4-controlled-merge
+task: "实现 plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/merge.py：受控合入——三方归并 proposal（三桶分类、防重复编号、歧义确认）、commit_proposal（批量机器裁决与人工确认同事务落 journal、appliedRevision 推进）、withdrawal_candidates 聚合（ADR-0004 §6 优先级表）、register_change 与来源回填 absorbed、propose_source_retirement / propose_assertion_invalidation、propose_lifecycle 与未来 effectiveAt（§7.3：提交时生效，不读墙钟）。接口契约固化在 tests/test_gate4_merge.py 与 tests/test_gate4_sources.py 的模块 docstring。同时收门 3 债务（修改 sync.py）：sync_source 游标更新必须在 writer lock 内执行（他人持锁抛 LockHeld）；未迁移工作树抛 SourceNotInitialized；retired 源抛 SourceRetired。另两处 robustness 修正：migration.commit_migration 人工编号按 itemKey 显式对齐（不依赖列表顺序）；所有对外异常语义清晰。设计见 docs/decisions/0004 §4/§5/§6/§7 与技术设计 §3.3/§3.6/§3.7/§7.3。全部经 operation_engine 提交（sync 类 commitPoint=appliedRevision，maintain 类 =operationState），只使用 Python 标准库；不得修改 tests/、schemas/、docs/。门 2/门 3 既有测试必须保持全绿。"
+base_commit: e7cb7f6
+budgets:
+  max_iterations: 25
+  max_duration_seconds: 14400
+protected_paths:
+  - /docs/
+  - /scripts/
+  - /templates/
+  - /README.md
+  - /CLAUDE.md
+  - /.voidtech-loop/
+  - /plugins/voidtech-loop/
+  - /plugins/voidtech-mcp-apple/
+  - /plugins/voidtech-mcp-common/
+  - plugins/voidtech-core/skills/prd-from-requirements/schemas/
+  - plugins/voidtech-core/skills/prd-from-requirements/tests/
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/xlsx-to-markdown.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/check-prd-tree.py
+  - plugins/voidtech-core/skills/prd-from-requirements/scripts/generate-dashboard.py
+evals:
+  - id: gate4-merge-fixtures
+    role: target
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_gate4_merge
+      - test_gate4_sources
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 900
+  - id: delivered-gates-stay-green
+    role: invariant
+    command:
+      - python3
+      - -m
+      - unittest
+      - test_schemas
+      - test_manifest_checks
+      - test_writer_lock
+      - test_operation_engine
+      - test_journal_projector
+      - test_effective_view
+      - test_gate2_migration
+      - test_gate2_example
+      - test_gate3_sync
+      - test_gate3_rebaseline
+    cwd: plugins/voidtech-core/skills/prd-from-requirements/tests
+    timeout_seconds: 900
+manual_review:
+  - withdrawal_candidates 的聚合优先级是否完整覆盖 ADR-0004 §6 表格五种情形（fixture 只覆盖「无来源」「仅 contextual」两种）
+  - 变更分类推荐标签在确认报告中的产品语言呈现（门 4 只交付机器层,呈现属 prd-sync skill 文案层）
+out_of_scope:
+  - Logic Atlas 与内容门(门 5)
+  - PRD 主本(Markdown)修改——变更集交 prd-maintain skill 层,本门只交付 journal/ledger/游标机器层
+  - overriding 裁决与 lifecycle controller 的完整来源冲突流程(ADR 第三阶段)

@@ -238,6 +238,20 @@ class SchemaExamplesTest(unittest.TestCase):
         self.assert_invalid("proposal",
                             mutate(VALID["proposal"], affectedFiles=["/etc/passwd"]),
                             "absolute path in affectedFiles")
+        self.assert_invalid("proposal",
+                            mutate(VALID["proposal"], affectedFiles=["a\\b.md"]),
+                            "backslash in affectedFiles")
+
+    def test_unicode_paths_accepted(self):
+        # 真实工作树的原件路径含中文（如 需求.xlsx），路径契约必须放行。
+        self.assert_valid("proposal", mutate(
+            VALID["proposal"],
+            affectedFiles=["_source/revisions/requirements-xlsx/rev-a1/需求.xlsx"]))
+        op = copy.deepcopy(VALID["operation"])
+        op["files"][1]["path"] = "_generated/需求账本.jsonl"
+        op["files"][1]["stagedPath"] = (
+            "_source/reconciliation/operations/op-20260721-001/staging/_generated/需求账本.jsonl")
+        self.assert_valid("operation", op)
 
     def test_proposal_bad_status(self):
         self.assert_invalid("proposal", mutate(VALID["proposal"], status="draft"), "unknown status")
