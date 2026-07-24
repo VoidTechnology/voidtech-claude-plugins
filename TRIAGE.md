@@ -20,6 +20,7 @@
 | Chrome DevTools MCP | ChromeDevTools 官方仓库，Apache-2.0 | `chrome-devtools-mcp@1.4.0`，默认关闭使用统计与 CrUX URL 查询 |
 | Apple Docs MCP | MIT | `@kimsungwhee/apple-docs-mcp@1.0.26`，放入 Apple 插件 |
 | XcodeBuildMCP | MIT | `xcodebuildmcp@2.6.2`，放入 Apple 插件 |
+| archify | MIT © tt-a1i(fork 自 Cocoon-AI architecture-diagram-generator) | v2.12.0 @ eb847fa vendored 到 `voidtech-core` prd-from-requirements,零 npm 运行时依赖,保留 LICENSE 与署名;裁剪与升级见 `vendor/archify/VENDOR.md` |
 
 ## 不随 Marketplace 发布
 
