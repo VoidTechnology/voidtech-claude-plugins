@@ -245,7 +245,12 @@ async function runBrowserAssertions(fixture) {
         attachments: flowPanel ? flowPanel.querySelectorAll(".interaction-attachments button").length : 0,
         failureDisclosures: flowPanel ? flowPanel.querySelectorAll(".interaction-attachments details").length : 0,
         dependencyLanes: flowPanel ? flowPanel.querySelectorAll(".scenario-lane").length - 1 : 0,
-        boundaryDisclosures: flowPanel ? flowPanel.querySelectorAll(".scenario-details").length : 0
+        boundaryDisclosures: flowPanel ? flowPanel.querySelectorAll(".scenario-details").length : 0,
+        roleLanes: flowPanel ? flowPanel.querySelectorAll(".workflow-role-lane").length : 0,
+        workflowLinks: flowPanel ? flowPanel.querySelectorAll(".workflow-link").length : 0,
+        semanticIcons: flowPanel ? flowPanel.querySelectorAll(".semantic-icon").length : 0,
+        interactionLegend: !!(flowPanel && flowPanel.querySelector(".interaction-legend")),
+        interactionFieldIcons: flowPanel ? flowPanel.querySelectorAll(".interaction-card dt .semantic-icon").length : 0
       };
       var stepButtons = flowPanel ? flowPanel.querySelectorAll(".flow-node") : [];
       var beforeStep = flowPanel && flowPanel.querySelector(".interaction-head") ?
@@ -283,7 +288,19 @@ async function runBrowserAssertions(fixture) {
           text: panel ? panel.innerText.trim().length : 0,
           interactive: panel ? panel.querySelectorAll("button").length : 0
         };
+        if (name === "state") {
+          out.lifecycle = {
+            legend: !!panel.querySelector(".lifecycle-legend"),
+            start: panel.querySelectorAll(".state-node.lifecycle-start .semantic-icon").length,
+            active: panel.querySelectorAll(".state-node.lifecycle-active .semantic-icon").length,
+            terminal: panel.querySelectorAll(".state-node.lifecycle-terminal .semantic-icon").length
+          };
+        }
       });
+      var graphTab = document.getElementById("tab-graph");
+      if (graphTab) graphTab.click();
+      out.architectureIcons = document.querySelectorAll(
+        "#view-graph .n-card .semantic-icon,#view-graph .n-focus .semantic-icon").length;
       var probe = ${probe};
       var search = document.getElementById("search");
       out.searchTypable = false;
@@ -340,6 +357,13 @@ async function runBrowserAssertions(fixture) {
     if (scenario.selectedSteps !== 1 || scenario.interactionPanels !== 1 || scenario.interactions < 1) {
       failures.push(`场景步骤未展开唯一页面交互轨迹: ${JSON.stringify(scenario)}`);
     }
+    if (scenario.roleLanes < 2 || scenario.workflowLinks < scenario.steps - 1) {
+      failures.push(`场景流程未按角色泳道和正交主路径渲染: ${JSON.stringify(scenario)}`);
+    }
+    if (scenario.semanticIcons < scenario.steps || !scenario.interactionLegend
+        || scenario.interactionFieldIcons < scenario.interactions * 5) {
+      failures.push(`场景流程或交互卡缺少稳定语义图标: ${JSON.stringify(scenario)}`);
+    }
     if (scenario.attachments < 1) failures.push("页面交互未精确挂载状态变化或异常");
     if (scenario.failureDisclosures < 1) failures.push("页面交互未提供可展开异常");
     if (!scenario.stepSwitch?.changed || !scenario.stepSwitch?.oneSelected
@@ -350,6 +374,12 @@ async function runBrowserAssertions(fixture) {
     }
     if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
     if (scenario.boundaryDisclosures < 1) failures.push("场景流程未集成模块职责边界");
+    if (!dom.lifecycle?.legend || dom.lifecycle.start < 1 || dom.lifecycle.terminal < 1) {
+      failures.push(`生命周期视图未标识起点/终点及图例: ${JSON.stringify(dom.lifecycle)}`);
+    }
+    if (dom.architectureIcons < 2) {
+      failures.push(`系统关系图缺少架构节点类型图标: ${dom.architectureIcons}`);
+    }
     if (failures.length > 0) {
       throw new Error(`浏览器断言失败:\n- ${failures.join("\n- ")}`);
     }

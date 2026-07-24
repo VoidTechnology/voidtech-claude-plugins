@@ -1795,9 +1795,9 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "5.0.0"
+RENDERER_VERSION = "6.0.0"
 BROWSER_MATRIX_VERSION = "2026-07"
-VALIDATION_HARNESS_VERSION = "5.0.0"
+VALIDATION_HARNESS_VERSION = "6.0.0"
 
 _FIXTURE_MODULE = "01-portal/01-module"
 _FIXTURE_MODULE_B = "01-portal/02-module"
@@ -1891,7 +1891,7 @@ def _fixture_model():
          "title": "S2 · 查看订单", "status": "original", "sources": [flow_src],
          "detail": {"category": "flowStep", "flowId": flow_id, "stepId": "S2",
                     "pageTitle": _FIXTURE_PROBE_TITLE, "pageId": probe_id,
-                    "role": "会员", "action": "查看订单", "condition": "加载成功",
+                    "role": "运营人员", "action": "查看订单", "condition": "加载成功",
                     "result": "展示订单", "nextStep": "结束",
                     "failureHandling": "支持重试"}},
         {"nodeId": interaction1_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
