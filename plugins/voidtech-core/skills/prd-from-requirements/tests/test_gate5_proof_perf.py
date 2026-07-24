@@ -3,10 +3,11 @@
 补充契约（接 test_gate5_atlas.py）：
 
 - `atlas.proof_inherits(previous_proof, current_env) -> bool`：渲染器验证证明
-  的继承判定。七个继承键 `rendererVersion`、`generatorVersion`、
-  `schemaVersion`、`assetDigest`、`fixtureDigest`、`validationHarnessVersion`、
-  `browserMatrixVersion` 全部相等才继承；任一变化（含 fixture 与验证 harness
-  更新）都使旧证明失效。纯函数、不读文件。
+  的继承判定。八个继承键 `rendererVersion`、`generatorVersion`、
+  `schemaVersion`、`assetDigest`、`archifyDigest`、`fixtureDigest`、
+  `validationHarnessVersion`、`browserMatrixVersion` 全部相等才继承；
+  任一变化（含 Archify、fixture 与验证 harness 更新）都使旧证明失效。
+  纯函数、不读文件。
 - `atlas.html` 渲染（html 阶段 build_plan 含 `logic-atlas.html`）：自包含
   （无外链 script/css）、顶部自述生成快照。
 - 性能基准：真实 Example 工作树（迁移后启用 markdown 阶段），每次
@@ -33,6 +34,7 @@ PROOF = {
     "generatorVersion": "1.0.0",
     "schemaVersion": "1",
     "assetDigest": "sha256:" + "ab" * 32,
+    "archifyDigest": "sha256:" + "ef" * 32,
     "fixtureDigest": "sha256:" + "cd" * 32,
     "validationHarnessVersion": "1.0.0",
     "browserMatrixVersion": "2026-07",

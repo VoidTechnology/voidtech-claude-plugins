@@ -2,7 +2,7 @@
 
 契约：
 
-- `atlas.renderer_env()`：返回七个继承键（atlas._PROOF_INHERIT_KEYS），
+- `atlas.renderer_env()`：返回八个继承键（atlas._PROOF_INHERIT_KEYS），
   全部为非空字符串，且纯函数——两次调用逐键相等。
 - `atlas.render_fixture_html()`：确定性（两次逐字节一致）；输出即注入后的
   viewer 模板（自带内联脚本），注入锚点 `__ATLAS_*` 全部消费；转义探针
@@ -10,7 +10,7 @@
   文本形态出现，原文不会提前闭合承载模型的 `<script type="application/json">`。
 - fixture 模型过 logic-model.schema.json 与 _validate_references——
   验证 harness 不得建立在无效模型上。
-- assets/renderer-validation-proof.json 已提交且七键与当前
+- assets/renderer-validation-proof.json 已提交且八键与当前
   renderer_env 一致（atlas.proof_inherits 为真）：任何改渲染器/fixture/
   harness 而不重签证明的提交在单测层即被抓住，不必等 CI 浏览器验证。
 """
@@ -35,6 +35,7 @@ class RendererEnvTest(unittest.TestCase):
             self.assertIsInstance(env[key], str, key)
             self.assertTrue(env[key], f"{key} 不得为空")
         self.assertEqual(env, atlas.renderer_env())
+        self.assertIn("archifyDigest", env)
 
     def test_fixture_html_deterministic_and_probe_escaped(self):
         html = atlas.render_fixture_html()
@@ -43,6 +44,7 @@ class RendererEnvTest(unittest.TestCase):
         # 故不再断言零 script；改为断言注入锚点已全部消费、探针以转义 JSON
         # 形态在场：< 转义为 \u003c，不会提前闭合承载模型的 <script> 标签。
         self.assertNotIn("__ATLAS_", html)
+        self.assertIn('id="atlas-lifecycle"', html)
         self.assertIn("\\u003cscript>alert(1)\\u003c/script>", html)
         self.assertNotIn("<script>alert(1)</script>", html)
         self.assertIn("Fixture-Home", html)

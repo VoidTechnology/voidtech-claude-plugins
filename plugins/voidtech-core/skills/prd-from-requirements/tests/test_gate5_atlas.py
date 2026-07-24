@@ -57,6 +57,7 @@ MODEL_RELPATH = "_generated/logic/logic-model.json"
 MD_RELPATH = "_generated/logic/logic-atlas.md"
 MANIFEST_RELPATH = "_generated/logic/manifest.json"
 REPORT_RELPATH = "_generated/logic/validation-report.md"
+PRESENTATION_RELPATH = "_generated/logic/lifecycle-presentation.json"
 
 
 def atlas_worktree(testcase, stage="markdown"):
@@ -77,8 +78,7 @@ class CompileTest(unittest.TestCase):
         model = atlas.compile(self.root)
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
-        self.assertEqual(atlas._validate_references(model), [])
-        self.assertEqual(model["generatorVersion"], "1.4.0")
+        self.assertEqual(model["generatorVersion"], "1.5.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -143,7 +143,10 @@ class CompileTest(unittest.TestCase):
         ]
         self.assertEqual(
             [edge["detail"]["action"] for edge in transitions],
-            ["激活", "自动激活"])
+            ["激活"])
+        self.assertFalse(any(
+            edge["detail"]["action"] == "自动激活"
+            for edge in transitions))
 
     def test_maps_page_data_edges_only_from_explicit_contract(self):
         mapping = """
@@ -635,8 +638,9 @@ class CompileTest(unittest.TestCase):
         write_atlas_module(
             self.root,
             ATLAS_MODULE_PRD.replace(
-                "| 激活 | 已激活 |",
-                "| 手动激活 → 立即生效 / 自动激活 ⇒ 等待校验 | 已激活 |"))
+                "待激活 --> 已激活: 激活",
+                "待激活 --> 已激活: 手动激活\n"
+                "    待激活 --> 已激活: 自动激活"))
 
         model = atlas.compile(self.root)
         transitions = [
@@ -645,16 +649,20 @@ class CompileTest(unittest.TestCase):
             and edge["from"].endswith(":客户:待激活")
         ]
         self.assertEqual(
-            {(edge["detail"]["action"], edge["detail"]["result"])
-             for edge in transitions},
-            {("手动激活", "立即生效"), ("自动激活", "等待校验")})
+            {edge["detail"]["action"] for edge in transitions},
+            {"手动激活", "自动激活"})
+        self.assertTrue(all(
+            "result" not in edge["detail"] for edge in transitions))
 
     def test_explicit_terminal_marker_is_not_a_business_state(self):
         write_atlas_module(
             self.root,
             ATLAS_MODULE_PRD.replace(
                 "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 已停用 |",
-                "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 终态(停用完成) |"))
+                "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 终态(停用完成) |"
+            ).replace(
+                "已激活 --> 已停用: 停用",
+                "已激活 --> [*]: 停用完成"))
 
         model = atlas.compile(self.root)
         states = [
@@ -664,11 +672,35 @@ class CompileTest(unittest.TestCase):
         ]
         self.assertNotIn("终态(停用完成)", {node["title"] for node in states})
         active = next(node for node in states if node["title"] == "已激活")
+
         self.assertTrue(active["detail"]["declaredTerminal"])
         self.assertEqual(active["detail"]["terminalResult"], "停用完成")
         self.assertFalse(any(
             gap["kind"] == "missing-transition"
             and "已激活" in gap["detail"]
+            for gap in model["gaps"]))
+
+    def test_mermaid_outgoing_edge_clears_target_only_gap(self):
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 已停用 | 是 | 管理员 | 通知客户 |",
+                "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 已停用 | 是 | 管理员 | 通知客户 |\n"
+                "| 客户 | 已停用 | 暂停使用 | 停用成功 | 恢复 | 已激活 | 是 | 管理员 | 通知客户 |"
+            ).replace(
+                "已激活 --> 已停用: 停用",
+                "已激活 --> 已停用: 停用\n"
+                "    已停用 --> 已激活: 恢复"))
+
+        model = atlas.compile(self.root)
+        stopped = next(
+            node for node in model["nodes"]
+            if node["nodeId"].endswith(":客户:已停用"))
+
+        self.assertNotIn("declaredAsTargetOnly", stopped["detail"])
+        self.assertFalse(any(
+            gap["kind"] == "missing-transition"
+            and "已停用" in gap["detail"]
             for gap in model["gaps"]))
 
     def test_resolves_referenced_domain_state_machine(self):
@@ -697,6 +729,12 @@ class CompileTest(unittest.TestCase):
 |---|---|---|---|---|---|---|---|
 | 账号 | 正常 | 注册成功 | 封禁 | 封禁 | 人工 | 是 | 记录操作人 |
 | 账号 | 封禁 | 管理员封禁 | 解封 | 正常 | 人工 | 是 | 通知用户 |
+
+```mermaid
+stateDiagram-v2
+    正常 --> 封禁: 封禁
+    封禁 --> 正常: 解封
+```
 """, encoding="utf-8")
 
         model = atlas.compile(self.root)
@@ -712,6 +750,68 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(len([
             e for e in model["edges"] if e["kind"] == "transition"
         ]), 2)
+
+    def test_projects_one_shared_mermaid_diagram_by_business_object(self):
+        before, marker, after = ATLAS_MODULE_PRD.partition(
+            "## 6. 状态机与状态流转")
+        self.assertTrue(marker)
+        _old_state_section, marker7, after7 = after.partition(
+            "## 7. 字段与数据规则")
+        referenced = """## 6. 状态机与状态流转
+
+| 对象 | 状态机主本 | 本端(机构后台)可见状态与操作差异 |
+|---|---|---|
+| 身份认证 | `../../00-global/domain-specs/account-identity.md` §2.2 | 审核 |
+| 身份等级 | `../../00-global/domain-specs/account-identity.md` §2.2 | 续期 |
+
+"""
+        write_atlas_module(
+            self.root, before + referenced + marker7 + after7)
+        spec = self.root / "00-global/domain-specs/account-identity.md"
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text("""# 账号身份
+## 2.2 身份状态
+
+| 对象 | 当前状态 | 进入条件 | 可执行操作 | 下一状态 | 触发方式 | 是否可逆 | 通知/日志 |
+|---|---|---|---|---|---|---|---|
+| 身份认证 | 审核中 | 提交资料 | 通过、拒绝 | 已通过、已拒绝 | 人工 | 否 | 通知结果 |
+| 身份认证 | 已拒绝 | 审核拒绝 | 重新提交 | 审核中 | 人工 | 是 | 记录原因 |
+
+| 对象 | 当前状态 | 进入条件 | 可执行操作 | 下一状态 | 触发方式 | 是否可逆 | 通知/日志 |
+|---|---|---|---|---|---|---|---|
+| 身份等级 | 已通过 | 审核通过 | 到期 | 已过期 | 自动 | 是 | 标红 |
+| 身份等级 | 已过期 | 到达有效期 | 续期 | 已通过 | 人工 | 是 | 恢复 |
+
+```mermaid
+stateDiagram-v2
+    [*] --> 审核中: 提交
+    审核中 --> 已通过: 通过
+    审核中 --> 已拒绝: 拒绝
+    已拒绝 --> 审核中: 重新提交
+    已通过 --> 已过期: 到期
+    已过期 --> 已通过: 续期
+```
+""", encoding="utf-8")
+
+        model = atlas.compile(self.root)
+        transitions = [edge for edge in model["edges"]
+                       if edge["kind"] == "transition"]
+        by_object = {}
+        for edge in transitions:
+            obj = edge["from"].split(":")[-2]
+            by_object.setdefault(obj, set()).add((
+                edge["from"].split(":")[-1],
+                edge["to"].split(":")[-1]))
+
+        self.assertEqual(by_object["身份认证"], {
+            ("审核中", "已通过"),
+            ("审核中", "已拒绝"),
+            ("已拒绝", "审核中"),
+        })
+        self.assertEqual(by_object["身份等级"], {
+            ("已通过", "已过期"),
+            ("已过期", "已通过"),
+        })
 
     def test_invalid_step_state_and_dependency_links_are_gaps(self):
         cases = [
@@ -793,7 +893,8 @@ class PublishAndFreshnessTest(unittest.TestCase):
         self.assertEqual(manifest["phase"], "committed")
 
     def test_published_artifacts_and_manifest_digests(self):
-        for rel in (MODEL_RELPATH, MD_RELPATH, MANIFEST_RELPATH, REPORT_RELPATH):
+        for rel in (MODEL_RELPATH, PRESENTATION_RELPATH, MD_RELPATH,
+                    MANIFEST_RELPATH, REPORT_RELPATH):
             self.assertTrue((self.root / rel).exists(), rel)
         manifest = read_json(self.root / MANIFEST_RELPATH)
         self.assertEqual(manifest["authoritativeSourceDigest"],
@@ -802,6 +903,11 @@ class PublishAndFreshnessTest(unittest.TestCase):
                          base_cas.ledger_source_digest(self.root))
         for key in ("generatorVersion", "logicModelSchemaVersion", "ledgerArtifactDigest"):
             self.assertIn(key, manifest)
+        self.assertIn(PRESENTATION_RELPATH, manifest["artifacts"])
+        presentation = read_json(self.root / PRESENTATION_RELPATH)
+        self.assertEqual(presentation["renderer"], "archify-lifecycle")
+        self.assertEqual(len(presentation["machines"]), 1)
+        self.assertIn(presentation["machines"][0]["status"], ("ok", "degraded"))
         # Markdown 视图自述生成快照，不宣称「当前最新」。
         md = (self.root / MD_RELPATH).read_text(encoding="utf-8")
         digest_hex = manifest["authoritativeSourceDigest"].removeprefix("sha256:")

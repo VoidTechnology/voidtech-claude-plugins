@@ -8,7 +8,7 @@
 //
 // 模式：
 //   node scripts/validate-renderer.mjs           完整浏览器断言（不读写证明）
-//   node scripts/validate-renderer.mjs --check   证明继承检查（七键相等；不起浏览器）
+//   node scripts/validate-renderer.mjs --check   证明继承检查（八键相等；不起浏览器）
 //   node scripts/validate-renderer.mjs --write   浏览器断言通过后签发证明文件
 //
 // Chrome 路径：CHROME_PATH 环境变量优先，其次探测 macOS 应用路径与
@@ -29,7 +29,8 @@ const PROOF_PATH = path.join(SKILL_ROOT, "assets", "renderer-validation-proof.js
 // （键存在、非空且相等）。
 const INHERIT_KEYS = [
   "rendererVersion", "generatorVersion", "schemaVersion", "assetDigest",
-  "fixtureDigest", "validationHarnessVersion", "browserMatrixVersion",
+  "archifyDigest", "fixtureDigest", "validationHarnessVersion",
+  "browserMatrixVersion",
 ];
 
 // ---------------------------------------------------------------- 引擎侧输入
@@ -42,6 +43,7 @@ function loadRendererFixture() {
     "print(json.dumps({",
     "    'env': atlas.renderer_env(),",
     "    'html': atlas.render_fixture_html(),",
+    "    'fallbackHtml': atlas.render_fallback_fixture_html(),",
     "    'markers': {'home': atlas._FIXTURE_HOME_TITLE,",
     "                'probe': atlas._FIXTURE_PROBE_TITLE},",
     "}, ensure_ascii=False))",
@@ -163,6 +165,9 @@ async function runBrowserAssertions(fixture) {
   const workDir = mkdtempSync(path.join(tmpdir(), "renderer-validation-"));
   const htmlPath = path.join(workDir, "logic-atlas-fixture.html");
   writeFileSync(htmlPath, fixture.html, "utf8");
+  const fallbackHtmlPath = path.join(workDir, "logic-atlas-fallback-fixture.html");
+  writeFileSync(fallbackHtmlPath, fixture.fallbackHtml, "utf8");
+  const fallbackUrl = pathToFileURL(fallbackHtmlPath).href;
   const docUrl = pathToFileURL(htmlPath).href;
 
   const chrome = spawn(chromePath, [
@@ -192,7 +197,9 @@ async function runBrowserAssertions(fixture) {
       } else if (msg.method === "Network.requestWillBeSent") {
         // 文档自身导航之外的任何请求都表示外链未内联，违反自包含契约。
         const url = msg.params.request.url;
-        if (url !== docUrl && !url.startsWith("data:")) externalRequests.push(url);
+        if (![docUrl, fallbackUrl].includes(url) && !url.startsWith("data:")) {
+          externalRequests.push(url);
+        }
       }
     });
 
@@ -322,17 +329,33 @@ async function runBrowserAssertions(fixture) {
           interactive: panel ? panel.querySelectorAll("button").length : 0
         };
         if (name === "state") {
-          var stateNodes = panel.querySelectorAll(".state-graph-node");
-          var stateLabels = Array.prototype.map.call(
-            stateNodes,function(node){return node.getAttribute("data-state-label");});
+          var lifecyclePayload = JSON.parse(
+            document.getElementById("atlas-lifecycle").textContent);
+          var lifecycleMachine = lifecyclePayload.machines[0];
+          var lifecycleSvg = panel.querySelector(
+            ".archify-lifecycle-svg > svg");
+          var expectedLabels = lifecycleMachine.ir.states.map(
+            function(item){return item.label;});
+          var svgTexts = lifecycleSvg ? Array.prototype.map.call(
+            lifecycleSvg.querySelectorAll("text"),
+            function(node){return node.textContent.trim();}) : [];
           out.lifecycle = {
             legend: !!panel.querySelector(".lifecycle-legend"),
-            start: panel.querySelectorAll(".state-graph-node.lifecycle-start").length,
-            active: panel.querySelectorAll(".state-graph-node.lifecycle-active").length,
-            terminal: panel.querySelectorAll(".state-graph-node.lifecycle-terminal").length,
-            uniqueNodes: stateNodes.length,
-            uniqueLabels: new Set(stateLabels).size,
-            edges: panel.querySelectorAll(".state-graph-edge").length,
+            archifySvg: !!lifecycleSvg,
+            archifyMarker: lifecycleSvg ?
+              lifecycleSvg.getAttribute("data-archify-diagram") : null,
+            styleTag: !!document.getElementById("archify-lifecycle-style"),
+            stateFill: (function(){
+              if (!lifecycleSvg) return null;
+              var probe = lifecycleSvg.querySelector("text.t-primary");
+              return probe ? getComputedStyle(probe).fill : null;
+            })(),
+            expectedStates: expectedLabels.length,
+            labelsAppearOnce: expectedLabels.every(function(label){
+              return svgTexts.filter(function(text){return text===label;}).length===1;
+            }),
+            builtInNodes: panel.querySelectorAll(".state-graph-node").length,
+            traceButtons: panel.querySelectorAll(".state-trace-list button").length,
             semanticCopy: panel.innerText
           };
         }
@@ -411,6 +434,28 @@ async function runBrowserAssertions(fixture) {
     }
     const dom = JSON.parse(evaluated.result.value);
 
+    const fallbackLoaded = cdp.waitForEvent("Page.loadEventFired", 20000);
+    await cdp.send("Page.navigate", { url: fallbackUrl });
+    await fallbackLoaded;
+    const fallbackEvaluated = await cdp.send("Runtime.evaluate", {
+      expression: `(function(){
+        var tab=document.getElementById("tab-state");
+        if(tab) tab.click();
+        var panel=document.getElementById("view-state");
+        return JSON.stringify({
+          riskBanner: !!(panel&&panel.querySelector(".lifecycle-risk")),
+          builtInNodes: panel?panel.querySelectorAll(".state-graph-node").length:0,
+          archifySvgs: panel?panel.querySelectorAll(".archify-lifecycle-svg > svg").length:0,
+          topRisk: !!document.querySelector(".topmeta .chip.risk")
+        });
+      })()`,
+      returnByValue: true,
+    });
+    if (fallbackEvaluated.exceptionDetails) {
+      throw new Error(`降级断言表达式执行失败: ${JSON.stringify(fallbackEvaluated.exceptionDetails)}`);
+    }
+    const fallback = JSON.parse(fallbackEvaluated.result.value);
+
     const failures = [];
     if (consoleErrors.length > 0) failures.push(`存在 console/page 错误: ${consoleErrors.join("; ")}`);
     if (dom.alertCount !== 0) failures.push(`alert/confirm/prompt 探针被触发 ${dom.alertCount} 次（存在未转义脚本执行）`);
@@ -484,16 +529,28 @@ async function runBrowserAssertions(fixture) {
         || dom.pageDataAudit.dimmedAfterUnmappedPageFocus !== 0) {
       failures.push(`页面↔数据关系缺失未显式呈现或仍绘制模块扇形边: ${JSON.stringify(dom.pageDataAudit)}`);
     }
-    if (!dom.lifecycle?.legend || dom.lifecycle.start < 1
-        || dom.lifecycle.terminal < 1
-        || dom.lifecycle.uniqueNodes < 2
-        || dom.lifecycle.uniqueNodes !== dom.lifecycle.uniqueLabels
-        || dom.lifecycle.edges < 1
+    if (!dom.lifecycle?.legend || !dom.lifecycle.archifySvg
+        || dom.lifecycle.archifyMarker !== "lifecycle"
+        || dom.lifecycle.expectedStates < 2
+        || !dom.lifecycle.labelsAppearOnce
+        || dom.lifecycle.builtInNodes !== 0
+        || dom.lifecycle.traceButtons < dom.lifecycle.expectedStates
         || !dom.lifecycle.semanticCopy.includes(
           "不代表业务起点或业务终态")
         || !dom.lifecycle.semanticCopy.includes(
           "流程中断也可能造成假终点")) {
-      failures.push(`生命周期视图未渲染唯一状态节点与有向流转: ${JSON.stringify(dom.lifecycle)}`);
+      failures.push(`Lifecycle SVG 未唯一呈现状态或未保留追溯入口: ${JSON.stringify(dom.lifecycle)}`);
+    }
+    // 样式落地断言（2026-07-24 黑块回归的守门）：Archify SVG 是纯类名着色，
+    // 结构在而样式丢时元素回落 fill:black——计算样式必须证明配色已生效。
+    if (!dom.lifecycle?.styleTag || !dom.lifecycle.stateFill
+        || dom.lifecycle.stateFill === "rgb(0, 0, 0)") {
+      failures.push(`Lifecycle SVG 样式未落地(结构在/配色丢): styleTag=${
+        dom.lifecycle?.styleTag} stateFill=${dom.lifecycle?.stateFill}`);
+    }
+    if (!fallback.riskBanner || fallback.builtInNodes < 2
+        || fallback.archifySvgs !== 0 || !fallback.topRisk) {
+      failures.push(`Lifecycle 降级路径不可达或风险未标注: ${JSON.stringify(fallback)}`);
     }
     if (dom.architectureIcons < 2) {
       failures.push(`系统关系图缺少架构节点类型图标: ${dom.architectureIcons}`);
@@ -521,6 +578,7 @@ async function runBrowserAssertions(fixture) {
     console.log(`- XSS 探针以纯文本可见: ${dom.probeVisibleAsText}`);
     console.log(`- 行为视图可见且可交互: ${JSON.stringify(dom.behaviorViews)}`);
     console.log(`- 场景流程、步骤切换与页面交互轨迹: ${JSON.stringify(dom.scenarioFlow)}`);
+    console.log(`- Lifecycle SVG 与降级路径: ${JSON.stringify({svg:dom.lifecycle,fallback})}`);
     ws.close();
   } finally {
     if (chrome.exitCode === null) {

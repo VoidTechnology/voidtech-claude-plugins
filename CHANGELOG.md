@@ -1,5 +1,26 @@
 # Changelog
 
+## voidtech-core 0.17.0 - 2026-07-24
+
+Logic Atlas 状态机视图正式接入 vendored Archify Lifecycle：默认以唯一状态节点和有向流转展示真实生命周期；Node 或图形校验不可用时，仅该状态机降级为内建状态图并标注呈现风险，不阻塞 PRD 内容门。
+
+### Added
+
+- 新增确定性 Lifecycle IR：按业务对象分组，使用 SCC 缩点与最长路径分配 lane/column，冻结状态类型关键词、IR 排序和摘要。
+- 新增 Archify 渲染桥：调用插件内零 npm 依赖的 Node 子系统，按机器诊断做不超过 8 轮的受限修复，内联唯一 SVG，并保留 Atlas 来源追溯面板。
+- 渲染器证明新增 `archifyDigest`；浏览器 harness 同时验证真实 SVG、状态标签唯一性、控制台清洁及 Node 缺失降级路径。
+
+### Changed
+
+- generator 1.5.0 改为只从 `stateDiagram-v2` 逐边提取流转；按状态表仅提供节点元数据，不再将动作与下一状态做笛卡尔积。共享 Mermaid 图按对象当前/下一状态裁切，避免跨对象串边；缺逐边来源时进入可审计 gap。
+- viewer 8.1.0、renderer harness 8.1.0：状态机 tab 优先展示 Archify Lifecycle SVG；修复 HTML 合法但 XML 不合法的 valueless `data-*` 属性导入，并对 SVG 做同一套严格清理。
+- Example PRD 的 13 个可提取状态机全部通过 Archify fail-closed deliver；「用户与会员」模块 6 张图均为真实 SVG，每个状态标签只出现一次。
+- 核心插件版本 0.16.0 → 0.17.0。
+
+### Fixed
+
+- 修复 Archify SVG 导入后整体渲染为黑块：SVG 为纯类名着色，样式与主题变量留在其宿主模板里未随导入搬运，全部元素回落默认 `fill:black`。生成端现从 vendored 模板确定性抽取 SVG 语义类与 preset 主题变量，作用域化到 `.archify-lifecycle-svg` 并随 payload 单份下发，viewer 注入并桥接 Atlas 明暗主题；样式抽取失败或缺失时该状态机降级为内建状态图，绝不裸嵌无样式 SVG。浏览器 harness 新增计算样式守门（style 标签存在 + 状态文本 computed fill 非黑）。
+
 ## voidtech-core 0.16.0 - 2026-07-24
 
 Logic Atlas 从「图形化展示」收口为 PRD 质量审计入口：默认首页先回答覆盖率、模块健康、需求反向追溯和待补齐缺口，再按需进入业务场景、生命周期与模块边界。

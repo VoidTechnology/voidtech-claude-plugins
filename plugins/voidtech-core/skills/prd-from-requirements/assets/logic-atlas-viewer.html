@@ -6,6 +6,7 @@
 <title>Logic Atlas · 系统关系地图</title>
 <script type="application/json" id="atlas-model">__ATLAS_MODEL_JSON__</script>
 <script type="application/json" id="atlas-meta">__ATLAS_META_JSON__</script>
+<script type="application/json" id="atlas-lifecycle">__ATLAS_LIFECYCLE_JSON__</script>
 <style>
 :root{
   --bg:#ffffff; --surface:#f6f7f9; --surface-2:#eef0f3; --panel:#ffffff;
@@ -75,6 +76,7 @@ a{color:var(--accent-text)}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--muted)}
 .chip.mono{font-family:var(--mono);font-size:11.5px}
 .chip.accent{background:var(--accent-weak);border-color:transparent;color:var(--accent-text)}
+.chip.risk{background:var(--warn-bg);border-color:transparent;color:var(--warn)}
 .self-note{font-size:12px;color:var(--faint)}
 .topbtn{padding:5px 11px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);color:var(--text)}
 .topbtn:hover{border-color:var(--border-strong)}
@@ -338,6 +340,15 @@ a{color:var(--accent-text)}
 .lifecycle-legend span{display:inline-flex;align-items:center;gap:5px}
 .state-audit-note{display:flex;gap:14px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)}
 .state-graph-scroll{overflow-x:auto;padding:12px 14px 16px}
+.archify-lifecycle-scroll{overflow-x:auto;padding:12px 14px 16px;background:var(--surface)}
+.archify-lifecycle-svg{min-width:760px}
+.archify-lifecycle-svg>svg{display:block;width:100%;height:auto;max-height:720px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.lifecycle-risk{margin:10px 14px 0;padding:8px 10px;border:1px solid var(--warn);border-radius:var(--radius-sm);background:var(--warn-bg);color:var(--warn);font-size:11px}
+.state-trace-panel{padding:10px 14px 14px;border-top:1px solid var(--border);background:var(--panel)}
+.state-trace-panel summary{cursor:pointer;font-size:11px;font-weight:650;color:var(--muted)}
+.state-trace-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.state-trace-list button{border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text);padding:4px 9px;font-size:10.5px;cursor:pointer}
+.state-trace-list button:hover{border-color:var(--accent);color:var(--accent-text)}
 .state-graph-canvas{position:relative;min-height:260px}
 .state-graph-svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
 .state-graph-edge{fill:none;stroke:var(--accent);stroke-width:1.7;pointer-events:stroke;cursor:pointer}
@@ -415,6 +426,18 @@ function parseTag(id){
 }
 var MODEL=parseTag("atlas-model")||{};
 var META=parseTag("atlas-meta")||{};
+var LIFECYCLE=parseTag("atlas-lifecycle")||{};
+/* Archify SVG 是纯类名着色：样式与主题变量由生成端从 vendored 模板
+   作用域化抽取后随 payload 下发。缺失时绝不裸嵌 SVG（会整体黑块），
+   改走内建状态图降级。textContent 注入只解释为 CSS，不执行脚本。 */
+var LIFECYCLE_CSS=(typeof LIFECYCLE.css==="string"&&LIFECYCLE.css&&
+  LIFECYCLE.css.indexOf("<")<0)?LIFECYCLE.css:"";
+if(LIFECYCLE_CSS){
+  var lifecycleStyle=document.createElement("style");
+  lifecycleStyle.id="archify-lifecycle-style";
+  lifecycleStyle.textContent=LIFECYCLE_CSS;
+  document.head.appendChild(lifecycleStyle);
+}
 var arr=function(x){ return Array.isArray(x)?x:[]; };
 var NODES=arr(MODEL.nodes), EDGES=arr(MODEL.edges), SCOPES=arr(MODEL.scopes), GAPS=arr(MODEL.gaps);
 var COVERAGE=MODEL.coverage||{};
@@ -515,6 +538,10 @@ NODES.forEach(function(n){
   else if(n.kind==="state"&&d.category==="pageState"){ (pageStatesByScope[n.scopeId]=pageStatesByScope[n.scopeId]||[]).push(n); }
 });
 GAPS.forEach(function(g){ (gapsByScope[g.scopeId]=gapsByScope[g.scopeId]||[]).push(g); });
+var lifecycleByMachine={};
+arr(LIFECYCLE.machines).forEach(function(machine){
+  lifecycleByMachine[(machine.scopeId||"")+"\u0000"+(machine.object||"")]=machine;
+});
 var requirements=NODES.filter(function(n){return n.kind==="requirement";})
   .sort(function(a,b){ return a.title<b.title?-1:a.title>b.title?1:0; });
 var requirementById={},requirementRefs={};
@@ -615,6 +642,8 @@ function shortHash(){
   t.appendChild(h("span",{class:"chip mono accent",title:"快照短哈希"},"⌗ "+shortHash()));
   if(META.stage) t.appendChild(h("span",{class:"chip"},"stage: "+META.stage));
   if(META.generatorVersion) t.appendChild(h("span",{class:"chip"},"gen "+META.generatorVersion));
+  if(META.presentationRisk) t.appendChild(h("span",{class:"chip risk"},
+    "Lifecycle 呈现风险 "+META.presentationRisk));
   t.appendChild(h("span",{class:"self-note"},"确定性生成快照,不代表当前最新"));
 })();
 /* ---------- audit cockpit ---------- */
@@ -1526,6 +1555,67 @@ function stateGraphEdgePath(from,to,offset){
   return {d:"M"+sx+","+sy+" C"+bx+","+sy+" "+bx+","+ty+" "+(to.x+to.w)+","+ty,
     x:bx-4,y:(sy+ty)/2-7};
 }
+function importLifecycleSvg(svgText,machineId){
+  if(typeof svgText!=="string"||!svgText) return null;
+  var parsed=new DOMParser().parseFromString(svgText,"image/svg+xml");
+  var root=parsed.documentElement;
+  if(parsed.querySelector("parsererror")){
+    /* Archify emits HTML-valid valueless data-* attributes; HTML parsing
+       normalizes them before the same strict SVG sanitization below. */
+    parsed=new DOMParser().parseFromString(svgText,"text/html");
+    var svgRoots=parsed.querySelectorAll("svg");
+    if(svgRoots.length!==1) return null;
+    root=svgRoots[0];
+  }
+  if(!root||root.localName!=="svg"||
+      root.namespaceURI!=="http://www.w3.org/2000/svg") return null;
+  root.querySelectorAll("script,foreignObject,iframe,object,embed,image,a").forEach(
+    function(node){ node.remove(); });
+  root.querySelectorAll("*").forEach(function(node){
+    Array.prototype.slice.call(node.attributes||[]).forEach(function(attr){
+      var name=attr.name.toLowerCase(),value=attr.value.trim();
+      if(name.indexOf("on")===0){
+        node.removeAttribute(attr.name);return;
+      }
+      if((name==="href"||name==="xlink:href")&&value.charAt(0)!=="#"){
+        node.removeAttribute(attr.name);return;
+      }
+      if(name==="style"&&value.indexOf("url(")>=0&&value.indexOf("url(#")<0){
+        node.removeAttribute(attr.name);
+      }
+    });
+  });
+  var imported=document.importNode(root,true);
+  imported.classList.add("archify-lifecycle-svg-root");
+  imported.setAttribute("data-machine",machineId||"");
+  var wrapper=h("div",{class:"archify-lifecycle-scroll"},
+    h("div",{class:"archify-lifecycle-svg"}));
+  wrapper.firstChild.appendChild(imported);
+  return wrapper;
+}
+function renderStateTracePanel(nodes,edges){
+  var details=h("details",{class:"state-trace-panel"},
+    h("summary",{},"状态与流转来源（点击查看需求及原文锚点）"));
+  var list=h("div",{class:"state-trace-list"});
+  nodes.slice().sort(function(a,b){return a.title<b.title?-1:a.title>b.title?1:0;})
+    .forEach(function(node){
+      list.appendChild(h("button",{onclick:function(){openNodeCard(node);}},
+        "状态 · "+node.title));
+    });
+  edges.slice().sort(function(a,b){return a.edgeId<b.edgeId?-1:a.edgeId>b.edgeId?1:0;})
+    .forEach(function(edge){
+      list.appendChild(h("button",{onclick:function(){openEdgeCard(edge);}},
+        "流转 · "+edgeTitle(edge)));
+    });
+  details.appendChild(list);return details;
+}
+function lifecycleRisk(machine){
+  var diagnostics=arr(machine&&machine.diagnostics);
+  var codes=diagnostics.map(function(item){return item.code||"unknown";}).join("、");
+  return h("div",{class:"lifecycle-risk"},
+    "图形呈现已降级为 Atlas 内建状态图"+
+    (codes?" · "+codes:""));
+}
 function renderStateGraph(nodes,edges,objectIndex){
   var layout=stateGraphLayout(nodes,edges);
   var scroll=h("div",{class:"state-graph-scroll"});
@@ -1594,13 +1684,20 @@ function renderStateMachines(){
     return e.kind==="transition"&&nodeById[e.from]&&
       nodeById[e.from].scopeId===state.moduleId;
   });
+  var scopeMachines=arr(LIFECYCLE.machines).filter(function(machine){
+    return machine.scopeId===state.moduleId;
+  });
+  var degradedCount=scopeMachines.filter(function(machine){
+    return machine.status!=="ok";
+  }).length;
   var objects={};
   states.forEach(function(n){
     var object=(n.detail||{}).object||"未命名对象";
     (objects[object]=objects[object]||[]).push(n);
   });
   behaviorStats(view,[["业务对象",Object.keys(objects).length],
-    ["唯一状态",states.length],["单一触发流转",transitions.length]]);
+    ["唯一状态",states.length],["单一触发流转",transitions.length],
+    ["呈现降级",degradedCount]]);
   if(!states.length){
     behaviorEmpty(view,"该模块尚未声明或引用可解析的业务状态机。");return;
   }
@@ -1630,7 +1727,20 @@ function renderStateMachines(){
         (starts.map(function(n){return n.title;}).join("、")||"无")),
       h("span",{},"无后续流转："+
         (terminals.map(function(n){return n.title;}).join("、")||"无"))));
-    group.appendChild(renderStateGraph(objectStates,objectTransitions,objectIndex));
+    var machine=lifecycleByMachine[state.moduleId+"\u0000"+object];
+    var archifyGraph=machine&&machine.status==="ok"&&LIFECYCLE_CSS?
+      importLifecycleSvg(machine.svg,machine.machineId):null;
+    if(!archifyGraph){
+      group.appendChild(lifecycleRisk(
+        machine&&machine.status==="ok"?{diagnostics:[{
+          code:"presentation/svg-style-missing"}]}:
+        machine||{diagnostics:[{code:"presentation/machine-missing"}]}));
+      group.appendChild(renderStateGraph(
+        objectStates,objectTransitions,objectIndex));
+    }else{
+      group.appendChild(archifyGraph);
+    }
+    group.appendChild(renderStateTracePanel(objectStates,objectTransitions));
     view.appendChild(group);
   });
 }
