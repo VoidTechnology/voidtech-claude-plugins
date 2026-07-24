@@ -232,6 +232,34 @@ async function runBrowserAssertions(fixture) {
         body: getComputedStyle(document.body).overflowX,
         bodyClipped: document.body.scrollWidth > document.body.clientWidth
       };
+      var auditPanel = document.getElementById("view-audit");
+      out.audit = {
+        defaultVisible: !!auditPanel && !auditPanel.hidden,
+        coverage: auditPanel ? (auditPanel.querySelector(".audit-coverage") || {}).textContent || "" : "",
+        moduleHealth: auditPanel ? auditPanel.querySelectorAll(".audit-module").length : 0,
+        healthyModules: auditPanel ? auditPanel.querySelectorAll(".audit-health.good").length : 0,
+        realGaps: auditPanel ? auditPanel.querySelectorAll(".audit-gap").length : 0,
+        unstructuredSummary: auditPanel ? auditPanel.querySelectorAll(".unstructured-summary").length : 0
+      };
+      var gapTab = document.getElementById("tab-gap");
+      if (gapTab) gapTab.click();
+      var gapPanel = document.getElementById("view-gap");
+      out.gapNoise = {
+        visibleItems: gapPanel ? gapPanel.querySelectorAll(".gap-item").length : 0,
+        unstructuredSummary: gapPanel ?
+          gapPanel.querySelectorAll(".unstructured-summary").length : 0,
+        summaryText: gapPanel ?
+          ((gapPanel.querySelector(".unstructured-summary") || {}).textContent || "") : ""
+      };
+      var gapButton = gapPanel && gapPanel.querySelector(".gap-item");
+      if (gapButton) gapButton.click();
+      var gapDrawer = document.getElementById("drawer");
+      out.gapContext = gapDrawer ? gapDrawer.innerText : "";
+      if (gapDrawer && gapDrawer.classList.contains("open")) {
+        gapDrawer.querySelector(".drawer-close").click();
+      }
+      var flowTab = document.getElementById("tab-flow");
+      if (flowTab) flowTab.click();
       out.behaviorViews = {};
       var flowPanel = document.getElementById("view-flow");
       out.scenarioFlow = {
@@ -239,6 +267,11 @@ async function runBrowserAssertions(fixture) {
         selector: !!document.getElementById("scenario-picker"),
         groups: flowPanel ? flowPanel.querySelectorAll(".scenario-group").length : 0,
         steps: flowPanel ? flowPanel.querySelectorAll(".flow-step-wrap").length : 0,
+        roleSources: flowPanel ? flowPanel.querySelectorAll(
+          ".workflow-role-source").length : 0,
+        attributedRoles: flowPanel ? Array.prototype.every.call(
+          flowPanel.querySelectorAll(".workflow-role-source"),
+          function(source){return source.title.includes("prd.md");}) : false,
         selectedSteps: flowPanel ? flowPanel.querySelectorAll('.flow-node[aria-pressed="true"]').length : 0,
         interactionPanels: flowPanel ? flowPanel.querySelectorAll(".interaction-panel").length : 0,
         interactions: flowPanel ? flowPanel.querySelectorAll(".interaction-card").length : 0,
@@ -289,11 +322,18 @@ async function runBrowserAssertions(fixture) {
           interactive: panel ? panel.querySelectorAll("button").length : 0
         };
         if (name === "state") {
+          var stateNodes = panel.querySelectorAll(".state-graph-node");
+          var stateLabels = Array.prototype.map.call(
+            stateNodes,function(node){return node.getAttribute("data-state-label");});
           out.lifecycle = {
             legend: !!panel.querySelector(".lifecycle-legend"),
-            start: panel.querySelectorAll(".state-node.lifecycle-start .semantic-icon").length,
-            active: panel.querySelectorAll(".state-node.lifecycle-active .semantic-icon").length,
-            terminal: panel.querySelectorAll(".state-node.lifecycle-terminal .semantic-icon").length
+            start: panel.querySelectorAll(".state-graph-node.lifecycle-start").length,
+            active: panel.querySelectorAll(".state-graph-node.lifecycle-active").length,
+            terminal: panel.querySelectorAll(".state-graph-node.lifecycle-terminal").length,
+            uniqueNodes: stateNodes.length,
+            uniqueLabels: new Set(stateLabels).size,
+            edges: panel.querySelectorAll(".state-graph-edge").length,
+            semanticCopy: panel.innerText
           };
         }
       });
@@ -301,6 +341,54 @@ async function runBrowserAssertions(fixture) {
       if (graphTab) graphTab.click();
       out.architectureIcons = document.querySelectorAll(
         "#view-graph .n-card .semantic-icon,#view-graph .n-focus .semantic-icon").length;
+      var structuredCard = document.querySelector("#view-graph .n-card.structured");
+      if (structuredCard) structuredCard.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+      var pageNode = document.querySelector("#view-graph .n-focus.page");
+      if (pageNode) pageNode.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+      out.pageDataAudit = {
+        explicitGap: !!document.querySelector("#view-graph .module-data-gap"),
+        misleadingModuleEdges: document.querySelectorAll(
+          "#view-graph .edge.reads,#view-graph .edge.writes").length,
+        dimmedAfterUnmappedPageFocus: document.querySelectorAll(
+          "#view-graph .n-focus.dim").length
+      };
+      if (reqDrawer && reqDrawer.classList.contains("open")) {
+        document.querySelector(".drawer-close").click();
+      }
+      var reqTab = document.getElementById("tab-req");
+      if (reqTab) reqTab.click();
+      var reqRow = document.querySelector('#view-req tr[data-req="REQ-100"]');
+      var reqSummary = reqRow ? (reqRow.querySelector(".rq-summary") || {}).textContent || "" : "";
+      var reqButton = reqRow ? reqRow.querySelector(".rq-id") : null;
+      if (reqButton) reqButton.click();
+      var reqDrawer = document.getElementById("drawer");
+      var refs = reqDrawer ? reqDrawer.querySelectorAll(".requirement-reference") : [];
+      if (refs.length) refs[0].click();
+      var sourceLink = reqDrawer ? reqDrawer.querySelector(".src") : null;
+      var navigatedToReference =
+        document.getElementById("tab-flow").getAttribute("aria-selected") === "true";
+      var stateTabForDrawer = document.getElementById("tab-state");
+      if (stateTabForDrawer) stateTabForDrawer.click();
+      var drawerClosedOnTab =
+        !!reqDrawer && !reqDrawer.classList.contains("open");
+      out.traceability = {
+        summary: reqSummary,
+        references: refs.length,
+        navigated: navigatedToReference,
+        anchoredSource: !!sourceLink && sourceLink.getAttribute("href").includes("#:~:text="),
+        drawerClosedOnTab: drawerClosedOnTab
+      };
+      var requirementSearch = document.getElementById("search");
+      if (requirementSearch) {
+        requirementSearch.value = "REQ-100";
+        requirementSearch.dispatchEvent(new Event("input", { bubbles: true }));
+        var requirementResult = document.querySelector("#results .result");
+        if (requirementResult) requirementResult.click();
+      }
+      out.traceability.searchOpensDrawer =
+        !!reqDrawer && reqDrawer.classList.contains("open")
+        && reqDrawer.textContent.includes("会员可查看订单详情并完成订单");
+      if (stateTabForDrawer) stateTabForDrawer.click();
       var probe = ${probe};
       var search = document.getElementById("search");
       out.searchTypable = false;
@@ -349,7 +437,21 @@ async function runBrowserAssertions(fixture) {
       failures.push("行为视图断言未覆盖 flow/state/boundary 三个 tab");
     }
     const scenario = dom.scenarioFlow ?? {};
-    if (!scenario.defaultVisible) failures.push("场景流程不是默认可见入口");
+    if (!dom.audit?.defaultVisible || !dom.audit.coverage.includes("0 / 2")
+        || dom.audit.moduleHealth !== 2 || dom.audit.healthyModules !== 0
+        || dom.audit.unstructuredSummary !== 1) {
+      failures.push(`审计驾驶舱未成为默认入口或健康度口径不一致: ${JSON.stringify(dom.audit)}`);
+    }
+    if (dom.gapNoise?.visibleItems !== 1
+        || dom.gapNoise.unstructuredSummary !== 1
+        || !dom.gapNoise.summaryText.includes("1 个模块未结构化")) {
+      failures.push(`模板型缺口未折叠降噪: ${JSON.stringify(dom.gapNoise)}`);
+    }
+    if (!dom.gapContext.includes("定位上下文")
+        || !dom.gapContext.includes("页面\n详情页")
+        || !dom.gapContext.includes("功能 / 流程\n查看订单详情")) {
+      failures.push(`缺口详情缺少页面/功能/流程定位上下文: ${JSON.stringify(dom.gapContext)}`);
+    }
     if (scenario.groups < 1 || scenario.steps < 2) {
       failures.push(`场景流程主干未渲染完整: ${JSON.stringify(scenario)}`);
     }
@@ -359,6 +461,10 @@ async function runBrowserAssertions(fixture) {
     }
     if (scenario.roleLanes < 2 || scenario.workflowLinks < scenario.steps - 1) {
       failures.push(`场景流程未按角色泳道和正交主路径渲染: ${JSON.stringify(scenario)}`);
+    }
+    if (scenario.roleSources !== scenario.roleLanes
+        || !scenario.attributedRoles) {
+      failures.push(`角色泳道缺少逐角色来源归因: ${JSON.stringify(scenario)}`);
     }
     if (scenario.semanticIcons < scenario.steps || !scenario.interactionLegend
         || scenario.interactionFieldIcons < scenario.interactions * 5) {
@@ -373,12 +479,31 @@ async function runBrowserAssertions(fixture) {
       failures.push(`场景步骤切换或精确附件挂载失败: ${JSON.stringify(scenario.stepSwitch)}`);
     }
     if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
-    if (scenario.boundaryDisclosures < 1) failures.push("场景流程未集成模块职责边界");
-    if (!dom.lifecycle?.legend || dom.lifecycle.start < 1 || dom.lifecycle.terminal < 1) {
-      failures.push(`生命周期视图未标识起点/终点及图例: ${JSON.stringify(dom.lifecycle)}`);
+    if (!dom.pageDataAudit?.explicitGap
+        || dom.pageDataAudit.misleadingModuleEdges !== 0
+        || dom.pageDataAudit.dimmedAfterUnmappedPageFocus !== 0) {
+      failures.push(`页面↔数据关系缺失未显式呈现或仍绘制模块扇形边: ${JSON.stringify(dom.pageDataAudit)}`);
+    }
+    if (!dom.lifecycle?.legend || dom.lifecycle.start < 1
+        || dom.lifecycle.terminal < 1
+        || dom.lifecycle.uniqueNodes < 2
+        || dom.lifecycle.uniqueNodes !== dom.lifecycle.uniqueLabels
+        || dom.lifecycle.edges < 1
+        || !dom.lifecycle.semanticCopy.includes(
+          "不代表业务起点或业务终态")
+        || !dom.lifecycle.semanticCopy.includes(
+          "流程中断也可能造成假终点")) {
+      failures.push(`生命周期视图未渲染唯一状态节点与有向流转: ${JSON.stringify(dom.lifecycle)}`);
     }
     if (dom.architectureIcons < 2) {
       failures.push(`系统关系图缺少架构节点类型图标: ${dom.architectureIcons}`);
+    }
+    if (!dom.traceability?.summary.includes("会员可查看订单详情并完成订单")
+        || dom.traceability.references < 1 || !dom.traceability.navigated
+        || !dom.traceability.anchoredSource
+        || !dom.traceability.drawerClosedOnTab
+        || !dom.traceability.searchOpensDrawer) {
+      failures.push(`需求摘要、反向跳转或来源定位不可审计: ${JSON.stringify(dom.traceability)}`);
     }
     if (failures.length > 0) {
       throw new Error(`浏览器断言失败:\n- ${failures.join("\n- ")}`);

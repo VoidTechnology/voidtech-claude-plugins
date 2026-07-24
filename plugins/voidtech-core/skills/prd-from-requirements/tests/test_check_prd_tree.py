@@ -85,6 +85,66 @@ class LegacyWorktreeTest(unittest.TestCase):
         self.assertIn("检查完成: 3 个文件, 0 个错误, 0 个警告", proc.stdout)
 
 
+class AcceptanceStructureTest(unittest.TestCase):
+    def test_acceptance_module_requires_auditable_logic_tables(self):
+        root = clean_legacy_worktree(self)
+        module = root / MODULE_A_PRD_RELPATH
+        module.write_text(
+            "# 模块甲\n\n- 深度:验收级\n\n只有叙述，没有审计结构。\n",
+            encoding="utf-8")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("验收级模块缺少审计结构", proc.stdout)
+        self.assertIn("页面数据读写（机器可解析）", proc.stdout)
+
+
+    def test_navigation_label_is_not_a_business_state(self):
+        root = clean_legacy_worktree(self)
+        module = root / MODULE_A_PRD_RELPATH
+        module.write_text(
+            """# 模块甲
+
+- 深度:骨架级
+
+```mermaid
+stateDiagram-v2
+    正常 --> 已注销
+```
+
+进入「转为会员」/会员列表。
+""",
+            encoding="utf-8")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("疑似幽灵状态「转为会员」", proc.stdout)
+
+
+    def test_acceptance_module_rejects_empty_audit_tables(self):
+        root = clean_legacy_worktree(self)
+        module = root / MODULE_A_PRD_RELPATH
+        sections = "\n\n".join(
+            f"## {marker}\n\n| 占位列 |\n|---|"
+            for marker in (
+                "页面契约（机器可解析）",
+                "核心流程（机器可解析）",
+                "流程状态影响（机器可解析）",
+                "页面交互（机器可解析）",
+                "状态机与状态流转",
+                "页面数据读写（机器可解析）"))
+        module.write_text(
+            f"# 模块甲\n\n- 深度:验收级\n\n{sections}\n",
+            encoding="utf-8")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("审计结构没有数据行", proc.stdout)
+
+
 class ReadFenceTest(unittest.TestCase):
     def test_publishing_operation_exits_3_and_writes_nothing(self):
         root = clean_legacy_worktree(self)

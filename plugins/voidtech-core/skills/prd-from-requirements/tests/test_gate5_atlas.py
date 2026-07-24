@@ -78,7 +78,7 @@ class CompileTest(unittest.TestCase):
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
         self.assertEqual(atlas._validate_references(model), [])
-        self.assertEqual(model["generatorVersion"], "1.3.0")
+        self.assertEqual(model["generatorVersion"], "1.4.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -88,6 +88,91 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(len(requirements), 6)
         edge_kinds = {e["kind"] for e in model["edges"]}
         self.assertTrue({"reads", "writes", "interacts"} <= edge_kinds)
+    def test_requirement_nodes_include_deterministic_human_summary(self):
+        model = atlas.compile(self.root)
+        requirement = next(
+            node for node in model["nodes"]
+            if node["nodeId"] == "req:TST-001")
+
+        self.assertEqual(requirement["detail"]["summary"], "客户新增")
+        self.assertEqual(requirement["detail"]["assertionRole"], "normative")
+
+    def test_structured_pages_without_page_data_mapping_are_explicit_gap(self):
+        model = atlas.compile(self.root)
+
+        self.assertTrue(any(
+            gap["kind"] == "missing-relation"
+            and "页面与数据对象的读写关系未声明" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_multi_action_page_row_preserves_shared_result_without_guessing(self):
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 客户列表页 | 主导航 | 管理员 | 已登录 | 查看客户列表 | 展示分页客户 |",
+                "| 客户列表页 | 主导航 | 管理员 | 已登录 | 浏览筛选/导出 | 展示分页客户 |"))
+
+        model = atlas.compile(self.root)
+        page = next(
+            node for node in model["nodes"]
+            if node["nodeId"] ==
+            "page:01-test-system/01-module-a:客户列表页")
+        self.assertEqual(page["detail"]["actions"], [
+            {"action": "浏览筛选", "result": None},
+            {"action": "导出", "result": None},
+        ])
+        self.assertEqual(page["detail"]["sharedResults"], ["展示分页客户"])
+        self.assertTrue(any(
+            gap["kind"] == "ambiguous-relation"
+            and "2 个动作共用 1 个结果" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_each_business_transition_edge_has_one_action(self):
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 客户 | 待激活 | 已创建但未启用 | 创建成功 | 激活 | 已激活 |",
+                "| 客户 | 待激活 | 已创建但未启用 | 创建成功 | 激活、自动激活 | 已激活 |"))
+
+        model = atlas.compile(self.root)
+        transitions = [
+            edge for edge in model["edges"]
+            if edge["kind"] == "transition"
+            and edge["from"].endswith(":客户:待激活")
+            and edge["to"].endswith(":客户:已激活")
+        ]
+        self.assertEqual(
+            [edge["detail"]["action"] for edge in transitions],
+            ["激活", "自动激活"])
+
+    def test_maps_page_data_edges_only_from_explicit_contract(self):
+        mapping = """
+
+### 7.0.1 页面数据读写（机器可解析）
+
+| 流程 | 步骤ID | 页面 | 数据对象 | 操作 | 需求编号 |
+|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 客户 | 读 | TST-001 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + mapping)
+
+        model = atlas.compile(self.root)
+        edge = next(
+            edge for edge in model["edges"]
+            if edge["kind"] == "reads"
+            and edge["from"].endswith(":客户列表页")
+            and edge["to"].endswith(":客户"))
+        self.assertEqual(edge["detail"]["relation"], "page-data")
+        self.assertEqual(edge["detail"]["flowTitle"], "查看客户详情")
+        self.assertEqual(edge["detail"]["stepId"], "S1")
+        self.assertFalse(any(
+            gap["gapId"].endswith(":page-data-rw")
+            for gap in model["gaps"]))
+        unmapped = next(
+            gap for gap in model["gaps"]
+            if gap["gapId"].endswith(":page-data-rw:客户详情页"))
+        self.assertEqual(
+            unmapped["context"]["pageTitle"], "客户详情页")
 
     def test_extracts_behavior_flow_and_branch_graph(self):
         model = atlas.compile(self.root)
@@ -539,6 +624,52 @@ class CompileTest(unittest.TestCase):
         self.assertEqual([n["title"] for n in boundaries], ["客户资料"])
         self.assertEqual(model["coverage"]["businessStateCount"], 3)
         self.assertEqual(model["coverage"]["boundaryCount"], 1)
+        transition_gaps = [
+            gap for gap in model["gaps"]
+            if gap["kind"] == "missing-transition"
+        ]
+        self.assertTrue(any(
+            "已停用" in gap["detail"] for gap in transition_gaps))
+
+    def test_parses_transition_actions_and_results(self):
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 激活 | 已激活 |",
+                "| 手动激活 → 立即生效 / 自动激活 ⇒ 等待校验 | 已激活 |"))
+
+        model = atlas.compile(self.root)
+        transitions = [
+            edge for edge in model["edges"]
+            if edge["kind"] == "transition"
+            and edge["from"].endswith(":客户:待激活")
+        ]
+        self.assertEqual(
+            {(edge["detail"]["action"], edge["detail"]["result"])
+             for edge in transitions},
+            {("手动激活", "立即生效"), ("自动激活", "等待校验")})
+
+    def test_explicit_terminal_marker_is_not_a_business_state(self):
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 已停用 |",
+                "| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 终态(停用完成) |"))
+
+        model = atlas.compile(self.root)
+        states = [
+            node for node in model["nodes"]
+            if node["kind"] == "state"
+            and node["detail"].get("category") == "businessState"
+        ]
+        self.assertNotIn("终态(停用完成)", {node["title"] for node in states})
+        active = next(node for node in states if node["title"] == "已激活")
+        self.assertTrue(active["detail"]["declaredTerminal"])
+        self.assertEqual(active["detail"]["terminalResult"], "停用完成")
+        self.assertFalse(any(
+            gap["kind"] == "missing-transition"
+            and "已激活" in gap["detail"]
+            for gap in model["gaps"]))
 
     def test_resolves_referenced_domain_state_machine(self):
         before, marker, after = ATLAS_MODULE_PRD.partition(

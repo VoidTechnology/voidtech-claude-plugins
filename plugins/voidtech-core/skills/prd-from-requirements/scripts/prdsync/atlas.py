@@ -36,7 +36,7 @@ from .canonical_store import (
     sha256_of_bytes,
 )
 
-GENERATOR_VERSION = "1.3.0"
+GENERATOR_VERSION = "1.4.0"
 LOGIC_MODEL_SCHEMA_VERSION = 1
 
 WORKTREE_MANIFEST_RELPATH = "prd-worktree.json"
@@ -56,6 +56,7 @@ _EXCLUDED_TOP = ("_source", "_generated")
 _PAGE_MARKER = "页面契约（机器可解析）"
 _FLOW_MARKER = "核心流程（机器可解析）"
 _DATA_MARKER = "数据读写（机器可解析）"
+_PAGE_DATA_MARKER = "页面数据读写（机器可解析）"
 _INTERACT_MARKER = "模块交互（机器可解析）"
 _PAGE_HEADER = ["页面", "入口", "角色", "前置条件", "用户动作", "系统结果"]
 _FLOW_HEADER = ["流程", "步骤ID", "关联页面", "角色", "用户动作/触发", "条件/分支",
@@ -82,10 +83,12 @@ _BOUNDARY_HEADER = ["边界项", "本模块负责", "不负责", "依赖模块/�
 _STATE_MARKER = "状态机与状态流转"
 _LOCAL_STATE_HEADER = ["对象", "当前状态", "状态含义", "进入条件", "可执行操作",
                        "下一状态", "是否可逆", "操作人", "通知/日志"]
+_STATE_REFERENCE_HEADER_GENERIC = ["对象", "状态机主本", "本端可见状态与操作差异"]
 _STATE_REFERENCE_HEADER = ["对象", "状态机主本", "本端(机构后台)可见状态与操作差异"]
 _DOMAIN_STATE_PREFIX = ["对象", "当前状态", "进入条件", "可执行操作", "下一状态"]
 _DOMAIN_STATE_SUFFIX = ["是否可逆", "通知/日志"]
 _DATA_HEADER = ["数据对象", "操作", "权威来源", "同步方式"]
+_PAGE_DATA_HEADER = ["流程", "步骤ID", "页面", "数据对象", "操作", "需求编号"]
 _INTERACT_HEADER = ["目标模块", "方向", "触发", "失败传播"]
 _REQ_ID_RE = re.compile(r"\b[A-Z][A-Z0-9]*-\d+\b")
 
@@ -299,6 +302,45 @@ def _next_states(text):
     return [item.strip() for item in re.split(r"\s*/\s*|、", value)
             if item.strip()]
 
+def _terminal_result(state_name):
+    """识别显式「终态」标记；返回 None 表示它仍是普通业务状态。"""
+    match = re.match(
+        r"^终态(?:\s*[\(（:：]\s*(.*?)[\)）]?\s*)?$",
+        (state_name or "").strip())
+    return match.group(1).strip() if match and match.group(1) else (
+        "" if match else None)
+def _declared_items(text):
+    """拆分显式列举项；只认列表分隔符，不按自然语言逗号猜测。"""
+    value = (text or "").strip()
+    if not value:
+        return []
+    return [
+        item.strip()
+        for item in re.split(r"\s*(?:/|、|；|;|\n)\s*", value)
+        if item.strip()
+    ]
+
+def _declared_action_results(text):
+    """拆分显式动作，并把箭头两侧保留为动作/结果，不猜测自然语言语义。"""
+    pairs = []
+    for item in _declared_items(text):
+        action_result = re.split(
+            r"\s*(?:->|=>|→|⇒)\s*", item, maxsplit=1)
+        action = action_result[0].strip()
+        result = action_result[1].strip() if len(action_result) == 2 else ""
+        if action and (action, result) not in pairs:
+            pairs.append((action, result))
+    return pairs
+
+
+def _requirement_summary(text):
+    """把规范化需求正文压成可扫描的一句话，不解释或补写业务含义。"""
+    value = re.sub(r"[*_`]+", "", text or "")
+    value = re.sub(r"\s+", " ", value).strip()
+    return value[:160]
+
+
+
 
 def _flow_title_key(title):
     """边缘状态小节标题可带需求号后缀；匹配流程时只去掉该后缀。"""
@@ -413,27 +455,63 @@ def _ledger_content(root):
         merge._role_map(ctx))["content"]
 
 
-def _requirement_states(root):
+def _requirement_nodes(root):
     ctx = merge._context(root)
     states = merge._lifecycle_states(ctx["projection"])
-    return {req: states.get(req, merge._ACTIVE) for req in merge._existing_ids(ctx)}
+    requirement_ids = merge._existing_ids(ctx)
+    candidates = {}
+    role_priority = {
+        "overriding": 0,
+        "normative": 1,
+        "corroborating": 2,
+        "contextual": 3,
+    }
+    for occurrence_id, info in ctx["applied"].items():
+        text = _requirement_summary(info["text"])
+        if not text:
+            continue
+        candidate = (
+            role_priority.get(info["role"], 9),
+            info["source"],
+            occurrence_id,
+            text,
+            info["role"],
+        )
+        candidates.setdefault(info["req"], []).append(candidate)
+    for change_id, manifest in ctx["changes"].items():
+        if (manifest.get("status") != "applied"
+                or not manifest.get("sustainsRequirement")):
+            continue
+        text = _requirement_summary(manifest.get("normalizedText", ""))
+        if not text:
+            continue
+        candidates.setdefault(manifest["requirementId"], []).append((
+            role_priority["normative"],
+            merge.CHANGE_SOURCE_ID,
+            change_id,
+            text,
+            "normative",
+        ))
 
-
-# ---------------------------------------------------------------- 编译
-
-def _requirement_nodes(states):
     nodes = []
-    for req in sorted(states):
-        status = "original" if states[req] == merge._ACTIVE else "adjudicated"
+    for req in sorted(requirement_ids):
+        state = states.get(req, merge._ACTIVE)
+        status = "original" if state == merge._ACTIVE else "adjudicated"
+        selected = min(candidates.get(req, []), default=None)
         nodes.append({
             "nodeId": f"req:{req}",
             "kind": "requirement",
             "scopeId": WORKTREE_SCOPE_ID,
             "title": req,
             "status": status,
-            "sources": [{"path": MATRIX_RELPATH, "anchor": None,
+            "sources": [{"path": MATRIX_RELPATH, "anchor": req,
                          "requirementIds": [req], "oqIds": []}],
-            "detail": {"state": states[req]},
+            "detail": {
+                "state": state,
+                "summary": selected[3] if selected else "",
+                "assertionRole": selected[4] if selected else None,
+                "sourceCount": len(candidates.get(req, [])),
+            },
         })
     return nodes
 
@@ -514,24 +592,35 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 "notifications": fields.get("notifications", ""),
                 "moduleDifference": fields.get("moduleDifference", ""),
             })
+        action_results = (
+            _declared_action_results(fields.get("actions", ""))
+            or [("", "")])
         for target in _next_states(fields.get("nextState", "")):
+            terminal_result = _terminal_result(target)
+            if terminal_result is not None:
+                current_node = business_state_nodes[current_id]
+                current_node["detail"]["declaredTerminal"] = True
+                current_node["detail"]["terminalResult"] = terminal_result
+                continue
             target_id = _ensure_business_state(
                 object_name, target, sources, {"declaredAsTargetOnly": True})
-            _add_edge({
-                "edgeId": (
-                    f"transition:{module_scope}:{object_name}:"
-                    f"{current}->{target}:{fields.get('actions', '')}"),
-                "kind": "transition", "from": current_id, "to": target_id,
-                "status": "original", "sources": sources,
-                "detail": {
-                    "condition": fields.get("entryCondition", ""),
-                    "action": fields.get("actions", ""),
-                    "reversible": fields.get("reversible", ""),
-                    "actor": fields.get("actor", ""),
-                    "triggerMode": fields.get("triggerMode", ""),
-                    "notifications": fields.get("notifications", ""),
-                    "moduleDifference": fields.get("moduleDifference", ""),
-                }})
+            for action, result in action_results:
+                _add_edge({
+                    "edgeId": (
+                        f"transition:{module_scope}:{object_name}:"
+                        f"{current}->{target}:{action}:{result}"),
+                    "kind": "transition", "from": current_id, "to": target_id,
+                    "status": "original", "sources": sources,
+                    "detail": {
+                        "condition": fields.get("entryCondition", ""),
+                        "action": action,
+                        "result": result,
+                        "reversible": fields.get("reversible", ""),
+                        "actor": fields.get("actor", ""),
+                        "triggerMode": fields.get("triggerMode", ""),
+                        "notifications": fields.get("notifications", ""),
+                        "moduleDifference": fields.get("moduleDifference", ""),
+                    }})
 
     status, header, rows = _find_section_table(text, _PAGE_MARKER)
     if status == "absent":
@@ -549,7 +638,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
         # 真实 PRD 常见「同一页面一行一个动作」——按页面标题合并成一个节点，
         # 动作聚合进 detail.actions，绝不产出重复 nodeId。
         page_nodes = {}
-        for row in rows:
+        for row_index, row in enumerate(rows, 1):
             if len(row) < len(_PAGE_HEADER) or not row[0]:
                 continue
             title, entry = row[0], row[1]
@@ -560,12 +649,33 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 node = {
                     "nodeId": node_id, "kind": "page", "scopeId": module_scope,
                     "title": title, "status": "original", "sources": [source],
-                    "detail": {"entry": entry, "role": row[2],
-                               "precondition": row[3], "actions": []},
+                    "detail": {
+                        "entry": entry, "role": row[2],
+                        "precondition": row[3], "actions": [],
+                        "sharedResults": [],
+                    },
                 }
                 page_nodes[title] = node
                 nodes.append(node)
-            node["detail"]["actions"].append({"action": row[4], "result": row[5]})
+            declared_actions = _declared_items(row[4]) or [row[4]]
+            if len(declared_actions) == 1:
+                node["detail"]["actions"].append({
+                    "action": declared_actions[0], "result": row[5]})
+                continue
+            node["detail"]["actions"].extend(
+                {"action": action, "result": None}
+                for action in declared_actions)
+            if row[5] and row[5] not in node["detail"]["sharedResults"]:
+                node["detail"]["sharedResults"].append(row[5])
+            gaps.append({
+                "gapId": (
+                    f"gap:{module_scope}:page-contract:{title}:"
+                    f"{row_index}:action-result"),
+                "scopeId": module_scope, "kind": "ambiguous-relation",
+                "detail": (
+                    f"页面「{title}」{len(declared_actions)} 个动作共用 "
+                    "1 个结果，无法确定逐项动作→结果映射"),
+                "backlogRef": None})
         # 页面导航：入口列匹配同模块已声明页面时，建立 navigates 边。
         for row in rows:
             if len(row) < 2 or not row[0]:
@@ -1117,9 +1227,12 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 "nextState": row[5], "reversible": row[6],
                 "actor": row[7], "notifications": row[8],
             }, [source])
-    elif state_status == "ok" and state_header == _STATE_REFERENCE_HEADER:
+    elif (state_status == "ok"
+          and state_header in (
+              _STATE_REFERENCE_HEADER, _STATE_REFERENCE_HEADER_GENERIC)):
+        assert state_header is not None
         for reference_index, row in enumerate(state_rows, 1):
-            if len(row) < len(_STATE_REFERENCE_HEADER) or not row[0] or not row[1]:
+            if len(row) < len(state_header) or not row[0] or not row[1]:
                 continue
             spec_path = _resolve_domain_spec(root, module_scope, row[1])
             if spec_path is None:
@@ -1186,6 +1299,19 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             "scopeId": module_scope, "kind": "unparsed",
             "detail": f"状态机表头列序不符，无法机械解析: {state_header}",
             "backlogRef": None})
+    for state_node in business_state_nodes.values():
+        if not state_node["detail"].get("declaredAsTargetOnly"):
+            continue
+        state_detail = state_node["detail"]
+        gaps.append({
+            "gapId": f"gap:{state_node['nodeId']}:outgoing-transition",
+            "scopeId": module_scope, "kind": "missing-transition",
+            "detail": (
+                f"{state_detail['object']}状态「{state_node['title']}」"
+                "仅作为下一状态出现，未声明后续流转或明确终态；"
+                "不能据此判定生命周期已结束"),
+            "backlogRef": None})
+
     impact_status, impact_header, impact_rows = _find_section_table(
         text, _IMPACT_MARKER)
     if impact_status == "absent" and flow_ids_by_title:
@@ -1340,20 +1466,23 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         "failurePropagation": failure,
                     }})
 
+    seen_objects = {}
+    data_contracts = {}
     status, header, rows = _find_section_table(text, _DATA_MARKER)
     if status == "absent":
-        gaps.append({"gapId": f"gap:{module_scope}:data-rw",
-                     "scopeId": module_scope, "kind": "missing-section",
-                     "detail": "模块缺少「数据读写（机器可解析）」章节，数据流待深化",
-                     "backlogRef": None})
+        gaps.append({
+            "gapId": f"gap:{module_scope}:data-rw",
+            "scopeId": module_scope, "kind": "missing-section",
+            "detail": "模块缺少「数据读写（机器可解析）」章节，数据流待深化",
+            "backlogRef": None})
     elif status == "ok" and header != _DATA_HEADER:
-        gaps.append({"gapId": f"gap:{module_scope}:data-rw",
-                     "scopeId": module_scope, "kind": "unparsed",
-                     "detail": f"数据读写表头列序不符，无法机械解析: {header}",
-                     "backlogRef": None})
+        gaps.append({
+            "gapId": f"gap:{module_scope}:data-rw",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": f"数据读写表头列序不符，无法机械解析: {header}",
+            "backlogRef": None})
     elif status == "ok":
         source = _module_source(module_scope, _DATA_MARKER)
-        seen_objects = {}
         for row in rows:
             if len(row) < len(_DATA_HEADER) or not row[0]:
                 continue
@@ -1362,19 +1491,121 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             if obj_id not in seen_objects:
                 seen_objects[obj_id] = True
                 nodes.append({
-                    "nodeId": obj_id, "kind": "dataObject", "scopeId": module_scope,
-                    "title": obj, "status": "original", "sources": [source],
+                    "nodeId": obj_id, "kind": "dataObject",
+                    "scopeId": module_scope, "title": obj,
+                    "status": "original", "sources": [source],
                     "detail": {"authoritativeSource": authority}})
-            # 「读写」一行产出两条边——写操作不得被静默丢弃。
-            kinds = [k for marker, k in (("读", "reads"), ("写", "writes"))
-                     if marker in op]
+            kinds = [
+                kind for marker, kind in (("读", "reads"), ("写", "writes"))
+                if marker in op]
             for kind in kinds:
+                detail = {
+                    "authoritativeSource": authority,
+                    "syncMethod": sync_mode}
+                data_contracts[(obj_id, kind)] = detail
                 _add_edge({
                     "edgeId": f"{kind}:{module_scope}:{obj}",
                     "kind": kind, "from": module_scope, "to": obj_id,
                     "status": "original", "sources": [source],
-                    "detail": {"authoritativeSource": authority,
-                               "syncMethod": sync_mode}})
+                    "detail": detail})
+
+    mapping_status, mapping_header, mapping_rows = _find_section_table(
+        text, _PAGE_DATA_MARKER)
+    if page_titles and seen_objects and mapping_status == "absent":
+        gaps.append({
+            "gapId": f"gap:{module_scope}:page-data-rw",
+            "scopeId": module_scope, "kind": "missing-relation",
+            "detail": (
+                "页面与数据对象的读写关系未声明；现有数据表只能证明"
+                "模块级读写，不可下推到具体页面"),
+            "backlogRef": None})
+    elif (page_titles and seen_objects and mapping_status == "ok"
+          and mapping_header != _PAGE_DATA_HEADER):
+        gaps.append({
+            "gapId": f"gap:{module_scope}:page-data-rw",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": (
+                "页面数据读写表头列序不符，无法机械解析: "
+                f"{mapping_header}"),
+            "backlogRef": None})
+    elif page_titles and seen_objects and mapping_status == "ok":
+        parsed_mapping_count = 0
+        mapped_page_ids = set()
+        assert mapping_header is not None
+        for row_index, row in enumerate(mapping_rows, 1):
+            if len(row) < len(_PAGE_DATA_HEADER) or not row[0]:
+                continue
+            flow_title, step_id, page_title, obj, op = row[:5]
+            flow_key = _flow_title_key(flow_title)
+            flow_id = flow_ids_by_title.get(flow_key)
+            step_node_id = (
+                flow_steps_by_title.get(flow_key, {}).get(step_id))
+            page_id = page_titles.get(page_title)
+            obj_id = f"obj:{module_scope}:{obj}"
+            reasons = []
+            if flow_id is None:
+                reasons.append(f"流程不存在: {flow_title}")
+            elif step_node_id is None:
+                reasons.append(f"步骤不存在: {step_id}")
+            if page_id is None:
+                reasons.append(f"页面不存在: {page_title}")
+            if obj_id not in seen_objects:
+                reasons.append(f"数据对象不存在: {obj}")
+            kinds = [
+                kind for marker, kind in (("读", "reads"), ("写", "writes"))
+                if marker in op]
+            if not kinds:
+                reasons.append(f"操作必须包含读或写: {op}")
+            for kind in kinds:
+                if (obj_id, kind) not in data_contracts:
+                    reasons.append(
+                        f"模块级数据契约未声明{kind == 'reads' and '读' or '写'}: "
+                        f"{obj}")
+            if reasons:
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:page-data-rw:{row_index}"),
+                    "scopeId": module_scope, "kind": "unparsed",
+                    "detail": "页面数据读写引用无效；" + "；".join(reasons),
+                    "backlogRef": None})
+                continue
+            source = _source_with_requirements(
+                module_scope, _PAGE_DATA_MARKER, " ".join(row))
+            for kind in kinds:
+                contract = data_contracts[(obj_id, kind)]
+                _add_edge({
+                    "edgeId": (
+                        f"{kind}:{page_id}:{obj}:{flow_key}:{step_id}"),
+                    "kind": kind, "from": page_id, "to": obj_id,
+                    "status": "original", "sources": [source],
+                    "detail": {
+                        **contract, "relation": "page-data",
+                        "flowTitle": flow_title, "flowId": flow_id,
+                        "stepId": step_id, "stepNodeId": step_node_id}})
+            mapped_page_ids.add(page_id)
+            parsed_mapping_count += 1
+        if not parsed_mapping_count:
+            gaps.append({
+                "gapId": f"gap:{module_scope}:page-data-rw",
+                "scopeId": module_scope, "kind": "missing-relation",
+                "detail": "页面数据读写表没有可验证的数据行",
+                "backlogRef": None})
+        else:
+            for page_title, page_id in sorted(page_titles.items()):
+                if page_id in mapped_page_ids:
+                    continue
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:page-data-rw:{page_title}"),
+                    "scopeId": module_scope,
+                    "kind": "missing-relation",
+                    "detail": (
+                        f"页面「{page_title}」尚未声明任何数据读写关系；"
+                        "模块级数据契约不可直接下推"),
+                    "backlogRef": None,
+                    "context": {
+                        "pageTitle": page_title,
+                        "flowTitle": None}})
 
     status, header, rows = _find_section_table(text, _INTERACT_MARKER)
     if status == "absent":
@@ -1418,7 +1649,7 @@ def _compile_model(root):
     module_scopes = [module_scope for module_scope, _, _ in module_prds]
     page_catalog = _build_page_catalog(module_prds)
 
-    nodes = _requirement_nodes(_requirement_states(root))
+    nodes = _requirement_nodes(root)
     edges = []
     gaps = []
     for module_scope, _system_scope, path in module_prds:
@@ -1795,9 +2026,9 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "6.0.0"
+RENDERER_VERSION = "7.0.0"
 BROWSER_MATRIX_VERSION = "2026-07"
-VALIDATION_HARNESS_VERSION = "6.0.0"
+VALIDATION_HARNESS_VERSION = "7.0.0"
 
 _FIXTURE_MODULE = "01-portal/01-module"
 _FIXTURE_MODULE_B = "01-portal/02-module"
@@ -1997,9 +2228,10 @@ def _fixture_model():
                     "excluded": "支付结算", "dependency": "支付模块"}},
         {"nodeId": "req:REQ-100", "kind": "requirement",
          "scopeId": WORKTREE_SCOPE_ID, "title": "REQ-100", "status": "original",
-         "sources": [{"path": MATRIX_RELPATH, "anchor": None,
+         "sources": [{"path": MATRIX_RELPATH, "anchor": "REQ-100",
                       "requirementIds": ["REQ-100"], "oqIds": []}],
-         "detail": {"state": "active"}},
+         "detail": {"state": "active", "summary": "会员可查看订单详情并完成订单",
+                    "assertionRole": "normative", "sourceCount": 1}},
     ]
     edges = [
         {"edgeId": f"nav:{_FIXTURE_MODULE}:{_FIXTURE_HOME_TITLE}->{_FIXTURE_PROBE_TITLE}",
@@ -2105,6 +2337,16 @@ def _fixture_model():
          "scopeId": _FIXTURE_MODULE_B, "kind": "missing-section",
          "detail": "模块缺少「页面契约（机器可解析）」章节，页面关系待深化",
          "backlogRef": None},
+        {"gapId": f"gap:{_FIXTURE_MODULE}:page-data-rw",
+         "scopeId": _FIXTURE_MODULE, "kind": "missing-relation",
+         "detail": (
+             "页面与数据对象的读写关系未声明；现有数据表只能证明"
+             "模块级读写，不可下推到具体页面"),
+         "backlogRef": None,
+         "context": {
+             "pageTitle": _FIXTURE_PROBE_TITLE,
+             "flowTitle": "查看订单详情",
+             "stepId": "S2"}},
     ]
     nodes.sort(key=lambda n: (n["kind"], n["nodeId"]))
     edges.sort(key=lambda e: (e["kind"], e["edgeId"]))

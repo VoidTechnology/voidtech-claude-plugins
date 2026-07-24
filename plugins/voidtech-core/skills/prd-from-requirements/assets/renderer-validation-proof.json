@@ -1,11 +1,11 @@
 {
-  "rendererVersion": "6.0.0",
-  "generatorVersion": "1.3.0",
+  "rendererVersion": "7.0.0",
+  "generatorVersion": "1.4.0",
   "schemaVersion": "1",
-  "assetDigest": "sha256:8a6b43ec53ae34015feb3991cb59b8b4a468109838a97ede8e64ad00beb789c1",
-  "fixtureDigest": "sha256:04781c4e2171bb9be0e954ce351bd6eb1647f9dc90fdbf8f7885dd7af1eb090b",
-  "validationHarnessVersion": "6.0.0",
+  "assetDigest": "sha256:c0c3f4d25d6c733f8625c0e207c385e2f60c0bc07b4c58b9ece0b2e7461a481b",
+  "fixtureDigest": "sha256:b199d4c2af4f9fc130f6d35c6b9a4dbcdb681dbfeec6e32f2cef1cd99f04aa54",
+  "validationHarnessVersion": "7.0.0",
   "browserMatrixVersion": "2026-07",
   "browserValidated": true,
-  "validatedAt": "2026-07-24T03:27:50.890Z"
+  "validatedAt": "2026-07-24T04:53:43.070Z"
 }

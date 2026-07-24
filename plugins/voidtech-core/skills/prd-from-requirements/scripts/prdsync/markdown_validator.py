@@ -45,6 +45,14 @@ DEPTH_LINE_RE = re.compile(r"^\s*-\s*\*{0,2}深度\*{0,2}\s*[:：]", re.M)
 DEPTH_VALUE_RE = re.compile(r"^\s*-\s*\*{0,2}深度\*{0,2}\s*[:：]\s*(\S+)", re.M)
 DEPTH_HEAD_LINES = 15
 REVIEW_SECTION_RE = re.compile(r"^#{2,3}\s*.*验收级核验记录.*$", re.M)
+ACCEPTANCE_LOGIC_MARKERS = (
+    "页面契约（机器可解析）",
+    "核心流程（机器可解析）",
+    "流程状态影响（机器可解析）",
+    "页面交互（机器可解析）",
+    "状态机与状态流转",
+    "页面数据读写（机器可解析）",
+)
 
 # 需求/开放问题编号,用于零填充一致性检查
 REQ_ID_RE = re.compile(r"\b([A-Z]{2,6})-(\d{1,4})\b")
@@ -72,6 +80,42 @@ def iter_lines(text):
             yield lineno, line, True
             continue
         yield lineno, line, in_fence
+
+
+def acceptance_section_has_content(text, marker):
+    """验收级审计章节必须有数据行，或明确声明「不涉及：原因」。"""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        heading = re.match(r"^(#{1,6})\s+.*$", line.strip())
+        if not heading or marker not in line:
+            continue
+        level = len(heading.group(1))
+        end = len(lines)
+        for cursor in range(index + 1, len(lines)):
+            next_heading = re.match(
+                r"^(#{1,6})\s+", lines[cursor].strip())
+            if next_heading and len(next_heading.group(1)) <= level:
+                end = cursor
+                break
+        section = lines[index + 1:end]
+        if re.search(r"不涉及\s*[:：]\s*\S+", "\n".join(section)):
+            return True
+        for cursor in range(len(section) - 2):
+            if not section[cursor].strip().startswith("|"):
+                continue
+            separator = section[cursor + 1].strip()
+            if not re.match(
+                    r"^\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$",
+                    separator):
+                continue
+            for row in section[cursor + 2:]:
+                stripped = row.strip()
+                if stripped.startswith("#"):
+                    break
+                if stripped.startswith("|") and stripped.strip("| \t"):
+                    return True
+        return False
+    return False
 
 
 def needs_depth_header(rel: PurePosixPath):
@@ -176,6 +220,15 @@ def validate(root, files):
         depth_m = DEPTH_VALUE_RE.search(head)
         if depth_m and depth_m.group(1).startswith("验收级") and not rel.name.endswith("full-prd.md"):
             acceptance_docs.append(rel)
+            if rel.name == "prd.md" and len(rel.parts) >= 3:
+                for marker in ACCEPTANCE_LOGIC_MARKERS:
+                    if marker not in text:
+                        errors.append(
+                            f"{rel}: 验收级模块缺少审计结构「{marker}」")
+                    elif not acceptance_section_has_content(text, marker):
+                        errors.append(
+                            f"{rel}: 验收级模块审计结构没有数据行"
+                            f"且未声明不涉及「{marker}」")
         if rel.name.endswith("full-prd.md") and "生成物" not in head:
             errors.append(f"{rel}: 汇总 PRD 头部缺少「生成物」声明")
 
@@ -253,6 +306,10 @@ def validate(root, files):
                         if plain[max(0, m.start() - 1): m.start()] in ("不", "未"):
                             continue
                         if term.endswith("的"):
+                            continue
+                        # 「进入『动作入口』/页面」是导航标签组合，不是状态引用。
+                        trailing = plain[m.end():m.end() + 4].lstrip()
+                        if trailing.startswith(("/", "／")):
                             continue
                         if not state_defined(term, file_states):
                             warnings.append(

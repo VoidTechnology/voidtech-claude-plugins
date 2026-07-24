@@ -93,9 +93,19 @@
         "properties": {
           "gapId": { "type": "string", "minLength": 1 },
           "scopeId": { "type": "string", "minLength": 1 },
-          "kind": { "enum": ["missing-section", "interval-traceability", "unparsed", "missing-source"] },
+          "kind": { "enum": ["missing-section", "missing-relation", "missing-transition", "ambiguous-relation", "interval-traceability", "unparsed", "missing-source"] },
           "detail": { "type": "string", "minLength": 1 },
-          "backlogRef": { "type": ["string", "null"] }
+          "backlogRef": { "type": ["string", "null"] },
+          "context": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pageTitle": { "type": ["string", "null"] },
+              "flowTitle": { "type": ["string", "null"] },
+              "functionTitle": { "type": ["string", "null"] },
+              "stepId": { "type": ["string", "null"] }
+            }
+          }
         }
       }
     },
