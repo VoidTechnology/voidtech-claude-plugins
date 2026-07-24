@@ -15,7 +15,7 @@ argument-hint: "原始需求路径/正文与输出目录"
 
 如果用户只是希望把当前对话整理成一份轻量单体 PRD，并发布到项目 issue 追踪器，应该改用 `voidtech-core:to-prd`。`to-prd` 不重新访谈需求，也不产出模块化工作树。
 
-对已生成工作树的后续维护——深化模块到验收级、合入需求变更、定案开放问题、落实评审修订——改用 `voidtech-core:prd-maintain`，不要重跑本技能。`prd-maintain` 复用本技能的红线、模板与脚本，只封装维护流程。
+对已生成工作树的后续维护——深化模块到验收级、合入需求变更、定案开放问题、落实评审修订——改用 `voidtech-core:prd-maintain`，不要重跑本技能。`prd-maintain` 复用本技能的红线、模板与脚本，只封装维护流程。源需求文件（如 Excel）后续出新版本时的同步走 `voidtech-core:prd-sync`：它只计算差异并提出候选，确认后的合入仍由 `prd-maintain` 执行。本技能只负责首建。
 
 ## 触发场景
 
@@ -381,6 +381,14 @@ prd/
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/scripts/check-prd-tree.py" <输出目录>
 ```
+
+退出码：0 干净；1 存在检查错误；2 用法错误；3 读取栅栏——已迁移工作树（存在 `prd-worktree.json`）中有未完成的同步 operation，脚本零写入、只报告 operation id。遇 3 先恢复再重跑，不得绕过：
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/scripts/prd-sync.py" recover <输出目录>
+```
+
+operation 进行中要自检暂存修改时，加 `--operation-id <id>`，对「当前有效输入 + 该 operation 暂存修改」的预提交视图执行同样检查。legacy 工作树（无 `prd-worktree.json`）不受以上两条影响。
 
 脚本报「错误」的项必须修复后重跑，直到退出码为 0；报「警告」的项不阻塞交付，但必须在最终回复中逐条说明处理方式。检查项：
 

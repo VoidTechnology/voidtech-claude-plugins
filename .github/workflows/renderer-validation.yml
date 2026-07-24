@@ -1,0 +1,47 @@
+# 渲染器浏览器验证（ADR-0005 §8）：绑定「渲染器变化」而非「PRD 内容变化」。
+# 仅当渲染器代码、logic model schema、验证 harness、证明文件或本 workflow
+# 变化时运行；证明继承成立时不重新打开浏览器（--check 已足够），但 CI 仍
+# 完整跑一次浏览器断言，验证已提交证明宣称的结论真实成立。
+name: Renderer validation
+
+on:
+  pull_request:
+    paths:
+      - plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/atlas.py
+      - plugins/voidtech-core/skills/prd-from-requirements/schemas/logic-model.schema.json
+      - plugins/voidtech-core/skills/prd-from-requirements/assets/renderer-validation-proof.json
+      - scripts/validate-renderer.mjs
+      - .github/workflows/renderer-validation.yml
+  push:
+    branches: [main]
+    paths:
+      - plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/atlas.py
+      - plugins/voidtech-core/skills/prd-from-requirements/schemas/logic-model.schema.json
+      - plugins/voidtech-core/skills/prd-from-requirements/assets/renderer-validation-proof.json
+      - scripts/validate-renderer.mjs
+      - .github/workflows/renderer-validation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.22.0
+
+      # 证明不继承 → fail：渲染器已变化但证明未重签，提示本地
+      # `node scripts/validate-renderer.mjs --write` 后提交。
+      - name: Check proof inheritance
+        run: node scripts/validate-renderer.mjs --check
+
+      # 完整浏览器验证：ubuntu-24.04 runner 自带 Google Chrome。
+      - name: Run browser validation
+        run: node scripts/validate-renderer.mjs

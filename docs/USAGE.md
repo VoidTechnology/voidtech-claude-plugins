@@ -1,6 +1,6 @@
 # VoidTech 插件使用指南
 
-本指南覆盖 `voidtech-core` 的 25 个技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前者服务日常回合式协作，后者只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南覆盖 `voidtech-core` 的 26 个技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前者服务日常回合式协作，后者只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -55,7 +55,7 @@
 | 可见性 | 含义 | 技能 |
 |---|---|---|
 | **模型可援引** | 命中场景时 Claude 可以主动使用，也可以手动调用；涉及文件或仓库状态变更时，按技能自己的流程确认 | `codebase-design`、`debug`、`feature-context`、`fix-conflicts`、`git-safety`、`setup-git-checks`、`tdd`、`text-naturalizer` |
-| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prd-from-requirements`、`prd-maintain`、`prepare-issue`、`prototype`、`research`、`ship`、`to-design-brief`、`to-issues`、`to-prd`、`write-skills` |
+| **仅用户显式触发** | 需要明确入口，可能带来较大副作用、网络/成本开销，或代表一次完整工作流授权；必须你手动 `/` 调用 | `architecture-review`、`handoff`、`implement`、`learn`、`plan-review`、`plan-review-docs`、`prd-from-requirements`、`prd-maintain`、`prd-sync`、`prepare-issue`、`prototype`、`research`、`ship`、`to-design-brief`、`to-issues`、`to-prd`、`write-skills` |
 | **仅内部编排** | 不出现在命令菜单，由其他技能调用 | `plan-review-core` |
 
 > 经验法则：越像一次完整交付流程，越应该由你手动触发；越像方法、诊断纪律或文案规则，越适合让 Claude 在具体任务中按需使用。
@@ -72,6 +72,7 @@
 | `to-prd` | 把当前对话综合成 PRD（不重新访谈） | 发布到跟踪器的 PRD，或 Markdown 草稿 |
 | `prd-from-requirements` | 从原始需求、整理稿、访谈纪要或旧 PRD 生成模块化 PRD 工作树 | 模块 PRD、全局文档、追溯矩阵、开放问题清单、状态看板 |
 | `prd-maintain` | 维护既有 PRD 工作树：深化模块、合入需求变更、定案开放问题、落实评审修订 | 修订后的主本、重生成的汇总与状态看板、变更记录 |
+| `prd-sync` | 向既有 PRD 工作树导入外部需求源新版本：存量迁移、只读同步、三方归并出可审阅变更集、人工裁决落 journal | 不可变 revision、变更集/歧义/撤回候选、裁决记录；已确认变更集交 `prd-maintain` 合入 |
 | `to-design-brief` | 把设计语言文档与 PRD 合成自包含设计 brief，供 claude.ai/design 逐页生成 UI | `claude-design-brief.md` |
 | `to-issues` | 把计划/PRD 拆成端到端垂直切片 | 可独立认领验证的 issue 列表 |
 | `prepare-issue` | 按分类+状态整理 issue/PR，验证主张，补信息 | agent 可直接执行的实现说明 |
@@ -122,6 +123,7 @@
 | 当前对话已经把需求讨论清楚，要整理成一份单体 PRD | `to-prd` | 重新访谈需求，或生成模块化工作树 |
 | 手上是原始需求、Excel、访谈纪要、需求清单或旧 PRD，要建立可追溯的模块化主本 | `prd-from-requirements` | `to-prd` 的后续步骤 |
 | 已经有 `prd-from-requirements` 生成的工作树，要深化、合入变更或落实评审意见 | `prd-maintain` | 重新运行生成流程 |
+| 需求源（如 Excel）出了新版本，要与既有工作树安全归并，且不覆盖已有裁决 | `prd-sync` | 重新运行生成流程，或让 `prd-maintain` 直接照描述改主本 |
 | 已知具体模块，需要设计或改进它的 interface、seam 与可测试性 | `codebase-design` | 全仓架构体检 |
 | 尚不知道最值得改哪里，要扫描全仓并比较多个模块深化候选 | `architecture-review` | 直接实施重构；它先生成报告，等用户选择候选项 |
 | 没有 PRD/issue，但要用测试先行实现一个范围明确的行为 | `tdd` | 先写完全部测试，或跳过接口与行为确认 |
@@ -155,6 +157,7 @@
 当前对话已讨论清楚 ──▶ /voidtech-core:to-prd
 原始需求/Excel/访谈纪要 ──▶ /voidtech-core:prd-from-requirements
 既有模块化 PRD 工作树 ──▶ /voidtech-core:prd-maintain
+需求源出了新版本要导入 ──▶ /voidtech-core:prd-sync（裁决后交 prd-maintain 合入）
 ```
 
 得到计划、规格或 PRD 后，只有确实需要多人认领或拆成多个独立交付单元时才继续：
@@ -232,6 +235,8 @@ to-prd ─────────润色正文────────▶ text-n
 prd-from-requirements ───────▶ product-manager subagent
                         └────▶ text-naturalizer（需要润色对外文档时）
 prd-maintain ──规则与脚本单源──▶ prd-from-requirements（红线/模板/自检脚本/看板生成器）
+prd-sync ──已确认变更集───────▶ prd-maintain（工况 2 合入 / 工况 5 生命周期）
+        └──规则单源──────────▶ prd-from-requirements
 to-issues ──────轻量自审文案────▶ text-naturalizer
 
 plan-review ────────────────▶ plan-review-core
@@ -258,6 +263,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 | 把当前对话中已经讨论清楚的需求整理成单体 PRD，不重新访谈 | `to-prd` |
 | 从原始需求、Excel 整理稿或访谈纪要生成模块化 PRD 工作树 | `prd-from-requirements` |
 | 维护既有 PRD 工作树（深化到验收级、合入需求变更、定案开放问题、落实评审意见） | `prd-maintain` |
+| 把新版 Excel/需求源导入既有工作树，得到可审阅变更集并裁决归并 | `prd-sync` |
 | 拿 PRD 和设计语言文档生成给 claude.ai/design 用的设计 brief | `to-design-brief` |
 | 把 PRD/计划拆成能干活的 issue | `to-issues` |
 | 按已有 PRD 或一组 issue 实现并核对验收标准 | `implement` |

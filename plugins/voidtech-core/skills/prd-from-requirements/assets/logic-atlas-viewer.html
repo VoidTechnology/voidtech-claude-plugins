@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logic Atlas · 系统关系地图</title>
+<script type="application/json" id="atlas-model">__ATLAS_MODEL_JSON__</script>
+<script type="application/json" id="atlas-meta">__ATLAS_META_JSON__</script>
+<style>
+:root{
+  --bg:#ffffff; --surface:#f6f7f9; --surface-2:#eef0f3; --panel:#ffffff;
+  --border:#e2e5ea; --border-strong:#cfd4dc;
+  --text:#1c2024; --muted:#616a75; --faint:#8b939e;
+  --accent:#2563eb; --accent-weak:#dbe6fe; --accent-text:#1d4ed8;
+  --ok:#15803d; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7;
+  --danger:#b91c1c; --danger-bg:#fee2e2; --neutral:#4b5563; --neutral-bg:#e5e7eb;
+  --read:#0e7490; --write:#c2410c; --interact:#6d28d9;
+  --shadow:0 1px 2px rgba(17,24,39,.06),0 2px 8px rgba(17,24,39,.06);
+  --shadow-lg:0 8px 30px rgba(17,24,39,.14);
+  --radius:10px; --radius-sm:6px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0d1117; --surface:#12161d; --surface-2:#1b212b; --panel:#161b22;
+    --border:#2a313c; --border-strong:#3a424f;
+    --text:#e6edf3; --muted:#9aa4b1; --faint:#6b7480;
+    --accent:#4c8dff; --accent-weak:#16233b; --accent-text:#8bb6ff;
+    --ok:#3fb950; --ok-bg:#123021; --warn:#d29922; --warn-bg:#332810;
+    --danger:#f85149; --danger-bg:#3a1618; --neutral:#9aa4b1; --neutral-bg:#232a34;
+    --read:#38bdf8; --write:#fb923c; --interact:#a78bfa;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 10px rgba(0,0,0,.35);
+    --shadow-lg:0 10px 34px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="light"]{
+  --bg:#ffffff; --surface:#f6f7f9; --surface-2:#eef0f3; --panel:#ffffff;
+  --border:#e2e5ea; --border-strong:#cfd4dc;
+  --text:#1c2024; --muted:#616a75; --faint:#8b939e;
+  --accent:#2563eb; --accent-weak:#dbe6fe; --accent-text:#1d4ed8;
+  --ok:#15803d; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7;
+  --danger:#b91c1c; --danger-bg:#fee2e2; --neutral:#4b5563; --neutral-bg:#e5e7eb;
+  --read:#0e7490; --write:#c2410c; --interact:#6d28d9;
+  --shadow:0 1px 2px rgba(17,24,39,.06),0 2px 8px rgba(17,24,39,.06);
+  --shadow-lg:0 8px 30px rgba(17,24,39,.14);
+}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --surface:#12161d; --surface-2:#1b212b; --panel:#161b22;
+  --border:#2a313c; --border-strong:#3a424f;
+  --text:#e6edf3; --muted:#9aa4b1; --faint:#6b7480;
+  --accent:#4c8dff; --accent-weak:#16233b; --accent-text:#8bb6ff;
+  --ok:#3fb950; --ok-bg:#123021; --warn:#d29922; --warn-bg:#332810;
+  --danger:#f85149; --danger-bg:#3a1618; --neutral:#9aa4b1; --neutral-bg:#232a34;
+  --read:#38bdf8; --write:#fb923c; --interact:#a78bfa;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 10px rgba(0,0,0,.35);
+  --shadow-lg:0 10px 34px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+a{color:var(--accent-text)}
+
+/* layout */
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+.topbar{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.brand{font-weight:650;font-size:15px;letter-spacing:.2px;white-space:nowrap}
+.brand .dot{color:var(--accent)}
+.topmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--muted)}
+.chip.mono{font-family:var(--mono);font-size:11.5px}
+.chip.accent{background:var(--accent-weak);border-color:transparent;color:var(--accent-text)}
+.self-note{font-size:12px;color:var(--faint)}
+.topbtn{padding:5px 11px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);color:var(--text)}
+.topbtn:hover{border-color:var(--border-strong)}
+
+.body{display:grid;grid-template-columns:280px 1fr;min-height:0}
+.body.card-open{grid-template-columns:280px 1fr}
+.sidebar{border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.search-wrap{padding:12px;border-bottom:1px solid var(--border);position:relative}
+.search-input{width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:var(--text)}
+.search-input::placeholder{color:var(--faint)}
+.results{position:absolute;left:12px;right:12px;top:52px;z-index:40;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);max-height:340px;overflow:auto}
+.result{display:flex;gap:8px;align-items:baseline;padding:7px 10px;border-bottom:1px solid var(--border);width:100%;text-align:left;background:none;border-left:none;border-right:none;border-top:none}
+.result:last-child{border-bottom:none}
+.result:hover,.result.active{background:var(--accent-weak)}
+.result .rtitle{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result .rkind{font-size:11px;color:var(--muted);flex:none}
+.result .rsub{font-size:11px;color:var(--faint);flex:none;font-family:var(--mono)}
+
+.mods{overflow:auto;padding:6px 0;flex:1;min-height:0}
+.sys-group{padding:4px 0}
+.sys-head{padding:8px 14px 4px;font-size:11px;font-weight:650;letter-spacing:.6px;text-transform:uppercase;color:var(--faint)}
+.mod-row{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;padding:8px 14px;border:none;background:none;border-left:3px solid transparent}
+.mod-row:hover{background:var(--surface-2)}
+.mod-row.current{background:var(--accent-weak);border-left-color:var(--accent)}
+.mod-row.muted .mod-title{color:var(--muted)}
+.mod-title{font-weight:550;font-size:13px;display:flex;align-items:center;gap:6px}
+.mod-sub{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted)}
+.badge{display:inline-flex;align-items:center;padding:0 6px;height:16px;border-radius:999px;font-size:10.5px;font-weight:600}
+.badge.gap{background:var(--warn-bg);color:var(--warn)}
+.badge.pend{background:var(--neutral-bg);color:var(--neutral)}
+.badge.pend.solo{background:transparent;color:var(--faint);border:1px dashed var(--border-strong);font-weight:500}
+.count-pill{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+.main-head{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel);flex-wrap:wrap}
+.tabs{display:inline-flex;background:var(--surface-2);border-radius:var(--radius-sm);padding:2px;gap:2px}
+.tab{padding:5px 12px;border:none;background:none;border-radius:5px;color:var(--muted);font-weight:550}
+.tab.active{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.crumbs{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);flex:1;flex-wrap:wrap}
+.crumbs button{border:none;background:none;color:var(--accent-text);padding:0}
+.crumbs .sep{color:var(--faint)}
+.crumbs .cur{color:var(--text);font-weight:550}
+.viewport{flex:1;position:relative;min-height:0;overflow:hidden;background:
+  radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/22px 22px}
+.stage-svg{width:100%;height:100%;display:block;touch-action:none}
+.zoom-ctl{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:6px;z-index:20}
+.zoom-ctl button{width:32px;height:32px;border:1px solid var(--border);background:var(--panel);border-radius:var(--radius-sm);box-shadow:var(--shadow);font-size:16px;line-height:1}
+.legend{position:absolute;left:14px;bottom:14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:11.5px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:5px;z-index:20}
+.legend .lg{display:flex;align-items:center;gap:7px;color:var(--muted)}
+.legend .swatch{width:20px;height:0;border-top-width:2px;border-top-style:solid}
+.hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--muted);box-shadow:var(--shadow);z-index:15}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);text-align:center;padding:24px}
+.empty .big{font-size:15px;font-weight:600;color:var(--text)}
+
+/* svg node styling via classes */
+.n-card{cursor:pointer}
+.n-card .nc-bg{fill:var(--panel);stroke:var(--border-strong);stroke-width:1.2;rx:10}
+.n-card:hover .nc-bg{stroke:var(--accent)}
+.n-card.selected .nc-bg{stroke:var(--accent);stroke-width:2.2;filter:drop-shadow(0 3px 8px rgba(0,0,0,.18))}
+.n-card.dim{opacity:.28}
+.n-card.pending .nc-bg{stroke-dasharray:5 4;fill:var(--surface)}
+.nc-title{font-weight:600;font-size:13px;fill:var(--text)}
+.nc-sub{font-size:11px;fill:var(--muted);font-family:var(--mono)}
+.nc-tag{font-size:10.5px;fill:var(--faint)}
+.n-card.structured .nc-bg{fill:var(--accent-weak)}
+.nc-accent{fill:var(--accent)}
+.nc-badge-bg{fill:var(--accent)}
+.nc-badge-tx{fill:#ffffff;font-size:9px;font-weight:700;letter-spacing:.3px}
+.n-focus{cursor:pointer}
+.n-focus .nf-bg{stroke-width:1.2}
+.n-focus.page .nf-bg{fill:var(--accent-weak);stroke:var(--accent)}
+.n-focus.data .nf-bg{fill:var(--surface);stroke:var(--border-strong)}
+.n-focus.hub .nf-bg{fill:var(--panel);stroke:var(--interact);stroke-width:2}
+.n-focus:hover .nf-bg{stroke:var(--accent)}
+.n-focus.selected .nf-bg{stroke:var(--accent);stroke-width:2.4}
+.n-focus.dim{opacity:.2}
+.nf-label{font-size:11.5px;fill:var(--text)}
+.nf-kind{font-size:9.5px;fill:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.edge{fill:none;cursor:pointer}
+.edge.interacts{stroke:var(--interact);stroke-width:1.6}
+.edge.reads{stroke:var(--read);stroke-width:1.5}
+.edge.writes{stroke:var(--write);stroke-width:1.5;stroke-dasharray:6 4}
+.edge.dim{opacity:.12}
+.edge.hot{stroke-width:3}
+.edge-hit{fill:none;stroke:transparent;stroke-width:14;cursor:pointer}
+.col-head{font-size:11px;font-weight:650;letter-spacing:.5px;fill:var(--faint);text-transform:uppercase}
+
+.tooltip{position:absolute;z-index:60;max-width:320px;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:9px 11px;font-size:12px;pointer-events:none;display:none}
+.tooltip .tt-h{font-weight:600;margin-bottom:4px}
+.tooltip .tt-row{color:var(--muted);margin-top:3px}
+.tooltip .tt-row b{color:var(--text);font-weight:600}
+
+/* card drawer */
+.drawer{position:absolute;top:0;right:0;bottom:0;width:380px;max-width:92vw;background:var(--panel);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;transform:translateX(100%);z-index:50}
+.drawer.open{transform:none}
+.drawer-head{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.drawer-head .dt{flex:1;min-width:0}
+.drawer-head .dt h3{margin:0 0 4px;font-size:16px;line-height:1.3}
+.drawer-close{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);width:28px;height:28px;flex:none;font-size:15px;line-height:1}
+.drawer-body{overflow:auto;padding:14px 16px;flex:1}
+.sec{margin-bottom:16px}
+.sec-h{font-size:11px;font-weight:650;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:4px 10px;font-size:13px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.act-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.act-table th{text-align:left;font-size:11px;color:var(--faint);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--border)}
+.act-table td{padding:6px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text)}
+.act-table td.a{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.mchip{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;background:var(--accent-weak);color:var(--accent-text);border:none;cursor:pointer}
+.mchip.oq{background:var(--warn-bg);color:var(--warn)}
+.src{display:block;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;text-decoration:none;color:var(--text);background:var(--surface)}
+.src:hover{border-color:var(--accent)}
+.src .sp{font-family:var(--mono);font-size:11.5px;color:var(--accent-text);word-break:break-all}
+.src .sa{font-size:11px;color:var(--muted);margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.9}
+.st-active{background:var(--ok-bg);color:var(--ok)}
+.st-withdrawn{background:var(--danger-bg);color:var(--danger)}
+.st-superseded{background:var(--warn-bg);color:var(--warn)}
+.st-proposed{background:var(--accent-weak);color:var(--accent-text)}
+.st-unknown{background:var(--neutral-bg);color:var(--neutral)}
+
+/* requirement index */
+.panel{overflow:auto;flex:1;min-height:0;padding:16px}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;box-shadow:var(--shadow);min-width:112px}
+.stat .num{font-size:22px;font-weight:700;font-family:var(--mono)}
+.stat .lab{font-size:11.5px;color:var(--muted);margin-top:2px}
+.cov{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.cov .covh{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:8px}
+.bar{height:9px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.bar>span{display:block;height:100%;background:var(--accent);border-radius:999px}
+.filter-row{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.filter-input{padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);min-width:220px}
+.toggle{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+.grp{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;background:var(--panel)}
+.grp-head{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-weight:600;width:100%;text-align:left;border-left:none;border-right:none;border-top:none}
+.grp-head .gc{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.grp-head .caret{font-size:11px;color:var(--faint);transition:none}
+.rq-table{width:100%;border-collapse:collapse}
+.rq-table td{padding:7px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.rq-table tr:last-child td{border-bottom:none}
+.rq-table tr.hl td{background:var(--accent-weak)}
+.rq-id{font-family:var(--mono);cursor:pointer;color:var(--accent-text)}
+.rq-src{color:var(--faint);font-size:11.5px;font-family:var(--mono);width:1%;white-space:nowrap}
+.gap-item{display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);align-items:baseline}
+.gap-item:last-child{border-bottom:none}
+.gap-kind{font-family:var(--mono);font-size:11px;color:var(--warn);flex:none;background:var(--warn-bg);padding:1px 7px;border-radius:999px}
+.muted-text{color:var(--muted)}
+
+/* behavioral atlas */
+.behavior-panel{overflow:auto;flex:1;min-height:0;padding:18px;background:var(--bg)}
+.behavior-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.behavior-group{border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow)}
+.behavior-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+.behavior-head h3{font-size:14px;margin:0;flex:1}.behavior-head .meta{font:11px var(--mono);color:var(--muted)}
+.flow-track{display:flex;align-items:stretch;gap:0;padding:14px;overflow-x:auto}
+.flow-start,.flow-node,.flow-end,.state-node{border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);text-align:left}
+.flow-start,.flow-end{align-self:center;padding:8px 12px;font-size:12px;font-weight:650;white-space:nowrap}
+.flow-start{border-color:var(--accent);color:var(--accent-text)}.flow-end{border-style:dashed;color:var(--muted)}
+.flow-step-wrap{display:flex;flex-direction:column;min-width:230px;max-width:270px}
+.flow-node{padding:10px 11px;width:100%;min-height:118px}
+.flow-node:hover,.state-node:hover,.boundary-card:hover{border-color:var(--accent)}
+.flow-node .step{font:11px var(--mono);color:var(--accent-text);margin-bottom:5px}
+.flow-node .page{font-size:11px;color:var(--muted);margin-bottom:6px}
+.flow-node .action{font-weight:650;margin-bottom:5px}.flow-node .result{font-size:12px;color:var(--muted)}
+.flow-arrow{display:flex;align-items:center;min-width:54px;justify-content:center;color:var(--accent-text);font-size:18px;position:relative}
+.flow-arrow small{position:absolute;top:18px;font-size:10px;color:var(--faint);white-space:nowrap}
+.flow-failure{margin:9px 0 0 12px;border-left:2px dashed var(--danger);padding:6px 8px;background:var(--danger-bg);color:var(--danger);font-size:11.5px;border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.flow-failure button{display:block;border:0;background:none;color:inherit;text-align:left;padding:0;font:inherit}
+.state-lane{padding:12px 14px}.transition-row{display:grid;grid-template-columns:minmax(150px,220px) minmax(180px,1fr) minmax(150px,220px);gap:10px;align-items:stretch;margin-bottom:9px}
+.state-node{padding:9px 11px;font-weight:650}.state-node small{display:block;font-weight:400;color:var(--muted);margin-top:4px}
+.transition-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;border-top:1px solid var(--accent);margin-top:18px;min-width:0}
+.transition-arrow span{background:var(--panel);padding:2px 7px;font-size:11px;color:var(--muted);text-align:center;transform:translateY(-50%)}
+.boundary-grid,.page-state-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;padding:12px 14px}
+.boundary-card{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);padding:10px 11px;text-align:left;color:var(--text)}
+.boundary-card h4{margin:0 0 7px;font-size:13px}.boundary-card dl{grid-template-columns:72px 1fr;font-size:12px}
+.behavior-empty{padding:36px;text-align:center;color:var(--muted)}
+@media(max-width:900px){.transition-row{grid-template-columns:1fr}.transition-arrow{border-top:0;border-left:1px solid var(--accent);margin:0 0 0 16px;align-items:flex-start}.transition-arrow span{transform:none}.flow-track{padding:10px}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">Logic Atlas<span class="dot"> · </span>系统关系地图</div>
+    <div class="topmeta" id="topmeta"></div>
+    <button class="topbtn" id="themeBtn" aria-label="切换明暗主题">明/暗</button>
+  </header>
+  <div class="body" id="body">
+    <aside class="sidebar" aria-label="模块导航">
+      <div class="search-wrap">
+        <input class="search-input" id="search" type="search" placeholder="搜索页面 / 数据 / 需求编号 (如 MBR-011)" autocomplete="off" aria-label="全局搜索" role="combobox" aria-expanded="false" aria-controls="results">
+        <div class="results" id="results" role="listbox" hidden></div>
+      </div>
+      <nav class="mods" id="mods" aria-label="模块列表"></nav>
+    </aside>
+    <main class="main">
+      <div class="main-head">
+        <div class="tabs" role="tablist">
+          <button class="tab active" id="tab-graph" role="tab" aria-selected="true">关系图</button>
+          <button class="tab" id="tab-flow" role="tab" aria-selected="false">用户流程</button>
+          <button class="tab" id="tab-state" role="tab" aria-selected="false">状态机</button>
+          <button class="tab" id="tab-boundary" role="tab" aria-selected="false">边界与异常</button>
+          <button class="tab" id="tab-req" role="tab" aria-selected="false">需求索引</button>
+          <button class="tab" id="tab-gap" role="tab" aria-selected="false">缺口</button>
+        </div>
+        <div class="crumbs" id="crumbs"></div>
+      </div>
+      <div id="view-graph" class="viewport" role="tabpanel" aria-label="关系图">
+        <div class="hint" id="hint"></div>
+        <svg class="stage-svg" id="svg" role="img" aria-label="模块关系图"></svg>
+        <div class="legend" id="legend"></div>
+        <div class="zoom-ctl">
+          <button id="zin" aria-label="放大">+</button>
+          <button id="zout" aria-label="缩小">−</button>
+          <button id="zfit" aria-label="适应窗口" style="font-size:12px">⤢</button>
+        </div>
+      </div>
+      <div id="view-flow" class="behavior-panel" role="tabpanel" aria-label="用户流程" hidden></div>
+      <div id="view-state" class="behavior-panel" role="tabpanel" aria-label="业务状态机" hidden></div>
+      <div id="view-boundary" class="behavior-panel" role="tabpanel" aria-label="边界与异常" hidden></div>
+      <div id="view-req" class="panel" role="tabpanel" aria-label="需求索引" hidden></div>
+      <div id="view-gap" class="panel" role="tabpanel" aria-label="缺口面板" hidden></div>
+    </main>
+  </div>
+</div>
+<aside class="drawer" id="drawer" aria-label="详情卡片" aria-hidden="true"></aside>
+<div class="tooltip" id="tooltip" role="status"></div>
+
+<script>
+"use strict";
+(function(){
+/* ---------- boot & parse ---------- */
+function parseTag(id){
+  var el=document.getElementById(id);
+  if(!el) return null;
+  try{ return JSON.parse(el.textContent); }catch(e){ console.warn("atlas: parse failed for #"+id,e); return null; }
+}
+var MODEL=parseTag("atlas-model")||{};
+var META=parseTag("atlas-meta")||{};
+var arr=function(x){ return Array.isArray(x)?x:[]; };
+var NODES=arr(MODEL.nodes), EDGES=arr(MODEL.edges), SCOPES=arr(MODEL.scopes), GAPS=arr(MODEL.gaps);
+var COVERAGE=MODEL.coverage||{};
+
+/* ---------- dom helpers ---------- */
+function h(tag,props){
+  var el=document.createElement(tag);
+  props=props||{};
+  for(var k in props){
+    var v=props[k];
+    if(v==null) continue;
+    if(k==="class") el.className=v;
+    else if(k==="text") el.textContent=v;
+    else if(k==="html") throw new Error("Unsafe html prop is not supported");
+    else if(k==="onclick") el.addEventListener("click",v);
+    else if(k==="on") { for(var ev in v) el.addEventListener(ev,v[ev]); }
+    else if(k==="dataset"){ for(var d in v) el.dataset[d]=v[d]; }
+    else el.setAttribute(k,v);
+  }
+  for(var i=2;i<arguments.length;i++){
+    var c=arguments[i];
+    if(c==null) continue;
+    if(Array.isArray(c)) c.forEach(function(x){ if(x!=null) el.appendChild(typeof x==="string"?document.createTextNode(x):x); });
+    else el.appendChild(typeof c==="string"?document.createTextNode(c):c);
+  }
+  return el;
+}
+var SVGNS="http://www.w3.org/2000/svg";
+function s(tag,props){
+  var el=document.createElementNS(SVGNS,tag);
+  props=props||{};
+  for(var k in props){
+    var v=props[k];
+    if(v==null) continue;
+    if(k==="text") el.textContent=v;
+    else if(k==="class") el.setAttribute("class",v);
+    else if(k==="on"){ for(var ev in v) el.addEventListener(ev,v[ev]); }
+    else el.setAttribute(k,v);
+  }
+  for(var i=2;i<arguments.length;i++){ var c=arguments[i]; if(c!=null) el.appendChild(typeof c==="string"?document.createTextNode(c):c); }
+  return el;
+}
+var $=function(id){ return document.getElementById(id); };
+
+/* ---------- indices ---------- */
+var scopeById={}; SCOPES.forEach(function(sc){ scopeById[sc.scopeId]=sc; });
+var systems=SCOPES.filter(function(x){return x.kind==="system";}).sort(byPath);
+var modules=SCOPES.filter(function(x){return x.kind==="module";}).sort(byPath);
+function byPath(a,b){ var pa=(a.path||a.scopeId||""),pb=(b.path||b.scopeId||""); return pa<pb?-1:pa>pb?1:0; }
+
+var nodeById={}; NODES.forEach(function(n){ nodeById[n.nodeId]=n; });
+var pagesByScope={}, dataByScope={}, flowsByScope={}, flowPartsByScope={},
+    businessStatesByScope={}, pageStatesByScope={}, boundariesByScope={},
+    gapsByScope={};
+NODES.forEach(function(n){
+  var d=n.detail||{};
+  if(n.kind==="page"){ (pagesByScope[n.scopeId]=pagesByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="dataObject"){ (dataByScope[n.scopeId]=dataByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="flow"&&d.category==="userFlow"){ (flowsByScope[n.scopeId]=flowsByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="flow"&&(d.category==="flowStep"||d.category==="terminal"||d.category==="failureBranch")){ (flowPartsByScope[n.scopeId]=flowPartsByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="flow"&&d.category==="boundary"){ (boundariesByScope[n.scopeId]=boundariesByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="state"&&d.category==="businessState"){ (businessStatesByScope[n.scopeId]=businessStatesByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="state"&&d.category==="pageState"){ (pageStatesByScope[n.scopeId]=pageStatesByScope[n.scopeId]||[]).push(n); }
+});
+GAPS.forEach(function(g){ (gapsByScope[g.scopeId]=gapsByScope[g.scopeId]||[]).push(g); });
+var requirements=NODES.filter(function(n){return n.kind==="requirement";})
+  .sort(function(a,b){ return a.title<b.title?-1:a.title>b.title?1:0; });
+
+var edgeById={}; EDGES.forEach(function(e){ edgeById[e.edgeId]=e; });
+var interactEdges=EDGES.filter(function(e){return e.kind==="interacts";});
+var interactByScope={};
+interactEdges.forEach(function(e){ (interactByScope[e.from]=interactByScope[e.from]||[]).push(e); (interactByScope[e.to]=interactByScope[e.to]||[]).push(e); });
+var edgesFromScope={};
+EDGES.forEach(function(e){ if(e.kind==="reads"||e.kind==="writes"){ (edgesFromScope[e.from]=edgesFromScope[e.from]||[]).push(e); } });
+var behaviorViews=["flow","state","boundary"];
+function isBehaviorView(v){ return behaviorViews.indexOf(v)>=0; }
+function behaviorNodesFor(v,scopeId){
+  if(v==="flow") return flowsByScope[scopeId]||[];
+  if(v==="state") return businessStatesByScope[scopeId]||[];
+  return (pageStatesByScope[scopeId]||[]).concat(boundariesByScope[scopeId]||[]);
+}
+function ensureBehaviorModule(v){
+  if(state.moduleId&&behaviorNodesFor(v,state.moduleId).length) return;
+  var found=modules.find(function(m){return behaviorNodesFor(v,m.scopeId).length;});
+  state.moduleId=found?found.scopeId:null;
+}
+
+function modMeta(m){
+  var pg=(pagesByScope[m.scopeId]||[]).length;
+  var dt=(dataByScope[m.scopeId]||[]).length;
+  var gp=(gapsByScope[m.scopeId]||[]).length;
+  return {pages:pg,data:dt,gaps:gp,structured:(pg+dt)>0};
+}
+function scopeTitle(id){ return (scopeById[id]&&scopeById[id].title)||id||"—"; }
+
+/* ---------- state ---------- */
+var state={ view:"graph", level:"overview", moduleId:null, selKey:null, focusId:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
+
+/* ---------- theme ---------- */
+function effTheme(){
+  var t=document.documentElement.getAttribute("data-theme");
+  if(t==="light"||t==="dark") return t;
+  return (window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";
+}
+function setTheme(t){
+  document.documentElement.setAttribute("data-theme",t);
+  try{ localStorage.setItem("atlas-theme",t); }catch(e){}
+}
+$("themeBtn").addEventListener("click",function(){ setTheme(effTheme()==="dark"?"light":"dark"); });
+try{ var st=localStorage.getItem("atlas-theme"); if(st) document.documentElement.setAttribute("data-theme",st); }catch(e){}
+
+/* ---------- topbar meta ---------- */
+function shortHash(){
+  if(META.shortDigest) return META.shortDigest;
+  var d=META.authoritativeSourceDigest||META.ledgerArtifactDigest||"";
+  d=String(d).replace(/^sha256:/,"");
+  return d?d.slice(0,12):"—";
+}
+(function renderTop(){
+  var t=$("topmeta");
+  t.appendChild(h("span",{class:"chip mono accent",title:"快照短哈希"},"⌗ "+shortHash()));
+  if(META.stage) t.appendChild(h("span",{class:"chip"},"stage: "+META.stage));
+  if(META.generatorVersion) t.appendChild(h("span",{class:"chip"},"gen "+META.generatorVersion));
+  t.appendChild(h("span",{class:"self-note"},"确定性生成快照,不代表当前最新"));
+})();
+
+/* ---------- sidebar ---------- */
+function renderSidebar(){
+  var box=$("mods"); box.textContent="";
+  systems.forEach(function(sys){
+    var g=h("div",{class:"sys-group"});
+    g.appendChild(h("div",{class:"sys-head"},sys.title||sys.scopeId));
+    modules.filter(function(m){return m.parentScopeId===sys.scopeId;}).forEach(function(m){
+      var mm=modMeta(m);
+      var cur=(state.moduleId===m.scopeId&&
+        ((state.view==="graph"&&state.level==="module")||isBehaviorView(state.view)));
+      var subChildren;
+      if(mm.structured){
+        subChildren=[ h("span",{class:"count-pill"},mm.pages+" 页 · "+mm.data+" 数据") ];
+        if(mm.gaps>0) subChildren.push(h("span",{class:"badge gap",title:mm.gaps+" 个缺口"},mm.gaps+" 缺口"));
+      }else{
+        var pendTitle="尚未结构化(缺少页面契约/数据读写)"+(mm.gaps>0?" · "+mm.gaps+" 项缺口":"");
+        subChildren=[ h("span",{class:"badge pend solo",title:pendTitle},"待深化") ];
+      }
+      var row=h("button",{
+        class:"mod-row"+(cur?" current":"")+(mm.structured?"":" muted"),
+        dataset:{scope:m.scopeId},
+        onclick:function(){ selectModule(m.scopeId); }
+      },
+        h("span",{class:"mod-title"},m.title||m.scopeId),
+        h("span",{class:"mod-sub"},subChildren)
+      );
+      g.appendChild(row);
+    });
+    box.appendChild(g);
+  });
+}
+
+/* keyboard nav across module rows */
+$("mods").addEventListener("keydown",function(e){
+  if(e.key!=="ArrowDown"&&e.key!=="ArrowUp") return;
+  var rows=Array.prototype.slice.call(this.querySelectorAll(".mod-row"));
+  var idx=rows.indexOf(document.activeElement);
+  if(idx<0) return;
+  e.preventDefault();
+  var ni=e.key==="ArrowDown"?Math.min(rows.length-1,idx+1):Math.max(0,idx-1);
+  rows[ni].focus();
+});
+
+/* ---------- view switching ---------- */
+function setView(v){
+  state.view=v;
+  if(isBehaviorView(v)) ensureBehaviorModule(v);
+  ["graph","flow","state","boundary","req","gap"].forEach(function(name){
+    var active=v===name;
+    $("tab-"+name).classList.toggle("active",active);
+    $("tab-"+name).setAttribute("aria-selected",String(active));
+    $("view-"+name).hidden=!active;
+  });
+  renderSidebar();
+  renderCrumbs();
+  if(v==="graph") renderGraph();
+  else if(v==="flow") renderFlows();
+  else if(v==="state") renderStateMachines();
+  else if(v==="boundary") renderBoundaries();
+  else if(v==="req") renderRequirements();
+  else renderGaps();
+}
+$("tab-graph").addEventListener("click",function(){ setView("graph"); });
+$("tab-flow").addEventListener("click",function(){ setView("flow"); });
+$("tab-state").addEventListener("click",function(){ setView("state"); });
+$("tab-boundary").addEventListener("click",function(){ setView("boundary"); });
+$("tab-req").addEventListener("click",function(){ setView("req"); });
+$("tab-gap").addEventListener("click",function(){ setView("gap"); });
+
+/* ---------- breadcrumbs ---------- */
+function renderCrumbs(){
+  var c=$("crumbs"); c.textContent="";
+  if(state.view==="req"||state.view==="gap"){
+    c.appendChild(h("span",{class:"cur"}, state.view==="req"?"需求索引":"缺口面板"));
+    return;
+  }
+  if(isBehaviorView(state.view)){
+    var labels={flow:"用户流程",state:"业务状态机",boundary:"边界与异常"};
+    var bm=scopeById[state.moduleId];
+    if(bm){
+      var bsys=scopeById[bm.parentScopeId];
+      if(bsys) c.appendChild(h("span",{},bsys.title||bsys.scopeId));
+      c.appendChild(h("span",{class:"sep"},"›"));
+      c.appendChild(h("span",{class:"cur"},bm.title||bm.scopeId));
+      c.appendChild(h("span",{class:"sep"},"›"));
+    }
+    c.appendChild(h("span",{},labels[state.view]));
+    return;
+  }
+  c.appendChild(h("button",{onclick:backToOverview},"总览"));
+  if(state.level==="module"&&state.moduleId){
+    var m=scopeById[state.moduleId];
+    var sys=m?scopeById[m.parentScopeId]:null;
+    c.appendChild(h("span",{class:"sep"},"›"));
+    if(sys) c.appendChild(h("span",{},sys.title||sys.scopeId));
+    c.appendChild(h("span",{class:"sep"},"›"));
+    c.appendChild(h("span",{class:"cur"},m?(m.title||m.scopeId):state.moduleId));
+  }
+}
+
+/* ---------- graph: shared svg + transform ---------- */
+var svg=$("svg");
+var gRoot=null, layout=null, contentBounds=null;
+
+function applyTransform(){
+  if(gRoot) gRoot.setAttribute("transform","translate("+state.tx+","+state.ty+") scale("+state.k+")");
+}
+function fitView(){
+  if(!contentBounds) return;
+  var vp=$("view-graph"), W=vp.clientWidth||900, H=vp.clientHeight||600;
+  var cw=contentBounds.w||1, ch=contentBounds.h||1;
+  var k=Math.min(W/(cw+80), H/(ch+80), 1.4); if(!isFinite(k)||k<=0) k=1;
+  state.k=k;
+  state.tx=(W-cw*k)/2 - contentBounds.x*k;
+  state.ty=(H-ch*k)/2 - contentBounds.y*k;
+  applyTransform();
+}
+$("zin").addEventListener("click",function(){ zoomAt(1.2); });
+$("zout").addEventListener("click",function(){ zoomAt(1/1.2); });
+$("zfit").addEventListener("click",fitView);
+function zoomAt(f){
+  var vp=$("view-graph"), cx=vp.clientWidth/2, cy=vp.clientHeight/2;
+  var nk=Math.max(.2,Math.min(3,state.k*f));
+  state.tx=cx-(cx-state.tx)*(nk/state.k);
+  state.ty=cy-(cy-state.ty)*(nk/state.k);
+  state.k=nk; applyTransform();
+}
+svg.addEventListener("wheel",function(e){
+  e.preventDefault();
+  var r=svg.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  var f=e.deltaY<0?1.1:1/1.1, nk=Math.max(.2,Math.min(3,state.k*f));
+  state.tx=px-(px-state.tx)*(nk/state.k);
+  state.ty=py-(py-state.ty)*(nk/state.k);
+  state.k=nk; applyTransform();
+},{passive:false});
+(function panSetup(){
+  var dragging=false,sx,sy,ox,oy,moved;
+  svg.addEventListener("mousedown",function(e){
+    if(e.target.closest(".n-card,.n-focus,.edge-hit")) return;
+    dragging=true;moved=false;sx=e.clientX;sy=e.clientY;ox=state.tx;oy=state.ty;
+  });
+  window.addEventListener("mousemove",function(e){
+    if(!dragging) return;
+    state.tx=ox+(e.clientX-sx); state.ty=oy+(e.clientY-sy);
+    if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>3) moved=true;
+    applyTransform();
+  });
+  window.addEventListener("mouseup",function(e){
+    if(dragging&&!moved&&!e.target.closest(".n-card,.n-focus,.edge-hit")){ /* click empty: clear focus */ if(state.focusId){ state.focusId=null; renderGraph(); } }
+    dragging=false;
+  });
+})();
+
+function renderGraph(){
+  svg.textContent="";
+  var vp=$("view-graph");
+  Array.prototype.slice.call(vp.querySelectorAll(".empty")).forEach(function(n){n.remove();});
+  gRoot=s("g",{}); svg.appendChild(gRoot);
+  buildDefs();
+  if(state.level==="overview"){ layoutOverview(); $("hint").textContent="点击模块卡片可下钻查看内部页面与数据"; }
+  else { layoutModule(); $("hint").textContent="点击节点聚焦邻接;Esc 或面包屑返回总览"; }
+  renderLegend();
+  fitView();
+}
+function buildDefs(){
+  var defs=s("defs",{});
+  [["arrow-interacts","var(--interact)"],["arrow-reads","var(--read)"],["arrow-writes","var(--write)"],["arrow-hot","var(--accent)"]].forEach(function(a){
+    var m=s("marker",{id:a[0],viewBox:"0 0 10 10",refX:"8.5",refY:"5",markerWidth:"9.5",markerHeight:"9.5",orient:"auto-start-reverse"});
+    m.appendChild(s("path",{d:"M0,0 L10,5 L0,10 z",fill:a[1]}));
+    defs.appendChild(m);
+  });
+  gRoot.appendChild(defs);
+}
+function renderLegend(){
+  var lg=$("legend"); lg.textContent="";
+  if(state.level==="overview"){
+    lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--interact)"}),"interacts 模块交互"));
+    lg.appendChild(h("div",{class:"lg"},h("span",{style:"display:inline-block;width:14px;height:10px;border-radius:2px;background:var(--accent-weak);border-left:3px solid var(--accent)"}),"蓝条+✓ = 已结构化"));
+    lg.appendChild(h("div",{class:"lg"},h("span",{style:"display:inline-block;width:14px;height:10px;border-radius:2px;border:1px dashed var(--border-strong)"}),"虚线边框 = 待深化"));
+  }else{
+    lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--read)"}),"reads 读取"));
+    lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--write);border-top-style:dashed"}),"writes 写入"));
+  }
+}
+
+/* ---------- overview layout (deterministic) ---------- */
+function layoutOverview(){
+  var COLW=248, CARDW=210, CARDH=78, ROWGAP=26, COLGAP=64, HEADY=26, TOP=44;
+  var pos={};
+  var maxRows=0;
+  systems.forEach(function(sys,ci){
+    var mods=modules.filter(function(m){return m.parentScopeId===sys.scopeId;});
+    maxRows=Math.max(maxRows,mods.length);
+  });
+  var colX=function(ci){ return ci*(COLW+COLGAP)+16; };
+  // column headers + cards
+  var edgesLayer=s("g",{}), nodeLayer=s("g",{});
+  gRoot.appendChild(edgesLayer); gRoot.appendChild(nodeLayer);
+  systems.forEach(function(sys,ci){
+    var x=colX(ci);
+    nodeLayer.appendChild(s("text",{class:"col-head",x:x+CARDW/2,y:HEADY,"text-anchor":"middle"},sys.title||sys.scopeId));
+    var mods=modules.filter(function(m){return m.parentScopeId===sys.scopeId;});
+    mods.forEach(function(m,ri){
+      var y=TOP+ri*(CARDH+ROWGAP);
+      pos[m.scopeId]={x:x,y:y,w:CARDW,h:CARDH,cx:x+CARDW/2,cy:y+CARDH/2};
+      nodeLayer.appendChild(overviewCard(m,x,y,CARDW,CARDH));
+    });
+  });
+  // interacts edges
+  interactEdges.forEach(function(e,i){
+    var a=pos[e.from],b=pos[e.to];
+    if(!a||!b) return;
+    edgesLayer.appendChild(overviewEdge(e,a,b,i));
+  });
+  var cols=systems.length;
+  contentBounds={x:0,y:0,w:cols*(COLW+COLGAP)+16,h:TOP+maxRows*(CARDH+ROWGAP)+20};
+  layout=pos;
+  // re-apply selection styling
+  if(state.selKey&&state.selKey.indexOf("edge:")!==0) markSelected();
+}
+function overviewCard(m,x,y,w,hgt){
+  var mm=modMeta(m);
+  var g=s("g",{class:"n-card"+(mm.structured?" structured":" pending"),tabindex:"0",role:"button","aria-label":(m.title||m.scopeId)+(mm.structured?" · 已结构化":" · 待深化"),
+    dataset:{scope:m.scopeId},
+    on:{ click:function(ev){ ev.stopPropagation(); openModule(m.scopeId); },
+         keydown:function(ev){ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); openModule(m.scopeId); } },
+         mouseenter:function(){ ovHiModule(m.scopeId); },
+         mouseleave:ovClearHi,
+         focus:function(){ ovHiModule(m.scopeId); },
+         blur:ovClearHi } });
+  g.setAttribute("data-scope",m.scopeId);
+  g.appendChild(s("rect",{class:"nc-bg",x:x,y:y,width:w,height:hgt,rx:10,ry:10}));
+  var lx=x+14;
+  if(mm.structured){
+    g.appendChild(s("rect",{class:"nc-accent",x:x,y:y+10,width:4,height:hgt-20,rx:2,ry:2}));
+    var bw=20, bh=16, bx=x+w-bw-8, by=y+8;
+    g.appendChild(s("rect",{class:"nc-badge-bg",x:bx,y:by,width:bw,height:bh,rx:8,ry:8}));
+    g.appendChild(s("text",{class:"nc-badge-tx",x:bx+bw/2,y:by+11.5,"text-anchor":"middle"},"✓"));
+    lx=x+18;
+  }
+  g.appendChild(s("text",{class:"nc-title",x:lx,y:y+26},clip(m.title||m.scopeId,16)));
+  g.appendChild(s("text",{class:"nc-sub",x:lx,y:y+45},mm.pages+"P · "+mm.data+"D"));
+  var tag=mm.structured?("已结构化"+(mm.gaps>0?" · "+mm.gaps+" 缺口":"")):(mm.gaps+" 缺口 · 待深化");
+  g.appendChild(s("text",{class:"nc-tag",x:lx,y:y+63},tag));
+  return g;
+}
+function overviewEdge(e,a,b,i){
+  var sx=a.x+a.w, sy=a.cy, d;
+  if(b.x>a.x){
+    // left→right: smooth S, control offset from horizontal gap (low crossing)
+    var tx=b.x, ty=b.cy, dx=Math.max(36,(tx-sx)*0.5);
+    d="M"+sx+","+sy+" C"+(sx+dx)+","+sy+" "+(tx-dx)+","+ty+" "+tx+","+ty;
+  }else{
+    // same/left column: converge as a tight loop on the right side
+    var tx2=b.x+b.w, ty2=b.cy, bow=34+Math.min(56,Math.abs(sy-ty2)*0.22);
+    d="M"+sx+","+sy+" C"+(sx+bow)+","+sy+" "+(tx2+bow)+","+ty2+" "+tx2+","+ty2;
+  }
+  var g=s("g",{});
+  g.appendChild(s("path",{class:"edge interacts","data-edge":e.edgeId,d:d,"marker-end":"url(#arrow-interacts)"}));
+  var hit=s("path",{class:"edge-hit",d:d,
+    on:{ click:function(ev){ ev.stopPropagation(); openEdgeCard(e); },
+         mouseenter:function(ev){ ovHiEdge(e.edgeId); edgeTip(e,ev); },
+         mousemove:function(ev){ moveTip(ev); },
+         mouseleave:function(){ ovClearHi(); hideTip(); } } });
+  g.appendChild(hit);
+  return g;
+}
+
+/* ---------- module layout (deterministic) ---------- */
+function layoutModule(){
+  var m=scopeById[state.moduleId];
+  var pages=(pagesByScope[state.moduleId]||[]).slice();
+  var dataObjs=(dataByScope[state.moduleId]||[]).slice();
+  var reads=(edgesFromScope[state.moduleId]||[]).filter(function(e){return e.kind==="reads";});
+  var writes=(edgesFromScope[state.moduleId]||[]).filter(function(e){return e.kind==="writes";});
+  var rwEdges=(edgesFromScope[state.moduleId]||[]);
+  if(pages.length===0&&dataObjs.length===0){
+    contentBounds=null; showEmpty(m); return;
+  }
+  var edgesLayer=s("g",{}), nodeLayer=s("g",{});
+  gRoot.appendChild(edgesLayer); gRoot.appendChild(nodeLayer);
+  var PW=170,PH=34,GAP=14,TOP=40;
+  var pageX=20, hubX=pageX+PW+150, hubW=150, dataX=hubX+hubW+170, DW=210;
+  var pos={};
+  // pages column
+  nodeLayer.appendChild(s("text",{class:"col-head",x:pageX+PW/2,y:24,"text-anchor":"middle"},"页面 ("+pages.length+")"));
+  pages.forEach(function(n,i){
+    var y=TOP+i*(PH+GAP);
+    pos[n.nodeId]={x:pageX,y:y,w:PW,h:PH,cx:pageX+PW/2,cy:y+PH/2};
+    nodeLayer.appendChild(focusNode(n,"page",pageX,y,PW,PH));
+  });
+  // data column
+  nodeLayer.appendChild(s("text",{class:"col-head",x:dataX+DW/2,y:24,"text-anchor":"middle"},"数据对象 ("+dataObjs.length+")"));
+  dataObjs.forEach(function(n,i){
+    var y=TOP+i*(PH+GAP);
+    pos[n.nodeId]={x:dataX,y:y,w:DW,h:PH,cx:dataX+DW/2,cy:y+PH/2};
+    nodeLayer.appendChild(focusNode(n,"data",dataX,y,DW,PH));
+  });
+  // hub node (module)
+  var rows=Math.max(pages.length,dataObjs.length,1);
+  var hubY=TOP+(rows*(PH+GAP))/2-30, hubH=60;
+  var hub={x:hubX,y:hubY,w:hubW,h:hubH,cx:hubX+hubW/2,cy:hubY+hubH/2,id:"$hub"};
+  pos["$hub"]=hub;
+  var hg=s("g",{class:"n-focus hub",tabindex:"0",role:"button","aria-label":"模块 "+(m?m.title:state.moduleId),
+    dataset:{node:"$hub"},
+    on:{ click:function(ev){ ev.stopPropagation(); focusOn("$hub"); openScopeCard(state.moduleId); },
+         keydown:function(ev){ if(ev.key==="Enter"){ev.preventDefault(); focusOn("$hub"); openScopeCard(state.moduleId);} } }});
+  hg.setAttribute("data-node","$hub");
+  hg.appendChild(s("rect",{class:"nf-bg",x:hubX,y:hubY,width:hubW,height:hubH,rx:9,ry:9}));
+  hg.appendChild(s("text",{class:"nf-kind",x:hubX+hubW/2,y:hubY+22,"text-anchor":"middle"},"MODULE"));
+  hg.appendChild(s("text",{class:"nf-label",x:hubX+hubW/2,y:hubY+40,"text-anchor":"middle"},clip(m?(m.title||m.scopeId):state.moduleId,10)));
+  nodeLayer.appendChild(hg);
+  // edges hub -> data
+  rwEdges.forEach(function(e){
+    var t=pos[e.to]; if(!t) return;
+    var sx=hub.x+hub.w, sy=hub.cy, tx=t.x, ty=t.cy;
+    var mid=(sx+tx)/2;
+    var d="M"+sx+","+sy+" C"+mid+","+sy+" "+mid+","+ty+" "+tx+","+ty;
+    var g=s("g",{});
+    g.appendChild(s("path",{class:"edge "+e.kind,"data-edge":e.edgeId,d:d,"marker-end":"url(#arrow-"+e.kind+")"}));
+    g.appendChild(s("path",{class:"edge-hit",d:d,
+      on:{ click:function(ev){ ev.stopPropagation(); openEdgeCard(e); },
+           mouseenter:function(ev){ edgeTip(e,ev); }, mousemove:moveTip, mouseleave:hideTip }}));
+    edgesLayer.appendChild(g);
+  });
+  var totalH=TOP+rows*(PH+GAP)+20;
+  contentBounds={x:0,y:0,w:dataX+DW+30,h:totalH};
+  layout=pos;
+  if(state.focusId) applyFocus();
+  if(state.selKey) markSelected();
+}
+function focusNode(n,cls,x,y,w,hgt){
+  var g=s("g",{class:"n-focus "+cls,tabindex:"0",role:"button","aria-label":(cls==="page"?"页面 ":"数据 ")+(n.title||n.nodeId),
+    dataset:{node:n.nodeId},
+    on:{ click:function(ev){ ev.stopPropagation(); focusOn(n.nodeId); openNodeCard(n); },
+         keydown:function(ev){ if(ev.key==="Enter"){ev.preventDefault(); focusOn(n.nodeId); openNodeCard(n);} } }});
+  g.setAttribute("data-node",n.nodeId);
+  g.appendChild(s("rect",{class:"nf-bg",x:x,y:y,width:w,height:hgt,rx:8,ry:8}));
+  g.appendChild(s("text",{class:"nf-label",x:x+10,y:y+hgt/2+4},clip(n.title||n.nodeId, cls==="page"?15:18)));
+  return g;
+}
+function showEmpty(m){
+  var vp=$("view-graph");
+  var e=h("div",{class:"empty"},
+    h("div",{class:"big"}, (m?(m.title||m.scopeId):"该模块")+" · 待深化"),
+    h("div",{}, "该模块尚未结构化(缺少页面契约/数据读写章节)。"),
+    h("div",{class:"muted-text"}, (gapsByScope[state.moduleId]||[]).length+" 项缺口 — 见「缺口」面板"),
+    h("button",{class:"topbtn",style:"margin-top:8px",onclick:backToOverview},"返回总览")
+  );
+  vp.appendChild(e);
+  $("legend").textContent="";
+}
+
+/* ---------- focus (adjacency highlight) ---------- */
+function focusOn(id){ state.focusId=id; applyFocus(); }
+function applyFocus(){
+  var fid=state.focusId;
+  var nodes=svg.querySelectorAll(".n-focus");
+  var edges=svg.querySelectorAll(".edge");
+  if(!fid){ nodes.forEach(function(n){n.classList.remove("dim");}); edges.forEach(function(e){e.classList.remove("dim","hot");}); return; }
+  var neighbors={}; neighbors[fid]=true;
+  var rw=(edgesFromScope[state.moduleId]||[]);
+  var incident={};
+  rw.forEach(function(e){
+    if(fid==="$hub"||e.to===fid||e.from===fid){
+      incident[e.edgeId]=true; neighbors[e.to]=true; neighbors["$hub"]=true;
+    }
+  });
+  nodes.forEach(function(n){
+    var nid=n.getAttribute("data-node");
+    n.classList.toggle("dim", !neighbors[nid]);
+  });
+  edges.forEach(function(e){
+    var eid=e.getAttribute("data-edge");
+    e.classList.toggle("dim", !incident[eid]);
+    e.classList.toggle("hot", !!incident[eid]);
+  });
+}
+
+/* ---------- overview hover/focus highlight ---------- */
+function ovClearHi(){
+  svg.querySelectorAll(".edge").forEach(function(el){ el.classList.remove("hot","dim"); });
+  svg.querySelectorAll(".n-card").forEach(function(c){ c.classList.remove("dim"); });
+}
+function ovHiEdge(edgeId){
+  var e=edgeById[edgeId], keep={}; if(e){ keep[e.from]=1; keep[e.to]=1; }
+  svg.querySelectorAll(".edge").forEach(function(el){
+    var on=el.getAttribute("data-edge")===edgeId;
+    el.classList.toggle("hot",on); el.classList.toggle("dim",!on);
+  });
+  svg.querySelectorAll(".n-card").forEach(function(c){
+    c.classList.toggle("dim", !keep[c.getAttribute("data-scope")]);
+  });
+}
+function ovHiModule(scopeId){
+  var inc=interactByScope[scopeId]||[], edgeSet={}, nbr={}; nbr[scopeId]=1;
+  inc.forEach(function(e){ edgeSet[e.edgeId]=1; nbr[e.from]=1; nbr[e.to]=1; });
+  svg.querySelectorAll(".edge").forEach(function(el){
+    var on=!!edgeSet[el.getAttribute("data-edge")];
+    el.classList.toggle("hot",on); el.classList.toggle("dim",!on);
+  });
+  svg.querySelectorAll(".n-card").forEach(function(c){
+    c.classList.toggle("dim", !nbr[c.getAttribute("data-scope")]);
+  });
+}
+
+/* ---------- selection marking ---------- */
+function markSelected(){
+  svg.querySelectorAll(".n-card,.n-focus").forEach(function(n){
+    var id=n.getAttribute("data-scope")||n.getAttribute("data-node");
+    n.classList.toggle("selected", state.selKey==="node:"+id);
+  });
+}
+
+/* ---------- behavioral atlas ---------- */
+function behaviorStats(view,pairs){
+  var row=h("div",{class:"behavior-summary"});
+  pairs.forEach(function(p){
+    row.appendChild(h("div",{class:"stat"},
+      h("div",{class:"num"},String(p[1])),h("div",{class:"lab"},p[0])));
+  });
+  view.appendChild(row);
+}
+function behaviorEmpty(view,message){
+  view.appendChild(h("div",{class:"behavior-empty"},
+    h("div",{class:"big"},"暂无可复核数据"),
+    h("p",{},message),
+    h("button",{class:"topbtn",onclick:function(){setView("gap");}},"查看缺口")));
+}
+function flowPart(scopeId,flowId,category){
+  return (flowPartsByScope[scopeId]||[]).filter(function(n){
+    var d=n.detail||{}; return d.flowId===flowId&&d.category===category;
+  });
+}
+function renderFlows(){
+  var view=$("view-flow"); view.textContent="";
+  var roots=(flowsByScope[state.moduleId]||[]).slice().sort(byPath);
+  var steps=(flowPartsByScope[state.moduleId]||[]).filter(function(n){
+    return (n.detail||{}).category==="flowStep";
+  });
+  behaviorStats(view,[["核心流程",roots.length],["行为步骤",steps.length],
+    ["失败分支",(flowPartsByScope[state.moduleId]||[]).filter(function(n){return (n.detail||{}).category==="failureBranch";}).length]]);
+  if(!roots.length){ behaviorEmpty(view,"该模块尚未声明「核心流程（机器可解析）」表。"); return; }
+  roots.forEach(function(root){
+    var flowSteps=flowPart(state.moduleId,root.nodeId,"flowStep").sort(function(a,b){
+      return String((a.detail||{}).stepId).localeCompare(String((b.detail||{}).stepId),undefined,{numeric:true});
+    });
+    var terminals=flowPart(state.moduleId,root.nodeId,"terminal");
+    var group=h("section",{class:"behavior-group"});
+    group.appendChild(h("div",{class:"behavior-head"},
+      h("h3",{},root.title),h("span",{class:"meta"},flowSteps.length+" 步 · 成功/失败双分支")));
+    var track=h("div",{class:"flow-track"});
+    track.appendChild(h("button",{class:"flow-start",onclick:function(){openNodeCard(root);}},"开始"));
+    flowSteps.forEach(function(step,index){
+      var d=step.detail||{};
+      track.appendChild(h("div",{class:"flow-arrow"},
+        h("span",{},"→"),h("small",{},index===0?"入口":(d.condition||"继续"))));
+      var wrap=h("div",{class:"flow-step-wrap"});
+      wrap.appendChild(h("button",{class:"flow-node",onclick:function(){openNodeCard(step);}},
+        h("div",{class:"step"},d.stepId||("步骤 "+(index+1))),
+        h("div",{class:"page"},(d.pageTitle||"未绑定页面")+" · "+(d.role||"未声明角色")),
+        h("div",{class:"action"},d.action||step.title),
+        h("div",{class:"result"},"结果 · "+(d.result||"—")),
+        h("div",{class:"result"},"下一步 · "+(d.nextStep||"—"))));
+      flowPart(state.moduleId,root.nodeId,"failureBranch").filter(function(n){
+        return (n.detail||{}).stepId===d.stepId;
+      }).forEach(function(failure){
+        wrap.appendChild(h("div",{class:"flow-failure"},
+          h("button",{onclick:function(){openNodeCard(failure);}},
+            "失败 ↘ "+failure.title)));
+      });
+      track.appendChild(wrap);
+    });
+    if(terminals.length){
+      track.appendChild(h("div",{class:"flow-arrow"},h("span",{},"→"),h("small",{},"完成")));
+      track.appendChild(h("button",{class:"flow-end",onclick:function(){openNodeCard(terminals[0]);}},"结束"));
+    }
+    group.appendChild(track); view.appendChild(group);
+  });
+}
+function renderStateMachines(){
+  var view=$("view-state"); view.textContent="";
+  var states=(businessStatesByScope[state.moduleId]||[]).slice();
+  var transitions=EDGES.filter(function(e){
+    return e.kind==="transition"&&nodeById[e.from]&&nodeById[e.from].scopeId===state.moduleId;
+  });
+  var objects={};
+  states.forEach(function(n){var object=(n.detail||{}).object||"未命名对象";(objects[object]=objects[object]||[]).push(n);});
+  behaviorStats(view,[["业务对象",Object.keys(objects).length],["状态",states.length],["流转",transitions.length]]);
+  if(!states.length){ behaviorEmpty(view,"该模块尚未声明或引用可解析的业务状态机。"); return; }
+  Object.keys(objects).sort().forEach(function(object){
+    var group=h("section",{class:"behavior-group"});
+    var objectTransitions=transitions.filter(function(e){return (nodeById[e.from].detail||{}).object===object;});
+    group.appendChild(h("div",{class:"behavior-head"},h("h3",{},object),
+      h("span",{class:"meta"},objects[object].length+" 状态 · "+objectTransitions.length+" 流转")));
+    var lane=h("div",{class:"state-lane"});
+    objectTransitions.forEach(function(edge){
+      var from=nodeById[edge.from],to=nodeById[edge.to],d=edge.detail||{};
+      lane.appendChild(h("div",{class:"transition-row"},
+        h("button",{class:"state-node",onclick:function(){openNodeCard(from);}},
+          from.title,h("small",{},(from.detail||{}).entryCondition||"当前状态")),
+        h("div",{class:"transition-arrow"},
+          h("span",{},(d.action||d.triggerMode||"流转")+" → "+(d.condition||""))),
+        h("button",{class:"state-node",onclick:function(){openNodeCard(to);}},
+          to.title,h("small",{},d.reversible?"可逆 · "+d.reversible:"目标状态"))));
+    });
+    if(!objectTransitions.length){
+      objects[object].forEach(function(n){lane.appendChild(h("button",{class:"state-node",onclick:function(){openNodeCard(n);}},n.title));});
+    }
+    group.appendChild(lane); view.appendChild(group);
+  });
+}
+function renderBoundaries(){
+  var view=$("view-boundary"); view.textContent="";
+  var boundaries=(boundariesByScope[state.moduleId]||[]).slice();
+  var pageStates=(pageStatesByScope[state.moduleId]||[]).slice();
+  behaviorStats(view,[["职责边界",boundaries.length],["边缘状态",pageStates.length],
+    ["可定位页面",pageStates.filter(function(n){var d=n.detail||{};return d.pageId||arr(d.pageIds).length;}).length]]);
+  if(!boundaries.length&&!pageStates.length){
+    behaviorEmpty(view,"该模块尚未声明模块边界或核心路径边缘状态。"); return;
+  }
+  if(boundaries.length){
+    var bg=h("section",{class:"behavior-group"},
+      h("div",{class:"behavior-head"},h("h3",{},"模块职责边界"),
+        h("span",{class:"meta"},"负责 / 不负责 / 依赖")));
+    var grid=h("div",{class:"boundary-grid"});
+    boundaries.forEach(function(n){var d=n.detail||{};
+      grid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
+        h("h4",{},n.title),kvList([["负责",d.responsibility],["不负责",d.excluded],["依赖",d.dependency]])));
+    });
+    bg.appendChild(grid); view.appendChild(bg);
+  }
+  var grouped={};
+  pageStates.forEach(function(n){var key=(n.detail||{}).flowTitle||"未归组流程";(grouped[key]=grouped[key]||[]).push(n);});
+  Object.keys(grouped).sort().forEach(function(flowTitle){
+    var pg=h("section",{class:"behavior-group"},
+      h("div",{class:"behavior-head"},h("h3",{},flowTitle),
+        h("span",{class:"meta"},grouped[flowTitle].length+" 个边缘状态")));
+    var grid=h("div",{class:"page-state-grid"});
+    grouped[flowTitle].forEach(function(n){var d=n.detail||{};
+      grid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
+        h("h4",{},n.title+" · "+(d.pageTitle||"流程级")),
+        kvList([["触发",d.trigger],["系统",d.systemBehavior],["用户",d.userAction],["恢复/验收",d.acceptance]])));
+    });
+    pg.appendChild(grid); view.appendChild(pg);
+  });
+}
+
+/* ---------- navigation ---------- */
+function selectModule(scopeId){
+  state.moduleId=scopeId; state.focusId=null; state.selKey=null; closeDrawer();
+  if(state.view==="flow") renderFlows();
+  else if(state.view==="state") renderStateMachines();
+  else if(state.view==="boundary") renderBoundaries();
+  else { openModule(scopeId); return; }
+  renderSidebar(); renderCrumbs();
+}
+function openModule(scopeId){
+  setView("graph");
+  state.level="module"; state.moduleId=scopeId; state.focusId=null; state.selKey=null;
+  renderSidebar(); renderCrumbs(); renderGraph();
+}
+function backToOverview(){
+  state.level="overview"; state.moduleId=null; state.focusId=null; state.selKey=null;
+  closeDrawer();
+  renderSidebar(); renderCrumbs();
+  if(state.view!=="graph") setView("graph"); else renderGraph();
+}
+
+/* ---------- tooltip ---------- */
+var tip=$("tooltip");
+function edgeTip(e,ev){
+  tip.textContent="";
+  tip.appendChild(h("div",{class:"tt-h"},edgeTitle(e)));
+  var d=e.detail||{};
+  if(d.direction) tip.appendChild(h("div",{class:"tt-row"},h("b",{},"方向: "),d.direction));
+  if(d.trigger) tip.appendChild(h("div",{class:"tt-row"},h("b",{},"触发: "),clip(d.trigger,60)));
+  if(d.failurePropagation) tip.appendChild(h("div",{class:"tt-row"},h("b",{},"失败传播: "),clip(d.failurePropagation,60)));
+  if(d.syncMethod) tip.appendChild(h("div",{class:"tt-row"},h("b",{},"同步: "),d.syncMethod));
+  if(d.authoritativeSource) tip.appendChild(h("div",{class:"tt-row"},h("b",{},"权威源: "),d.authoritativeSource));
+  tip.style.display="block"; moveTip(ev);
+}
+function moveTip(ev){
+  var pad=14;
+  var x=ev.clientX+pad, y=ev.clientY+pad;
+  var r=tip.getBoundingClientRect();
+  if(x+r.width>window.innerWidth-8) x=ev.clientX-r.width-pad;
+  if(y+r.height>window.innerHeight-8) y=ev.clientY-r.height-pad;
+  tip.style.left=x+"px"; tip.style.top=y+"px";
+}
+function hideTip(){ tip.style.display="none"; }
+function edgeTitle(e){
+  if(e.kind==="interacts") return scopeTitle(e.from)+" → "+scopeTitle(e.to);
+  var t=nodeById[e.to];
+  return (e.kind==="reads"?"读取 ":"写入 ")+(t?(t.title||e.to):e.to);
+}
+
+/* ---------- detail drawer ---------- */
+var drawer=$("drawer");
+function closeDrawer(){ drawer.classList.remove("open"); drawer.setAttribute("aria-hidden","true"); $("body").classList.remove("card-open"); state.selKey=null; if(state.view==="graph") markSelected(); }
+function openDrawer(){ drawer.classList.add("open"); drawer.setAttribute("aria-hidden","false"); $("body").classList.add("card-open"); }
+function drawerShell(kindLabel,title,subtitle){
+  drawer.textContent="";
+  var head=h("div",{class:"drawer-head"},
+    h("div",{class:"dt"},
+      h("div",{class:"sec-h"},kindLabel),
+      h("h3",{},title),
+      subtitle?h("div",{class:"muted-text",style:"font-family:var(--mono);font-size:11.5px;word-break:break-all"},subtitle):null
+    ),
+    h("button",{class:"drawer-close","aria-label":"关闭",onclick:closeDrawer},"×")
+  );
+  drawer.appendChild(head);
+  var body=h("div",{class:"drawer-body"});
+  drawer.appendChild(body);
+  openDrawer();
+  return body;
+}
+function sourcesSection(sources){
+  sources=arr(sources);
+  var reqIds={}, oqIds={};
+  sources.forEach(function(sc){ arr(sc.requirementIds).forEach(function(r){reqIds[r]=1;}); arr(sc.oqIds).forEach(function(o){oqIds[o]=1;}); });
+  var frag=[];
+  if(sources.length){
+    var sec=h("div",{class:"sec"}, h("div",{class:"sec-h"},"来源 Sources"));
+    sources.forEach(function(sc){
+      var a=h("a",{class:"src",href:sc.path||"#",target:"_blank",rel:"noopener"},
+        h("span",{class:"sp"},sc.path||"(无路径)"));
+      if(sc.anchor) a.appendChild(h("span",{class:"sa"},"# "+sc.anchor));
+      sec.appendChild(a);
+    });
+    frag.push(sec);
+  }
+  var rk=Object.keys(reqIds), ok=Object.keys(oqIds);
+  if(rk.length){
+    var rs=h("div",{class:"sec"},h("div",{class:"sec-h"},"需求 ID"));
+    var cc=h("div",{class:"chips"});
+    rk.sort().forEach(function(r){ cc.appendChild(h("button",{class:"mchip",onclick:function(){ jumpToRequirement(r); }},r)); });
+    rs.appendChild(cc); frag.push(rs);
+  }
+  if(ok.length){
+    var os=h("div",{class:"sec"},h("div",{class:"sec-h"},"开放问题 OQ"));
+    var oc=h("div",{class:"chips"});
+    ok.sort().forEach(function(o){ oc.appendChild(h("span",{class:"mchip oq"},o)); });
+    os.appendChild(oc); frag.push(os);
+  }
+  return frag;
+}
+function kvList(pairs){
+  var dl=h("dl",{class:"kv"});
+  pairs.forEach(function(p){ if(p[1]!=null&&p[1]!==""){ dl.appendChild(h("dt",{},p[0])); dl.appendChild(h("dd",{},p[1])); } });
+  return dl;
+}
+function openNodeCard(n){
+  state.selKey="node:"+n.nodeId; if(state.view==="graph") markSelected();
+  var labels={
+    page:"页面契约 PAGE",dataObject:"数据对象 DATA OBJECT",
+    requirement:"需求 REQUIREMENT",flow:"行为节点 FLOW",state:"状态 STATE"
+  };
+  var kindLabel=labels[n.kind]||n.kind;
+  var body=drawerShell(kindLabel,n.title||n.nodeId,n.nodeId);
+  var d=n.detail||{};
+  if(n.kind==="requirement"){
+    var sec=h("div",{class:"sec"}, h("div",{class:"sec-h"},"生命周期状态"), statePill(d.state));
+    body.appendChild(sec);
+  }
+  if(n.kind==="page"){
+    var meta=h("div",{class:"sec"},h("div",{class:"sec-h"},"页面契约"),
+      kvList([["入口",d.entry],["角色",d.role],["前置",d.precondition]]));
+    body.appendChild(meta);
+    var acts=arr(d.actions);
+    if(acts.length){
+      var at=h("table",{class:"act-table"},
+        h("thead",{},h("tr",{},h("th",{},"动作"),h("th",{},"结果"))),
+        h("tbody",{}));
+      var tb=at.querySelector("tbody");
+      acts.forEach(function(a){ tb.appendChild(h("tr",{},h("td",{class:"a"},a.action||"—"),h("td",{},a.result||"—"))); });
+      var asec=h("div",{class:"sec"},h("div",{class:"sec-h"},"动作 → 结果"),at);
+      body.appendChild(asec);
+    }
+  }
+  if(n.kind==="flow"){
+    if(d.category==="userFlow"){
+      body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"核心流程"),
+        kvList([["步骤数",String(d.stepCount||0)],["所属模块",scopeTitle(n.scopeId)]])));
+    }else if(d.category==="flowStep"){
+      body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"行为步骤"),
+        kvList([["步骤ID",d.stepId],["页面",d.pageTitle],["角色",d.role],
+          ["动作/触发",d.action],["条件/分支",d.condition],["系统结果",d.result],
+          ["下一步",d.nextStep],["失败处理",d.failureHandling]])));
+    }else if(d.category==="failureBranch"){
+      body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"失败分支"),
+        kvList([["步骤ID",d.stepId],["处理",d.handling]])));
+    }else if(d.category==="boundary"){
+      body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"模块边界"),
+        kvList([["本模块负责",d.responsibility],["不负责",d.excluded],["依赖",d.dependency]])));
+    }
+  }
+  if(n.kind==="state"&&d.category==="pageState"){
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"页面边缘状态"),
+      kvList([["所属流程",d.flowTitle],["页面",d.pageTitle||"流程级"],
+        ["触发条件",d.trigger],["系统行为",d.systemBehavior],
+        ["用户可执行",d.userAction],["恢复/验收",d.acceptance]])));
+  }
+  if(n.kind==="state"&&d.category==="businessState"){
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"业务状态"),
+      kvList([["对象",d.object],["状态含义",d.meaning],
+        ["进入条件",d.entryCondition],["可执行操作",d.actions],
+        ["触发方式",d.triggerMode],["操作人",d.actor],
+        ["是否可逆",d.reversible],["通知/日志",d.notifications],
+        ["本端差异",d.moduleDifference]])));
+    var outgoing=EDGES.filter(function(e){return e.kind==="transition"&&e.from===n.nodeId;});
+    if(outgoing.length){
+      var transitions=h("div",{class:"sec"},h("div",{class:"sec-h"},"可达状态"));
+      outgoing.forEach(function(e){
+        var target=nodeById[e.to],ed=e.detail||{};
+        transitions.appendChild(h("div",{class:"muted-text",style:"margin:5px 0"},
+          "→ "+(target?target.title:e.to)+" · "+(ed.action||ed.triggerMode||"流转")));
+      });
+      body.appendChild(transitions);
+    }
+  }
+  if(n.kind==="dataObject"){
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"数据对象"),
+      kvList([["权威源",d.authoritativeSource]])));
+    // reads/writes touching this object within its module
+    var touching=EDGES.filter(function(e){return (e.kind==="reads"||e.kind==="writes")&&e.to===n.nodeId;});
+    if(touching.length){
+      var rw=h("div",{class:"sec"},h("div",{class:"sec-h"},"读写关系"));
+      touching.forEach(function(e){
+        rw.appendChild(h("div",{class:"muted-text",style:"margin:2px 0"},
+          h("b",{style:"color:var(--"+(e.kind==="reads"?"read":"write")+")"}, e.kind==="reads"?"读取":"写入"),
+          " · "+scopeTitle(e.from)));
+      });
+      body.appendChild(rw);
+    }
+  }
+  sourcesSection(n.sources).forEach(function(x){ body.appendChild(x); });
+}
+function openEdgeCard(e){
+  state.selKey="edge:"+e.edgeId;
+  var kindLabel=e.kind==="interacts"?"模块交互 INTERACTS":e.kind==="reads"?"数据读取 READS":e.kind==="writes"?"数据写入 WRITES":e.kind;
+  var body=drawerShell(kindLabel,edgeTitle(e),e.edgeId);
+  var d=e.detail||{};
+  if(e.kind==="interacts"){
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"交互契约"),
+      kvList([["来源模块",scopeTitle(e.from)],["目标模块",scopeTitle(e.to)],["方向",d.direction]])));
+    if(d.trigger) body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"触发条件"),h("div",{},d.trigger)));
+    if(d.failurePropagation) body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"失败传播"),h("div",{},d.failurePropagation)));
+  }else{
+    var t=nodeById[e.to];
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"读写契约"),
+      kvList([["来源模块",scopeTitle(e.from)],["数据对象",t?(t.title||e.to):e.to],["权威源",d.authoritativeSource],["同步方式",d.syncMethod]])));
+  }
+  sourcesSection(e.sources).forEach(function(x){ body.appendChild(x); });
+}
+function openScopeCard(scopeId){
+  var m=scopeById[scopeId]; var mm=modMeta(m||{scopeId:scopeId});
+  var body=drawerShell("模块 MODULE",(m?(m.title||scopeId):scopeId),scopeId);
+  body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"概览"),
+    kvList([["系统",scopeTitle(m&&m.parentScopeId)],["页面数",String(mm.pages)],["数据对象",String(mm.data)],["缺口",String(mm.gaps)],["状态",mm.structured?"已结构化":"待深化"]])));
+  var gs=gapsByScope[scopeId]||[];
+  if(gs.length){
+    var gsec=h("div",{class:"sec"},h("div",{class:"sec-h"},"缺口"));
+    gs.forEach(function(g){ gsec.appendChild(h("div",{class:"muted-text",style:"margin:3px 0"},"· "+(g.detail||g.kind||g.gapId))); });
+    body.appendChild(gsec);
+  }
+}
+function statePill(state){
+  var st=(state||"unknown").toLowerCase();
+  var known={active:"st-active",withdrawn:"st-withdrawn",superseded:"st-superseded",proposed:"st-proposed"};
+  return h("span",{class:"pill "+(known[st]||"st-unknown")}, state||"未知");
+}
+
+/* ---------- requirements index ---------- */
+function structuredCount(){ return modules.filter(function(m){return modMeta(m).structured;}).length; }
+function renderRequirements(){
+  var v=$("view-req"); v.textContent="";
+  // stats
+  var stats=h("div",{class:"stats"});
+  [["模块",COVERAGE.moduleCount!=null?COVERAGE.moduleCount:modules.length],
+   ["页面",COVERAGE.pageCount!=null?COVERAGE.pageCount:NODES.filter(function(n){return n.kind==="page";}).length],
+   ["数据对象",NODES.filter(function(n){return n.kind==="dataObject";}).length],
+   ["关系边",COVERAGE.edgeCount!=null?COVERAGE.edgeCount:EDGES.length],
+   ["需求",COVERAGE.requirementCount!=null?COVERAGE.requirementCount:requirements.length],
+   ["缺口",COVERAGE.gapCount!=null?COVERAGE.gapCount:GAPS.length]
+  ].forEach(function(p){ stats.appendChild(h("div",{class:"stat"},h("div",{class:"num"},String(p[1])),h("div",{class:"lab"},p[0]))); });
+  v.appendChild(stats);
+  // coverage bar (structured modules)
+  var sc=structuredCount(), tot=modules.length||1, pct=Math.round(sc/tot*100);
+  var cov=h("div",{class:"cov"},
+    h("div",{class:"covh"},h("span",{},"结构化覆盖率(含页面/数据的模块)"),h("span",{class:"muted-text"},sc+" / "+tot+" · "+pct+"%")),
+    h("div",{class:"bar"},h("span",{style:"width:"+pct+"%"})));
+  v.appendChild(cov);
+  // filter
+  var fin=h("input",{class:"filter-input",type:"search",placeholder:"过滤需求编号(如 MBR / MBR-011)",value:state.reqFilter,"aria-label":"过滤需求"});
+  fin.addEventListener("input",function(){ state.reqFilter=this.value; renderReqGroups(listWrap); });
+  v.appendChild(h("div",{class:"filter-row"},fin,h("span",{class:"muted-text"},"共 "+requirements.length+" 条 · 状态色彩与文字双编码")));
+  var listWrap=h("div",{});
+  v.appendChild(listWrap);
+  renderReqGroups(listWrap);
+}
+function reqPrefix(t){ var mm=/^([A-Za-z]+)/.exec(t||""); return mm?mm[1]:"其他"; }
+function renderReqGroups(wrap){
+  wrap.textContent="";
+  var q=(state.reqFilter||"").trim().toUpperCase();
+  var groups={};
+  requirements.forEach(function(r){
+    if(q&&(r.title||"").toUpperCase().indexOf(q)<0) return;
+    var p=reqPrefix(r.title); (groups[p]=groups[p]||[]).push(r);
+  });
+  var keys=Object.keys(groups).sort();
+  if(!keys.length){ wrap.appendChild(h("div",{class:"muted-text",style:"padding:20px"},"无匹配需求")); return; }
+  keys.forEach(function(k){
+    var items=groups[k];
+    var grp=h("div",{class:"grp"});
+    var tbl=h("table",{class:"rq-table"},h("tbody",{}));
+    var tb=tbl.querySelector("tbody");
+    var head=h("button",{class:"grp-head",onclick:function(){ var open=tbl.style.display!=="none"; tbl.style.display=open?"none":""; caret.textContent=open?"▸":"▾"; }},
+      h("span",{},k), h("span",{class:"gc"},items.length+" 条"));
+    var caret=h("span",{class:"caret"},"▾"); head.insertBefore(caret,head.firstChild);
+    grp.appendChild(head);
+    items.forEach(function(r){
+      var src=arr(r.sources)[0];
+      var tr=h("tr",{dataset:{req:r.title}},
+        h("td",{},h("span",{class:"rq-id",onclick:function(){ openNodeCard(r); }},r.title)),
+        h("td",{},statePill((r.detail||{}).state)),
+        h("td",{class:"rq-src"}, src?(src.path||"").split("/").slice(-1)[0]:"—"));
+      if(state.reqHl===r.title) tr.classList.add("hl");
+      tb.appendChild(tr);
+    });
+    grp.appendChild(tbl);
+    wrap.appendChild(grp);
+  });
+  if(state.reqHl){
+    var row=wrap.querySelector('tr[data-req="'+cssEsc(state.reqHl)+'"]');
+    if(row) row.scrollIntoView({block:"center"});
+  }
+}
+function jumpToRequirement(id){
+  state.reqFilter=""; state.reqHl=id;
+  setView("req");
+  var fin=$("view-req").querySelector(".filter-input"); if(fin) fin.value="";
+  renderReqGroups($("view-req").querySelector(".filter-row").nextSibling);
+}
+
+/* ---------- gaps panel ---------- */
+function renderGaps(){
+  var v=$("view-gap"); v.textContent="";
+  var tgl=h("label",{class:"toggle"},
+    h("input",{type:"checkbox","aria-label":"只看已结构化模块"}), "只看已结构化模块");
+  var cb=tgl.querySelector("input"); cb.checked=state.gapStructOnly;
+  cb.addEventListener("change",function(){ state.gapStructOnly=this.checked; renderGapGroups(wrap); });
+  v.appendChild(h("div",{class:"filter-row"},tgl,h("span",{class:"muted-text"},"共 "+GAPS.length+" 项缺口,来自 "+Object.keys(gapsByScope).length+" 个模块")));
+  var wrap=h("div",{});
+  v.appendChild(wrap);
+  renderGapGroups(wrap);
+}
+function renderGapGroups(wrap){
+  wrap.textContent="";
+  var scopes=Object.keys(gapsByScope).sort();
+  var shown=0;
+  scopes.forEach(function(sid){
+    if(state.gapStructOnly && !modMeta(scopeById[sid]||{scopeId:sid}).structured) return;
+    var items=gapsByScope[sid]; shown++;
+    var grp=h("div",{class:"grp"});
+    grp.appendChild(h("button",{class:"grp-head",onclick:function(){ openModule(sid); }},
+      h("span",{},scopeTitle(sid)),
+      h("span",{class:"gc"},items.length+" 项")));
+    items.forEach(function(g){
+      grp.appendChild(h("div",{class:"gap-item"},
+        h("span",{class:"gap-kind"},g.kind||"gap"),
+        h("span",{},g.detail||g.gapId)));
+    });
+    wrap.appendChild(grp);
+  });
+  if(!shown) wrap.appendChild(h("div",{class:"muted-text",style:"padding:20px"},"已结构化模块暂无缺口。"));
+}
+
+/* ---------- search ---------- */
+var searchIndex=buildSearchIndex();
+function buildSearchIndex(){
+  var idx=[];
+  NODES.forEach(function(n){
+    if(n.kind==="page") idx.push({type:"page",label:n.title,sub:scopeTitle(n.scopeId),node:n,scope:n.scopeId});
+    else if(n.kind==="dataObject") idx.push({type:"data",label:n.title,sub:scopeTitle(n.scopeId),node:n,scope:n.scopeId});
+    else if(n.kind==="requirement") idx.push({type:"req",label:n.title,sub:(n.detail||{}).state||"",node:n});
+    else if(n.kind==="flow"){
+      var fc=(n.detail||{}).category;
+      idx.push({type:fc==="boundary"?"boundary":"flow",label:n.title,
+        sub:scopeTitle(n.scopeId)+" · "+fc,node:n,scope:n.scopeId});
+    }else if(n.kind==="state"){
+      var sc=(n.detail||{}).category;
+      idx.push({type:sc==="pageState"?"pageState":"businessState",label:n.title,
+        sub:scopeTitle(n.scopeId)+" · "+((n.detail||{}).object||(n.detail||{}).flowTitle||""),
+        node:n,scope:n.scopeId});
+    }
+  });
+  // OQ ids from sources
+  var oqSeen={};
+  EDGES.concat(NODES).forEach(function(x){
+    arr(x.sources).forEach(function(sc){ arr(sc.oqIds).forEach(function(o){ if(!oqSeen[o]){ oqSeen[o]=1; idx.push({type:"oq",label:o,sub:"开放问题",oq:o}); } }); });
+  });
+  modules.forEach(function(m){ idx.push({type:"module",label:m.title,sub:m.scopeId,scope:m.scopeId}); });
+  return idx;
+}
+function runSearch(q){
+  q=(q||"").trim().toLowerCase();
+  if(!q) return [];
+  var out=[];
+  for(var i=0;i<searchIndex.length&&out.length<40;i++){
+    var it=searchIndex[i];
+    if(((it.label||"")+"").toLowerCase().indexOf(q)>=0) out.push(it);
+  }
+  // rank: exact-ish first
+  out.sort(function(a,b){
+    var la=(a.label||"").toLowerCase(), lb=(b.label||"").toLowerCase();
+    return (la.indexOf(q))-(lb.indexOf(q));
+  });
+  return out;
+}
+var searchEl=$("search"), resultsEl=$("results"); var activeRes=-1, curResults=[];
+function renderResults(){
+  resultsEl.textContent="";
+  if(!curResults.length){ resultsEl.hidden=true; searchEl.setAttribute("aria-expanded","false"); return; }
+  resultsEl.hidden=false; searchEl.setAttribute("aria-expanded","true");
+  var kindLabel={page:"页面",data:"数据",flow:"流程",businessState:"状态",
+    pageState:"边缘",boundary:"边界",req:"需求",oq:"OQ",module:"模块"};
+  curResults.forEach(function(it,i){
+    var b=h("button",{class:"result"+(i===activeRes?" active":""),role:"option",onclick:function(){ chooseResult(it); }},
+      h("span",{class:"rkind"},kindLabel[it.type]||it.type),
+      h("span",{class:"rtitle"},it.label||""),
+      h("span",{class:"rsub"},it.sub||""));
+    resultsEl.appendChild(b);
+  });
+}
+function chooseResult(it){
+  hideResults();
+  searchEl.value=it.label||"";
+  if(it.type==="page"||it.type==="data"){
+    openModule(it.scope);
+    // wait for layout then focus
+    focusOn(it.node.nodeId); openNodeCard(it.node); applyFocus(); markSelected();
+    var el=svg.querySelector('[data-node="'+cssEsc(it.node.nodeId)+'"]'); if(el&&el.focus) el.focus();
+  }else if(it.type==="flow"||it.type==="businessState"||
+           it.type==="pageState"||it.type==="boundary"){
+    state.moduleId=it.scope;
+    setView(it.type==="flow"?"flow":it.type==="businessState"?"state":"boundary");
+    openNodeCard(it.node);
+  }else if(it.type==="module"){
+    openModule(it.scope);
+  }else if(it.type==="req"){
+    jumpToRequirement(it.label);
+  }else if(it.type==="oq"){
+    // find node/edge referencing this oq
+    var owner=null;
+    NODES.concat(EDGES).some(function(x){ return arr(x.sources).some(function(sc){ if(arr(sc.oqIds).indexOf(it.oq)>=0){ owner=x; return true; } return false; }); });
+    if(owner){ if(owner.nodeId) openNodeCard(owner); else openEdgeCard(owner); }
+  }
+}
+function hideResults(){ curResults=[]; activeRes=-1; resultsEl.hidden=true; searchEl.setAttribute("aria-expanded","false"); }
+searchEl.addEventListener("input",function(){ curResults=runSearch(this.value); activeRes=curResults.length?0:-1; renderResults(); });
+searchEl.addEventListener("keydown",function(e){
+  if(e.key==="ArrowDown"){ e.preventDefault(); if(curResults.length){ activeRes=Math.min(curResults.length-1,activeRes+1); renderResults(); } }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); if(curResults.length){ activeRes=Math.max(0,activeRes-1); renderResults(); } }
+  else if(e.key==="Enter"){ if(activeRes>=0&&curResults[activeRes]) chooseResult(curResults[activeRes]); }
+  else if(e.key==="Escape"){ hideResults(); }
+});
+document.addEventListener("click",function(e){ if(!e.target.closest(".search-wrap")) hideResults(); });
+
+/* ---------- global keyboard ---------- */
+document.addEventListener("keydown",function(e){
+  if(e.key!=="Escape") return;
+  if(!resultsEl.hidden){ hideResults(); return; }
+  if(drawer.classList.contains("open")){ closeDrawer(); return; }
+  if(state.view==="graph"&&state.focusId){ state.focusId=null; applyFocus(); return; }
+  if(state.view==="graph"&&state.level==="module"){ backToOverview(); return; }
+});
+
+/* ---------- utils ---------- */
+function clip(str,n){ str=(str==null?"":String(str)); return str.length>n?str.slice(0,n-1)+"…":str; }
+function cssEsc(v){ if(window.CSS&&CSS.escape) return CSS.escape(v); return String(v).replace(/["\\\]]/g,"\\$&"); }
+
+/* ---------- init ---------- */
+window.addEventListener("resize",function(){ if(state.view==="graph"&&contentBounds) fitView(); });
+renderSidebar();
+renderCrumbs();
+renderGraph();
+
+})();
+</script>
+</body>
+</html>

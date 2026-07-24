@@ -2,12 +2,11 @@
 
 被测契约——worker 在 `scripts/prdsync/atlas.py` 实现：
 
-- `atlas.compile(root) -> dict`：确定性逻辑模型编译器。只消费权威主本的
-  机器可解析章节（模块 prd.md 的「页面契约/数据读写/模块交互（机器可解析）」
-  三表，表头列序见 templates/module-prd.md）、追溯矩阵经
-  `_generated/requirements-ledger.jsonl`（受验证中间生成物）。输出通过
+- `atlas.compile(root) -> dict`：确定性逻辑模型编译器。消费权威主本的页面契约、
+  核心流程、边缘状态、状态机、模块边界、数据读写、模块交互与追溯矩阵经
+  `_generated/requirements-ledger.jsonl` 形成的需求身份读模型。输出通过
   schemas/logic-model.schema.json；每个正式 node/edge 必须携带来源
-  （schema 强制 minItems 1）；无法解析的模块如实进 `gaps`，绝不按产品经验
+  （schema 强制 minItems 1）；无法解析的内容如实进 `gaps`，绝不按产品经验
   补齐。构建前先检查读取栅栏（存在 publishing/publish-conflict operation
   时抛 effective_view.ReadFenceError）；Atlas 能力未开启抛
   `atlas.AtlasNotEnabled`。两次编译结果逐字节一致。
@@ -43,8 +42,9 @@ import unittest
 from pathlib import Path
 
 from legacy_fixture import (
-    ATLAS_MODULE_PRD_BROKEN, MANUAL_KEY, MODULE_A_PRD_RELPATH, ROWS_V2,
-    build_xlsx, enable_logic_atlas, make_legacy_worktree, write_atlas_module,
+    ATLAS_MODULE_PRD, ATLAS_MODULE_PRD_BROKEN, MANUAL_KEY,
+    MODULE_A_PRD_RELPATH, ROWS_V2, build_xlsx, enable_logic_atlas,
+    make_legacy_worktree, write_atlas_module,
 )
 from worktree_fixture import SKILL_ROOT, snapshot
 
@@ -86,6 +86,147 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(len(requirements), 6)
         edge_kinds = {e["kind"] for e in model["edges"]}
         self.assertTrue({"reads", "writes", "interacts"} <= edge_kinds)
+
+    def test_extracts_behavior_flow_and_branch_graph(self):
+        model = atlas.compile(self.root)
+
+        flows = [n for n in model["nodes"] if n["kind"] == "flow"]
+        categories = [n["detail"]["category"] for n in flows]
+        self.assertEqual(categories.count("userFlow"), 1)
+        self.assertEqual(categories.count("flowStep"), 2)
+        self.assertEqual(categories.count("terminal"), 1)
+        self.assertEqual(categories.count("failureBranch"), 2)
+
+        edge_kinds = {e["kind"] for e in model["edges"]}
+        self.assertTrue({"navigates", "traces"} <= edge_kinds)
+        flow_step = next(n for n in flows
+                         if n["detail"]["category"] == "flowStep"
+                         and n["detail"]["stepId"] == "S1")
+        self.assertEqual(flow_step["sources"][0]["requirementIds"],
+                         ["TST-001", "TST-002", "TST-003"])
+        self.assertEqual(model["coverage"]["flowCount"], 1)
+
+    def test_extracts_page_states_with_page_traceability(self):
+        model = atlas.compile(self.root)
+        page_states = [
+            n for n in model["nodes"]
+            if n["kind"] == "state"
+            and n["detail"]["category"] == "pageState"
+        ]
+        self.assertEqual({n["title"] for n in page_states},
+                         {"加载中", "对象不存在"})
+        page_trace_ids = {
+            e["to"] for e in model["edges"]
+            if e["kind"] == "traces"
+            and e["detail"].get("relation") == "page-state"
+        }
+        self.assertEqual(page_trace_ids, {
+            "page:01-test-system/01-module-a:客户列表页",
+            "page:01-test-system/01-module-a:客户详情页",
+        })
+        self.assertEqual(model["coverage"]["pageStateCount"], 2)
+
+    def test_page_state_can_trace_to_multiple_declared_pages(self):
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 客户列表页 | 加载中 |",
+                "| 客户列表页 / 客户详情页 | 加载中 |"))
+
+        model = atlas.compile(self.root)
+        loading = next(
+            n for n in model["nodes"]
+            if n["kind"] == "state" and n["title"] == "加载中")
+        self.assertEqual(set(loading["detail"]["pageIds"]), {
+            "page:01-test-system/01-module-a:客户列表页",
+            "page:01-test-system/01-module-a:客户详情页",
+        })
+        traces = {
+            e["to"] for e in model["edges"]
+            if e["kind"] == "traces" and e["from"] == loading["nodeId"]
+            and e["detail"].get("relation") == "page-state"
+        }
+        self.assertEqual(traces, set(loading["detail"]["pageIds"]))
+
+    def test_extracts_business_transitions_and_boundaries(self):
+        model = atlas.compile(self.root)
+        business_states = [
+            n for n in model["nodes"]
+            if n["kind"] == "state"
+            and n["detail"]["category"] == "businessState"
+        ]
+        self.assertEqual({n["title"] for n in business_states},
+                         {"待激活", "已激活", "已停用"})
+        transitions = [e for e in model["edges"] if e["kind"] == "transition"]
+        self.assertEqual({(e["from"], e["to"]) for e in transitions}, {
+            ("state:01-test-system/01-module-a:客户:待激活",
+             "state:01-test-system/01-module-a:客户:已激活"),
+            ("state:01-test-system/01-module-a:客户:已激活",
+             "state:01-test-system/01-module-a:客户:已停用"),
+        })
+        boundaries = [
+            n for n in model["nodes"]
+            if n["kind"] == "flow"
+            and n["detail"]["category"] == "boundary"
+        ]
+        self.assertEqual([n["title"] for n in boundaries], ["客户资料"])
+        self.assertEqual(model["coverage"]["businessStateCount"], 3)
+        self.assertEqual(model["coverage"]["boundaryCount"], 1)
+
+    def test_resolves_referenced_domain_state_machine(self):
+        before, marker, after = ATLAS_MODULE_PRD.partition(
+            "## 6. 状态机与状态流转")
+        self.assertTrue(marker)
+        _old_state_section, marker7, after7 = after.partition(
+            "## 7. 字段与数据规则")
+        referenced = """## 6. 状态机与状态流转
+
+| 对象 | 状态机主本 | 本端(机构后台)可见状态与操作差异 |
+|---|---|---|
+| 账号认证段 | `../../00-global/domain-specs/account-identity.md` §2.1 | 后台可封禁/解封(TST-001) |
+
+"""
+        write_atlas_module(
+            self.root, before + referenced + marker7 + after7)
+        spec = self.root / "00-global/domain-specs/account-identity.md"
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text("""# 账号身份
+## 2.1 账号状态
+
+
+| 对象 | 当前状态 | 进入条件 | 可执行操作 | 下一状态 | 触发方式 | 是否可逆 | 通知/日志 |
+|---|---|---|---|---|---|---|---|
+| 账号 | 正常 | 注册成功 | 封禁 | 封禁 | 人工 | 是 | 记录操作人 |
+| 账号 | 封禁 | 管理员封禁 | 解封 | 正常 | 人工 | 是 | 通知用户 |
+""", encoding="utf-8")
+
+        model = atlas.compile(self.root)
+        states = [
+            n for n in model["nodes"]
+            if n["kind"] == "state"
+            and n["detail"].get("category") == "businessState"
+        ]
+        self.assertEqual({n["title"] for n in states}, {"正常", "封禁"})
+        self.assertTrue(any(
+            source["path"] == "00-global/domain-specs/account-identity.md"
+            for node in states for source in node["sources"]))
+        self.assertEqual(len([
+            e for e in model["edges"] if e["kind"] == "transition"
+        ]), 2)
+
+    def test_invalid_behavior_references_are_reported_as_gaps(self):
+        broken = ATLAS_MODULE_PRD.replace(
+            "| 查看客户详情 | S1 | 客户列表页 |",
+            "| 查看客户详情 | S1 | 幽灵页面 |").replace(
+            "| 查看客户详情 | S2 | 客户详情页 | 管理员 | 查看资料 | 客户存在 | 展示客户资料 | 结束 |",
+            "| 查看客户详情 | S2 | 客户详情页 | 管理员 | 查看资料 | 客户存在 | 展示客户资料 | S404 |")
+        write_atlas_module(self.root, broken)
+
+        gap_details = [g["detail"] for g in atlas.compile(self.root)["gaps"]]
+        self.assertTrue(any("引用未声明页面: 幽灵页面" in d
+                            for d in gap_details))
+        self.assertTrue(any("下一步不存在: S404" in d
+                            for d in gap_details))
 
     def test_skeleton_module_yields_gaps_not_fabrication(self):
         model = atlas.compile(self.root)

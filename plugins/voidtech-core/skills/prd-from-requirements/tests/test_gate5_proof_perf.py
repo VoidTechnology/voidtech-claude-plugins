@@ -89,6 +89,16 @@ class ExamplePerformanceTest(unittest.TestCase):
         cls._tmp = tempfile.TemporaryDirectory()
         cls.root = Path(cls._tmp.name) / "example"
         shutil.copytree(EXAMPLE, cls.root)
+        # 真实 Example 树可能已在原地完成迁移/Atlas 发布（2026-07-23 起）；
+        # 本测试度量的是「对 legacy 内容的一次全新迁移 + Atlas 编译」，
+        # 因此先剥离副本上的迁移与 Atlas 产物，还原 legacy 视角。
+        for rel in ("prd-worktree.json", "logic-atlas.html"):
+            (cls.root / rel).unlink(missing_ok=True)
+        for rel in ("_source/reconciliation", "_source/revisions",
+                    "_generated/logic"):
+            shutil.rmtree(cls.root / rel, ignore_errors=True)
+        for rel in ("_source/source-registry.json", "_source/sync-state.json"):
+            (cls.root / rel).unlink(missing_ok=True)
         migration.commit_migration(cls.root, confirmations=cls.CONFIRMATIONS)
         enable_logic_atlas(cls.root, "markdown")
 

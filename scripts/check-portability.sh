@@ -4,7 +4,7 @@ set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-loop\nvoidtech-mcp-apple\nvoidtech-mcp-common'
-EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprd-from-requirements\nprd-maintain\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
+EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprd-from-requirements\nprd-maintain\nprd-sync\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
 EXPECTED_CORE_AGENTS=$'architect\nproduct-manager'
 failures=0
 
@@ -117,8 +117,8 @@ if [[ -d plugins/voidtech-core ]]; then
   fi
 
   core_skill_count=$(find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
-  if [[ "$core_skill_count" == "25" ]]; then
-    pass "voidtech-core 发布 25 个技能"
+  if [[ "$core_skill_count" == "26" ]]; then
+    pass "voidtech-core 发布 26 个技能"
   else
     fail "voidtech-core 技能数量异常：$core_skill_count"
   fi
@@ -356,6 +356,7 @@ DELIVERED_GATE_TESTS=(
   test_gate4_merge test_gate4_sources
   test_gate5_atlas test_gate5_proof_perf
   test_review_fixes
+  test_cli test_check_prd_tree test_renderer_env
 )
 if command -v python3 >/dev/null 2>&1; then
   if (cd plugins/voidtech-core/skills/prd-from-requirements/tests && \
@@ -417,6 +418,9 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       "skills/git-safety/scripts/block-dangerous-git.sh"
       "skills/research/SKILL.md"
       "skills/ship/SKILL.md"
+      "skills/prd-from-requirements/scripts/prd-sync.py"
+      "skills/prd-from-requirements/assets/renderer-validation-proof.json"
+      "skills/prd-sync/SKILL.md"
       "skills/text-naturalizer/LICENSE"
     )
     missing_installed_resource=0

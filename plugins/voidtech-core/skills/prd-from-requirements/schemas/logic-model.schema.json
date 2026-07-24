@@ -106,6 +106,10 @@
       "properties": {
         "moduleCount": { "type": "integer", "minimum": 0 },
         "pageCount": { "type": "integer", "minimum": 0 },
+        "flowCount": { "type": "integer", "minimum": 0 },
+        "pageStateCount": { "type": "integer", "minimum": 0 },
+        "businessStateCount": { "type": "integer", "minimum": 0 },
+        "boundaryCount": { "type": "integer", "minimum": 0 },
         "edgeCount": { "type": "integer", "minimum": 0 },
         "requirementCount": { "type": "integer", "minimum": 0 },
         "gapCount": { "type": "integer", "minimum": 0 }

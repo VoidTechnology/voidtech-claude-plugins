@@ -1,0 +1,11 @@
+{
+  "rendererVersion": "3.0.0",
+  "generatorVersion": "1.1.0",
+  "schemaVersion": "1",
+  "assetDigest": "sha256:88d9842a47edf6395dc173495685152fb551a63d8d8926f00312bd06415676a5",
+  "fixtureDigest": "sha256:acd222a976b3ee666fa1efebdf468b682f0ed72246a7126d0a5fc28082abea82",
+  "validationHarnessVersion": "3.0.0",
+  "browserMatrixVersion": "2026-07",
+  "browserValidated": true,
+  "validatedAt": "2026-07-23T10:28:13.971Z"
+}
