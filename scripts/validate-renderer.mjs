@@ -288,6 +288,9 @@ async function runBrowserAssertions(fixture) {
         boundaryDisclosures: flowPanel ? flowPanel.querySelectorAll(".scenario-details").length : 0,
         roleLanes: flowPanel ? flowPanel.querySelectorAll(".workflow-role-lane").length : 0,
         workflowLinks: flowPanel ? flowPanel.querySelectorAll(".workflow-link").length : 0,
+        workflowLinkLabels: flowPanel ? Array.prototype.map.call(
+          flowPanel.querySelectorAll(".workflow-link-label"),
+          function(node){return node.textContent.trim();}) : [],
         semanticIcons: flowPanel ? flowPanel.querySelectorAll(".semantic-icon").length : 0,
         interactionLegend: !!(flowPanel && flowPanel.querySelector(".interaction-legend")),
         interactionFieldIcons: flowPanel ? flowPanel.querySelectorAll(".interaction-card dt .semantic-icon").length : 0
@@ -351,6 +354,11 @@ async function runBrowserAssertions(fixture) {
               return probe ? getComputedStyle(probe).fill : null;
             })(),
             expectedStates: expectedLabels.length,
+            businessStates: Object.keys(
+              lifecycleMachine.stateNodeIds || {}).length,
+            legendBridge: lifecycleSvg ?
+              lifecycleSvg.querySelectorAll("[data-legend-bridge]").length : -1,
+            declaredTerminalVisible: svgTexts.indexOf("已声明终点") >= 0,
             labelsAppearOnce: expectedLabels.every(function(label){
               return svgTexts.filter(function(text){return text===label;}).length===1;
             }),
@@ -524,6 +532,12 @@ async function runBrowserAssertions(fixture) {
       failures.push(`场景步骤切换或精确附件挂载失败: ${JSON.stringify(scenario.stepSwitch)}`);
     }
     if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
+    // ⑤ 场景连线：condition 为空/「—」占位不得渲染标签节点（fixture S2 条件为「—」）。
+    var placeholderLinkLabels = (scenario.workflowLinkLabels || []).filter(
+      function(text){return text === "" || text === "—";});
+    if (placeholderLinkLabels.length > 0) {
+      failures.push(`场景连线渲染了空/「—」占位标签: ${JSON.stringify(scenario.workflowLinkLabels)}`);
+    }
     if (!dom.pageDataAudit?.explicitGap
         || dom.pageDataAudit.misleadingModuleEdges !== 0
         || dom.pageDataAudit.dimmedAfterUnmappedPageFocus !== 0) {
@@ -534,12 +548,21 @@ async function runBrowserAssertions(fixture) {
         || dom.lifecycle.expectedStates < 2
         || !dom.lifecycle.labelsAppearOnce
         || dom.lifecycle.builtInNodes !== 0
-        || dom.lifecycle.traceButtons < dom.lifecycle.expectedStates
+        || dom.lifecycle.traceButtons < dom.lifecycle.businessStates
         || !dom.lifecycle.semanticCopy.includes(
           "不代表业务起点或业务终态")
         || !dom.lifecycle.semanticCopy.includes(
           "流程中断也可能造成假终点")) {
       failures.push(`Lifecycle SVG 未唯一呈现状态或未保留追溯入口: ${JSON.stringify(dom.lifecycle)}`);
+    }
+    // ② Archify 内置英文 Legend 必须被 viewer 确定性移除，避免与 Atlas 中文图例重复。
+    if (dom.lifecycle?.legendBridge !== 0) {
+      failures.push(`Archify 内置 Legend 未从导入的 SVG 移除: legendBridge=${dom.lifecycle?.legendBridge}`);
+    }
+    // ③ 已声明 [*] 出口必须渲染为显式终点标记，且该标记不是业务状态。
+    if (!dom.lifecycle?.declaredTerminalVisible
+        || !(dom.lifecycle.expectedStates > dom.lifecycle.businessStates)) {
+      failures.push(`已声明终点未作为非业务状态标记可见: ${JSON.stringify(dom.lifecycle)}`);
     }
     // 样式落地断言（2026-07-24 黑块回归的守门）：Archify SVG 是纯类名着色，
     // 结构在而样式丢时元素回落 fill:black——计算样式必须证明配色已生效。

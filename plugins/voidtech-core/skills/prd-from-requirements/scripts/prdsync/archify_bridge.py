@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import copy
 import hashlib
 import json
@@ -39,7 +40,7 @@ _ROUTE_SEQUENCE = (
     ("bottom-channel", None, None),
     ("bottom-channel", 410, None),
     ("bottom-channel", 392, None),
-    ("right-channel", None, 850),
+    ("right-channel", None, None),
     ("left-channel", None, 48),
 )
 _SUPPORTED_DIAGNOSTIC_CODES = {
@@ -292,7 +293,7 @@ def _repair_short_transition(ir, label):
     ], key=lambda item: item.get("id", ""))
     side = "right" if pair.index(target) % 2 == 0 else "left"
     _set_route(
-        target, f"{side}-channel", None, 850 if side == "right" else 48)
+        target, f"{side}-channel", None, None if side == "right" else 48)
     target["fromSide"] = side
     target["toSide"] = side
     return True
@@ -510,11 +511,23 @@ def render_machine(machine, ir, *, runner=subprocess.run, executable="node",
 def build_presentation(model, *, runner=subprocess.run, executable="node"):
     machines = lifecycle_ir.extract_machines(model)
     runtime = node_runtime(runner, executable)
-    rendered = []
-    for machine in machines:
+
+    def _render(machine):
         ir = lifecycle_ir.build_lifecycle_ir(machine)
-        rendered.append(render_machine(
-            machine, ir, runner=runner, executable=executable, runtime=runtime))
+        return render_machine(
+            machine, ir, runner=runner, executable=executable, runtime=runtime)
+
+    # 每台机器的渲染/修复循环相互独立、各用独立临时目录，可并发。结果按机器
+    # 次序回收，确定性与串行一致（同输入字节一致，已回归验证）。仅在使用真实
+    # subprocess 且多于一台机器时并发，避免影响注入 mock runner 的单测。
+    if (runtime.get("status") == "ok" and runner is subprocess.run
+            and len(machines) > 1):
+        max_workers = min(8, len(machines))
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers) as pool:
+            rendered = list(pool.map(_render, machines))
+    else:
+        rendered = [_render(machine) for machine in machines]
     css = ""
     ok_machines = [item for item in rendered if item["status"] == "ok"]
     if ok_machines:

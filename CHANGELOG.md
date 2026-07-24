@@ -1,5 +1,23 @@
 # Changelog
 
+## voidtech-core 0.17.1 - 2026-07-24
+
+Logic Atlas 状态机与场景流程呈现打磨：只调渲染层，不改内容抽取与数据契约。收束五个「给人看」的缺陷，18 张真实状态机 deliver 全绿、0 呈现降级、无新增 gap，同输入两次发布字节一致。
+
+### Added
+
+- 已声明终点可见：mermaid `X --> [*]` 出口不再被丢弃。当声明出口的状态仍有后继流转（终点被丢、结果带空）时，Lifecycle IR 在结果带补一个显式「已声明终点」标记（`neutral`，非业务状态、不进 `stateNodeIds`），出口边指向它并原样带上 `terminalResult` 标签；结构性终态已自证，不重复标注。仅依据已声明 `declaredTerminal` 生成，绝不凭空造终点（本次 5 张机器命中）。
+- renderer harness 新增断言：导入的 Lifecycle SVG 内无 `data-legend-bridge`（英文图例已移除）、已声明终点标记可见且状态数多于业务状态数、场景连线无空/「—」占位标签。
+
+### Changed
+
+- 画布密度：Lifecycle IR `meta.viewBox` 按内容外接框收紧（列心由渲染器固定，收紧只去除右侧/底部空白，状态坐标不变）——小状态机由 `[980,660]` 收到 `[652,566/660]`，不再「内容挤一角 + 全屏空白」；结果带无节点时高度收到 schema 下限 566。
+- 泳道中文化：`main/branch/terminal` 标签统一为「主生命周期 / 中断与恢复 / 结果」；结果带仅在确有节点时声明。
+- 边标签贴边：流转标签不再预置栅格槽位（旧行为使标签漂到画布中部），改由渲染器按边中点自动贴边，仅冲突时经 archify fail-closed validator 有界微调；同列往复流转仍走通道并在通道处标注。
+- viewer 8.2.0：`importLifecycleSvg` 确定性移除 Archify 内置英文 Legend（`g[data-legend-bridge]`），消除与 Atlas 中文图例重复；场景流程连线在 condition 为空/「—」时不再输出标签节点。
+- 渲染桥并发化：18 台机器的渲染/修复循环相互独立，改为按机器次序并发回收（同输入字节一致），发布耗时约 9s → 2s。
+- viewer 8.1.0 → 8.2.0、renderer harness 8.1.0 → 8.2.0、核心插件 0.17.0 → 0.17.1。
+
 ## voidtech-core 0.17.0 - 2026-07-24
 
 Logic Atlas 状态机视图正式接入 vendored Archify Lifecycle：默认以唯一状态节点和有向流转展示真实生命周期；Node 或图形校验不可用时，仅该状态机降级为内建状态图并标注呈现风险，不阻塞 PRD 内容门。

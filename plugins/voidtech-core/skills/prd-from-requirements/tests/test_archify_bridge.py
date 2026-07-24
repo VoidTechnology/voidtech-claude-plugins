@@ -62,7 +62,7 @@ class ArchifyBridgeTest(unittest.TestCase):
             ("bottom-channel", None, None),
             ("bottom-channel", 410, None),
             ("bottom-channel", 392, None),
-            ("right-channel", None, 850),
+            ("right-channel", None, None),
         ])
 
     def test_layout_constraint_uses_only_bounded_suggested_fix(self):
@@ -115,8 +115,7 @@ class ArchifyBridgeTest(unittest.TestCase):
 
     def test_render_retries_when_one_of_duplicate_diagnostics_is_repairable(self):
         ir = copy.deepcopy(IR)
-        ir["transitions"][0].update({
-            "route": "right-channel", "channelX": 850})
+        ir["transitions"][0].update({"route": "right-channel"})
         machine = {
             "machineId": "machine-order",
             "scopeId": "01-system/01-orders",

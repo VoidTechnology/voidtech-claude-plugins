@@ -2278,9 +2278,9 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "8.1.0"
+RENDERER_VERSION = "8.2.0"
 BROWSER_MATRIX_VERSION = "2026-07"
-VALIDATION_HARNESS_VERSION = "8.1.0"
+VALIDATION_HARNESS_VERSION = "8.2.0"
 
 _FIXTURE_MODULE = "01-portal/01-module"
 _FIXTURE_MODULE_B = "01-portal/02-module"
@@ -2374,7 +2374,7 @@ def _fixture_model():
          "title": "S2 · 查看订单", "status": "original", "sources": [flow_src],
          "detail": {"category": "flowStep", "flowId": flow_id, "stepId": "S2",
                     "pageTitle": _FIXTURE_PROBE_TITLE, "pageId": probe_id,
-                    "role": "运营人员", "action": "查看订单", "condition": "加载成功",
+                    "role": "运营人员", "action": "查看订单", "condition": "—",
                     "result": "展示订单", "nextStep": "结束",
                     "failureHandling": "支持重试"}},
         {"nodeId": interaction1_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
@@ -2468,7 +2468,8 @@ def _fixture_model():
          "title": "处理中", "status": "original", "sources": [state_src],
          "detail": {"category": "businessState", "object": "订单",
                     "entryCondition": "提交成功", "actions": "完成订单",
-                    "reversible": "否", "notifications": "记录日志"}},
+                    "reversible": "否", "notifications": "记录日志",
+                    "declaredTerminal": True, "terminalResult": "订单完成"}},
         {"nodeId": done_state_id, "kind": "state", "scopeId": _FIXTURE_MODULE,
          "title": "已完成", "status": "original", "sources": [state_src],
          "detail": {"category": "businessState", "object": "订单",

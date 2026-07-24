@@ -13,18 +13,23 @@ WAITING_KEYWORDS = ("待", "暂停", "到期")
 _LANE_ORDER = ("main", "branch", "terminal")
 _LANE_LABELS = {
     "main": "主生命周期",
-    "branch": "分支 / 中断",
-    "terminal": "终态",
+    "branch": "中断与恢复",
+    "terminal": "结果",
 }
 _LANE_MAX_COL = {"main": 4, "branch": 2, "terminal": 2}
-_LABEL_SLOTS = tuple(
-    (x, y)
-    for y in (218, 246, 366, 396, 532)
-    for x in (190, 390, 590, 790))
-_DENSE_LABEL_SLOTS = tuple(
-    (x, y)
-    for y in (214, 244, 358, 388, 418, 532)
-    for x in (100, 280, 460, 640, 820))
+# Archify lifecycle 渲染器固定的列心与状态半宽（vendor renderers/lifecycle
+# 布局预算）。用于把 meta.viewBox 收紧到内容外接框——列心不随 viewBox 缩放，
+# 收紧只是去除右侧/底部空白，状态坐标不变。
+_PHASE_XS = (94, 248, 402, 556, 710)
+_BAND_XS = (402, 556, 710)
+_STATE_HALF_W = {"main": 59, "event": 63, "terminal": 59}
+# 渲染器内置英文 Legend 固定在 x220–620；viewer 会移除它，但为保持 Archify
+# 交付产物自洽，宽度下限仍留足图例位。
+_VIEWBOX_LEGEND_FLOOR = 652
+# 右向回环通道贴着最右状态右缘落在 state_right+36，其贴边标签再向右延伸约
+# 半个标签宽；为「最右状态右缘 → 通道 → 标签右缘」预留固定余量，保证收紧后
+# 的 viewBox 始终容得下（渲染器不校验通道/标签越界，必须由 IR 侧留足）。
+_RIGHT_CHANNEL_RESERVE = 160
 
 
 def _stable_id(prefix, value):
@@ -253,6 +258,49 @@ def _transition_label(edge):
     return f"{action} → {result}" if result else action
 
 
+def _label_width(text):
+    """与渲染器同口径估算标签宽度：全宽字形计 2 单位，宽度 = units*4.9+12，
+    下限 32（见 vendor renderers/lifecycle renderTransitionLabel / textUnits）。"""
+    units = sum(2 if ord(ch) > 0x2E80 else 1 for ch in text)
+    return max(32.0, units * 4.9 + 12)
+
+
+def _left_channel_label_dx(label):
+    """左通道标签以通道 x=48 为心，宽标签会向左越过 viewBox 左缘（x 恒从 0
+    起）被裁切。给一个正的 labelDx 把标签右移到左缘内，仍落在两个堆叠回环状态
+    之间的空隙、贴着通道，不遮状态。窄标签无需右移返回 0。"""
+    shift = _label_width(label) / 2 - 48 + 8
+    return round(shift, 1) if shift > 0 else 0
+
+
+def _band_of(lane):
+    if lane == "main":
+        return "main"
+    if lane == "terminal":
+        return "terminal"
+    return "event"
+
+
+def _tight_viewbox(ir_states):
+    """把 viewBox 收紧到内容外接框，消除小状态机「内容挤一角 + 全屏空白」。
+
+    列心/带位由 Archify 渲染器固定，收紧只影响右侧与底部留白：宽度覆盖最右
+    状态右缘，并为右向回环通道（渲染器取 state_right+36）及其贴边标签预留
+    _RIGHT_CHANNEL_RESERVE，避免收紧后通道/标签落到 viewBox 之外被裁切；高度
+    只有在存在 terminal 带节点时才延伸到底部结果带，否则收到 schema 下限 566。"""
+    max_right = 0
+    used_terminal = False
+    for item in ir_states:
+        band = _band_of(item["lane"])
+        center = _PHASE_XS[item["col"]] if band == "main" else _BAND_XS[item["col"]]
+        if band == "terminal":
+            used_terminal = True
+        max_right = max(max_right, center + _STATE_HALF_W[band])
+    width = max(int(max_right) + _RIGHT_CHANNEL_RESERVE, _VIEWBOX_LEGEND_FLOOR)
+    height = 660 if used_terminal else 566
+    return [width, height]
+
+
 def build_lifecycle_ir(machine):
     """生成键序、数组序、布局均稳定的 schema-v1 Lifecycle IR。"""
     nodes = {node["nodeId"]: node for node in machine["states"]}
@@ -321,16 +369,14 @@ def build_lifecycle_ir(machine):
 
     state_layout = {item["id"]: item for item in ir_states}
     ir_transitions = []
-    label_slots = _DENSE_LABEL_SLOTS if len(edges) > 20 else _LABEL_SLOTS
     max_column = max(columns.values(), default=0)
-    for edge_index, edge in enumerate(edges):
+    for edge in edges:
         item = {
             "id": transition_ir_id(edge["edgeId"]),
             "from": state_ids[edge["from"]],
             "to": state_ids[edge["to"]],
             "label": _transition_label(edge),
             "variant": "default",
-            "labelAt": list(label_slots[edge_index % len(label_slots)]),
             "route": "drop",
         }
         source_layout = state_layout[item["from"]]
@@ -345,10 +391,58 @@ def build_lifecycle_ir(machine):
                 "route": f"{side}-channel",
                 "fromSide": side,
                 "toSide": side,
-                "channelX": 850 if side == "right" else 48,
             })
+            # 左通道用固定近左槽（x=48，任何收紧后的 viewBox 都容得下）；右通道
+            # 省略 channelX，由渲染器贴着状态右缘取 state_right+36，避免固定 850
+            # 落到收紧 viewBox 之外被裁切（viewBox 已为右通道预留标签位）。
+            if side == "left":
+                item["channelX"] = 48
+                label_dx = _left_channel_label_dx(item["label"])
+                if label_dx:
+                    item["labelDx"] = label_dx
         ir_transitions.append(item)
+
+    # 已声明终点：mermaid `X --> [*]` 出口。只有当声明出口的状态仍有后继业务
+    # 流转时（终点被丢弃、结果带自相矛盾地为空）才补一个显式终点标记，出口边
+    # 指向它；结构性终态（无离开边）已在结果带自证，不重复标注。终点标记只依据
+    # 已声明的 declaredTerminal 生成，绝不凭空造终点。
+    hidden_exits = [
+        node_id for node_id in node_ids
+        if (nodes[node_id].get("detail") or {}).get("declaredTerminal")
+        and outdegrees[node_id] > 0]
+    if hidden_exits:
+        used_terminal_cols = {
+            item["col"] for item in ir_states if item["lane"] == "terminal"}
+        marker_col = next(
+            (col for col in range(len(_BAND_XS))
+             if col not in used_terminal_cols),
+            len(_BAND_XS) - 1)
+        marker_id = _stable_id("terminal", machine["machineId"])
+        ir_states.append({
+            "id": marker_id,
+            "type": "neutral",
+            "label": "已声明终点",
+            "lane": "terminal",
+            "col": marker_col,
+        })
+        for node_id in hidden_exits:
+            exit_item = {
+                "id": _stable_id("transition", f"declared-terminal\0{node_id}"),
+                "from": state_ids[node_id],
+                "to": marker_id,
+                "variant": "default",
+                "route": "drop",
+            }
+            result = (nodes[node_id].get("detail") or {}).get("terminalResult")
+            if result:
+                exit_item["label"] = str(result)
+            ir_transitions.append(exit_item)
+
     used_lanes = {item["lane"] for item in ir_states}
+    # vendor 渲染器对未声明的中间事件带回落英文默认名（render-lifecycle.mjs
+    # eventLanes 为空时 'Interruptions + recovery'），三条带无论声明与否都会
+    # 绘制——始终声明 branch 带以保证带标题中文，不改 vendor。
+    used_lanes.add("branch")
     return {
         "schema_version": 1,
         "diagram_type": "lifecycle",
@@ -357,7 +451,7 @@ def build_lifecycle_ir(machine):
             "subtitle": machine["scopeId"],
             "animation": "none",
             "visual_preset": "blueprint",
-            "viewBox": [980, 660],
+            "viewBox": _tight_viewbox(ir_states),
         },
         "lanes": [
             {"id": lane, "label": _LANE_LABELS[lane]}

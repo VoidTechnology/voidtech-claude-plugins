@@ -1304,9 +1304,12 @@ function drawWorkflowLinks(root){
         "marker-end":"url(#"+markerId+")"});
       svg.appendChild(path);
       var condition=(cards[i+1].closest(".flow-step-wrap")||{}).dataset;
-      var labelText=condition&&condition.condition?condition.condition:"继续";
-      var labelY=sy===ty?sy-9:(sy+ty)/2-6;
-      svg.appendChild(s("text",{class:"workflow-link-label",x:mx+5,y:labelY},clip(labelText,18)));
+      var labelText=condition&&condition.condition?condition.condition:"";
+      /* 场景连线只在有真实条件/分支时才标注；空或「—」占位不生成标签节点。 */
+      if(labelText&&labelText!=="—"){
+        var labelY=sy===ty?sy-9:(sy+ty)/2-6;
+        svg.appendChild(s("text",{class:"workflow-link-label",x:mx+5,y:labelY},clip(labelText,18)));
+      }
     }
   });
 }
@@ -1407,7 +1410,7 @@ function renderFlows(){
       var stage=index===0?"起点":index===flowSteps.length-1?"终点":"过程";
       var stageIcon=index===0?"start":index===flowSteps.length-1?"terminal":"active";
       var wrap=h("div",{class:"flow-step-wrap","data-step-id":d.stepId||"",
-        "data-condition":d.condition||"继续",
+        "data-condition":d.condition||"",
         style:"grid-row:"+roleRow+";grid-column:"+(index+2)});
       wrap.appendChild(h("button",{class:"flow-node","aria-pressed":String(state.stepId===step.nodeId),
         "aria-controls":"interaction-panel",onclick:function(){selectScenarioStep(step.nodeId,d.stepId);}},
@@ -1570,6 +1573,10 @@ function importLifecycleSvg(svgText,machineId){
   if(!root||root.localName!=="svg"||
       root.namespaceURI!=="http://www.w3.org/2000/svg") return null;
   root.querySelectorAll("script,foreignObject,iframe,object,embed,image,a").forEach(
+    function(node){ node.remove(); });
+  /* Archify 内置英文 Legend（稳定选择器 g[data-legend-bridge]，见 vendor
+     renderers/lifecycle renderLegend）与 Atlas 自带中文图例行重复，确定性移除。 */
+  root.querySelectorAll("[data-legend-bridge]").forEach(
     function(node){ node.remove(); });
   root.querySelectorAll("*").forEach(function(node){
     Array.prototype.slice.call(node.attributes||[]).forEach(function(attr){
