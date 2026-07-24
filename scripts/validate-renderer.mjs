@@ -228,6 +228,17 @@ async function runBrowserAssertions(fixture) {
       out.mainTextLen = app ? app.innerText.trim().length : 0;
       out.sidebarChildren = (document.getElementById("mods") || {}).childElementCount || 0;
       out.behaviorViews = {};
+      var flowPanel = document.getElementById("view-flow");
+      out.scenarioFlow = {
+        defaultVisible: !!flowPanel && !flowPanel.hidden,
+        selector: !!document.getElementById("scenario-picker"),
+        groups: flowPanel ? flowPanel.querySelectorAll(".scenario-group").length : 0,
+        steps: flowPanel ? flowPanel.querySelectorAll(".flow-step-wrap").length : 0,
+        impacts: flowPanel ? flowPanel.querySelectorAll(".state-impact-chip").length : 0,
+        exceptionGroups: flowPanel ? flowPanel.querySelectorAll(".step-exceptions").length : 0,
+        dependencyLanes: flowPanel ? flowPanel.querySelectorAll(".scenario-lane").length - 1 : 0,
+        boundaryDisclosures: flowPanel ? flowPanel.querySelectorAll(".scenario-details").length : 0
+      };
       ["flow", "state", "boundary"].forEach(function(name){
         var tab = document.getElementById("tab-" + name);
         var panel = document.getElementById("view-" + name);
@@ -282,6 +293,16 @@ async function runBrowserAssertions(fixture) {
     if (Object.keys(dom.behaviorViews ?? {}).length !== 3) {
       failures.push("行为视图断言未覆盖 flow/state/boundary 三个 tab");
     }
+    const scenario = dom.scenarioFlow ?? {};
+    if (!scenario.defaultVisible) failures.push("场景流程不是默认可见入口");
+    if (scenario.groups < 1 || scenario.steps < 2) {
+      failures.push(`场景流程主干未渲染完整: ${JSON.stringify(scenario)}`);
+    }
+    if (!scenario.selector) failures.push("场景流程缺少业务场景选择器");
+    if (scenario.impacts < 1) failures.push("场景步骤未嵌入业务状态变化");
+    if (scenario.exceptionGroups < 1) failures.push("场景步骤未嵌入可展开异常");
+    if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
+    if (scenario.boundaryDisclosures < 1) failures.push("场景流程未集成模块职责边界");
     if (failures.length > 0) {
       throw new Error(`浏览器断言失败:\n- ${failures.join("\n- ")}`);
     }
@@ -296,6 +317,7 @@ async function runBrowserAssertions(fixture) {
     console.log(`- 搜索框存在且可输入: ${dom.hasSearch}/${dom.searchTypable}；主题切换按钮: ${dom.hasThemeBtn}`);
     console.log(`- XSS 探针以纯文本可见: ${dom.probeVisibleAsText}`);
     console.log(`- 行为视图可见且可交互: ${JSON.stringify(dom.behaviorViews)}`);
+    console.log(`- 场景流程默认入口及四层信息: ${JSON.stringify(dom.scenarioFlow)}`);
     ws.close();
   } finally {
     if (chrome.exitCode === null) {

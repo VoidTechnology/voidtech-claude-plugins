@@ -1,5 +1,23 @@
 # Changelog
 
+## voidtech-core 0.12.0 - 2026-07-23
+
+prd-sync/Logic Atlas 引擎(五门全通)的 skill 层接线交付:引擎能力首次获得面向使用者的命令入口。ADR-0004 第三阶段(overriding 完整流程、复活候选、多可更新源)仍为后续工作。
+
+### Added
+
+- 新公共技能 `prd-sync`(`/voidtech-core:prd-sync`)与 CLI `skills/prd-from-requirements/scripts/prd-sync.py`:13 个子命令(status/migrate/sync/rebaseline/propose/confirm/lifecycle/retire-source/invalidate-assertions/register-change/recover/atlas,atlas 含 `--enable <stage>` 能力阶段置位),统一退出码契约(0 成功 / 1 错误 / 2 用法 / 3 读取栅栏 / 4 需人工裁决),支持 `--json`;单 versioned 源自动推断,多源必须显式 `--source`。
+- 渲染器浏览器验证 CI(ADR-0005 §8):`scripts/validate-renderer.mjs`(零 npm 依赖,自带最小 CDP 客户端驱动 headless Chrome)+ `.github/workflows/renderer-validation.yml` + 渲染器验证证明 `assets/renderer-validation-proof.json`(七继承键,真实浏览器断言签发)。渲染器升级至 viewer 3.0(`assets/logic-atlas-viewer.html`):在模块关系图之上新增用户流程、业务状态机、边界与异常三种可复核视图;核心流程显示页面级步骤、条件、成功结果、失败分支与需求来源,状态机解析本地状态表或领域规格引用,边缘状态可显式绑定单页/多页。generator 1.1.0 新增 flow/state/boundary 节点与 navigates/transition/traces 边,缺表、坏引用与断头步骤如实进入 gaps;全部脚本样式内联零外链,模板即资产本体,`assetDigest` 覆盖模板字节故改模板即失效旧证明。
+- 新测试模块 `test_cli`(12 用例)、`test_check_prd_tree`(6 用例)、`test_renderer_env`(4 用例),全部接入 check-portability 已过门套件。
+- Behavioral Atlas 统一场景流程：generator 1.2.0 新增步骤级 `stateImpact` 契约与 `state-impact-step` / `page-state-step` 追溯，严格校验流程步骤、权威状态流转和模块/外部依赖，坏关联进入 gaps；viewer 4.0.0 将主流程、状态变化、折叠异常和跨模块/外部依赖泳道整合到单场景视图，新增场景选择器并设为默认入口，完整状态机与边界审计视图保留。模块模板新增「流程状态影响」表，边缘状态表新增步骤 ID；Example「入会审批与缴费」试点发布 3 步、3 条状态影响、12 条步骤级页面异常。
+
+### Changed
+
+- `check-prd-tree.py` 改造(技术设计 §9):正则类检查迁入 `prdsync/markdown_validator.py`;默认严格只读,发现 publishing/publish-conflict 返回退出码 3 且零写入;默认扫描经 overlay resolver 排除 `_source/reconciliation/`;`--operation-id` 检查预提交合成视图(同一逻辑文件只出现一次);logicAtlas 开启的工作树追加 Atlas 新鲜度检查,带外修改报 stale。legacy 工作树输出与退出码与改造前逐字节一致(已对照验证)。
+- `prd-maintain` 接线:新增工况 5(需求撤回、废弃、替代与移除——四套剧本、部分撤回拆分规则、工况 5 收尾机械检查);工况 2 按能力分叉(已迁移树源文件新版本一律走 prd-sync,带外变更 register-change);收尾不变式按能力分层(已迁移树经 operation overlay 走内容门、退出码 3 先 recover、Atlas 随 operation 发布不手工重生成)。
+- `prd-from-requirements`:机械自检段补退出码语义与 `--operation-id` 说明;追溯矩阵模板补六列生命周期投影字段(ADR-0004 §7)。
+- 核心插件版本 0.11.2 → 0.12.0;技能集合 25 → 26(ADR-0002 登记 `prd-sync`);USAGE.md 同步。
+
 ## voidtech-loop 0.3.0 - 2026-07-17
 
 二期 Agent-first Review 建议模式交付：独立审查 agent 完成评审劳动，人保留方向权与否决权；全部决定由人显式执行，新 run 永不自动启动。有界委托（自动落决定）本版**未开放**，等待盲评质量门数据（≥30 合格 blind case 全门 PASS）。

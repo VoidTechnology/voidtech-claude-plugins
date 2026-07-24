@@ -244,6 +244,31 @@ a{color:var(--accent-text)}
 .flow-arrow small{position:absolute;top:18px;font-size:10px;color:var(--faint);white-space:nowrap}
 .flow-failure{margin:9px 0 0 12px;border-left:2px dashed var(--danger);padding:6px 8px;background:var(--danger-bg);color:var(--danger);font-size:11.5px;border-radius:0 var(--radius-sm) var(--radius-sm) 0}
 .flow-failure button{display:block;border:0;background:none;color:inherit;text-align:left;padding:0;font:inherit}
+.scenario-map{padding:12px 14px 14px}
+.scenario-group .flow-step-wrap{min-width:210px;max-width:235px}
+.scenario-group .flow-arrow{min-width:40px}
+.scenario-group .flow-node .page,.scenario-group .flow-node .result,
+.scenario-group .state-impact-chip small{color:var(--text);opacity:.78}
+.scenario-group .flow-arrow small{color:var(--muted)}
+.scenario-lane{display:grid;grid-template-columns:112px minmax(0,1fr);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.scenario-lane+.scenario-lane{margin-top:8px}
+.scenario-lane-label{padding:12px 10px;background:var(--accent-weak);color:var(--accent-text);font-size:11px;font-weight:700;border-right:1px solid var(--border);word-break:break-word}
+.scenario-lane .flow-track{padding:12px;background:var(--panel)}
+.state-impact-list{display:grid;gap:6px;margin-top:7px}
+.state-impact-chip{width:100%;border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-weak);color:var(--text);padding:7px 8px;text-align:left;font-size:11.5px}
+.state-impact-chip b{display:block;color:var(--accent-text);margin-bottom:2px}
+.state-impact-chip small{display:block;color:var(--muted);margin-top:3px}
+.state-impact-empty{font-size:11px;color:var(--faint);padding:6px 1px}
+.step-exceptions{margin-top:7px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--danger-bg);color:var(--danger)}
+.step-exceptions summary{cursor:pointer;padding:6px 8px;font-size:11.5px;font-weight:650}
+.step-exceptions button{display:block;width:100%;border:0;border-top:1px dashed color-mix(in srgb,var(--danger) 35%,transparent);background:none;color:inherit;text-align:left;padding:7px 8px;font-size:11px}
+.scenario-dependencies{display:flex;gap:7px;flex-wrap:wrap;padding:10px 12px}
+.dependency-card{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);padding:7px 9px;text-align:left;font-size:11.5px}
+.dependency-card b{color:var(--accent-text)}
+.scenario-details{margin:9px 14px 13px;border-top:1px solid var(--border);padding-top:9px;color:var(--muted)}
+.scenario-details summary{cursor:pointer;font-size:12px;font-weight:650}
+.scenario-details-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;margin-top:8px}
+@media(max-width:900px){.scenario-lane{grid-template-columns:1fr}.scenario-lane-label{border-right:0;border-bottom:1px solid var(--border)}}
 .state-lane{padding:12px 14px}.transition-row{display:grid;grid-template-columns:minmax(150px,220px) minmax(180px,1fr) minmax(150px,220px);gap:10px;align-items:stretch;margin-bottom:9px}
 .state-node{padding:9px 11px;font-weight:650}.state-node small{display:block;font-weight:400;color:var(--muted);margin-top:4px}
 .transition-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;border-top:1px solid var(--accent);margin-top:18px;min-width:0}
@@ -274,8 +299,8 @@ a{color:var(--accent-text)}
     <main class="main">
       <div class="main-head">
         <div class="tabs" role="tablist">
-          <button class="tab active" id="tab-graph" role="tab" aria-selected="true">关系图</button>
-          <button class="tab" id="tab-flow" role="tab" aria-selected="false">用户流程</button>
+          <button class="tab" id="tab-graph" role="tab" aria-selected="false">系统关系</button>
+          <button class="tab active" id="tab-flow" role="tab" aria-selected="true">场景流程</button>
           <button class="tab" id="tab-state" role="tab" aria-selected="false">状态机</button>
           <button class="tab" id="tab-boundary" role="tab" aria-selected="false">边界与异常</button>
           <button class="tab" id="tab-req" role="tab" aria-selected="false">需求索引</button>
@@ -283,7 +308,7 @@ a{color:var(--accent-text)}
         </div>
         <div class="crumbs" id="crumbs"></div>
       </div>
-      <div id="view-graph" class="viewport" role="tabpanel" aria-label="关系图">
+      <div id="view-graph" class="viewport" role="tabpanel" aria-label="系统关系" hidden>
         <div class="hint" id="hint"></div>
         <svg class="stage-svg" id="svg" role="img" aria-label="模块关系图"></svg>
         <div class="legend" id="legend"></div>
@@ -293,7 +318,7 @@ a{color:var(--accent-text)}
           <button id="zfit" aria-label="适应窗口" style="font-size:12px">⤢</button>
         </div>
       </div>
-      <div id="view-flow" class="behavior-panel" role="tabpanel" aria-label="用户流程" hidden></div>
+      <div id="view-flow" class="behavior-panel" role="tabpanel" aria-label="场景流程"></div>
       <div id="view-state" class="behavior-panel" role="tabpanel" aria-label="业务状态机" hidden></div>
       <div id="view-boundary" class="behavior-panel" role="tabpanel" aria-label="边界与异常" hidden></div>
       <div id="view-req" class="panel" role="tabpanel" aria-label="需求索引" hidden></div>
@@ -367,14 +392,15 @@ function byPath(a,b){ var pa=(a.path||a.scopeId||""),pb=(b.path||b.scopeId||"");
 
 var nodeById={}; NODES.forEach(function(n){ nodeById[n.nodeId]=n; });
 var pagesByScope={}, dataByScope={}, flowsByScope={}, flowPartsByScope={},
-    businessStatesByScope={}, pageStatesByScope={}, boundariesByScope={},
-    gapsByScope={};
+    stateImpactsByScope={}, businessStatesByScope={}, pageStatesByScope={},
+    boundariesByScope={}, gapsByScope={};
 NODES.forEach(function(n){
   var d=n.detail||{};
   if(n.kind==="page"){ (pagesByScope[n.scopeId]=pagesByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="dataObject"){ (dataByScope[n.scopeId]=dataByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="flow"&&d.category==="userFlow"){ (flowsByScope[n.scopeId]=flowsByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="flow"&&(d.category==="flowStep"||d.category==="terminal"||d.category==="failureBranch")){ (flowPartsByScope[n.scopeId]=flowPartsByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="flow"&&d.category==="stateImpact"){ (stateImpactsByScope[n.scopeId]=stateImpactsByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="flow"&&d.category==="boundary"){ (boundariesByScope[n.scopeId]=boundariesByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="state"&&d.category==="businessState"){ (businessStatesByScope[n.scopeId]=businessStatesByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="state"&&d.category==="pageState"){ (pageStatesByScope[n.scopeId]=pageStatesByScope[n.scopeId]||[]).push(n); }
@@ -411,7 +437,7 @@ function modMeta(m){
 function scopeTitle(id){ return (scopeById[id]&&scopeById[id].title)||id||"—"; }
 
 /* ---------- state ---------- */
-var state={ view:"graph", level:"overview", moduleId:null, selKey:null, focusId:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
+var state={ view:"flow", level:"overview", moduleId:null, scenarioId:null, selKey:null, focusId:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
 
 /* ---------- theme ---------- */
 function effTheme(){
@@ -518,7 +544,7 @@ function renderCrumbs(){
     return;
   }
   if(isBehaviorView(state.view)){
-    var labels={flow:"用户流程",state:"业务状态机",boundary:"边界与异常"};
+    var labels={flow:"场景流程",state:"业务状态机",boundary:"边界与异常"};
     var bm=scopeById[state.moduleId];
     if(bm){
       var bsys=scopeById[bm.parentScopeId];
@@ -875,50 +901,162 @@ function flowPart(scopeId,flowId,category){
     var d=n.detail||{}; return d.flowId===flowId&&d.category===category;
   });
 }
+function behaviorDependencyTitle(id,fallback){
+  if(!id&&!fallback) return "";
+  var node=nodeById[id],scope=scopeById[id];
+  return (node&&node.title)||(scope&&(scope.title||scope.scopeId))||fallback||"未解析依赖";
+}
 function renderFlows(){
   var view=$("view-flow"); view.textContent="";
-  var roots=(flowsByScope[state.moduleId]||[]).slice().sort(byPath);
-  var steps=(flowPartsByScope[state.moduleId]||[]).filter(function(n){
-    return (n.detail||{}).category==="flowStep";
-  });
-  behaviorStats(view,[["核心流程",roots.length],["行为步骤",steps.length],
-    ["失败分支",(flowPartsByScope[state.moduleId]||[]).filter(function(n){return (n.detail||{}).category==="failureBranch";}).length]]);
+  var scopeId=state.moduleId;
+  var roots=(flowsByScope[scopeId]||[]).slice().sort(byPath);
+  var parts=flowPartsByScope[scopeId]||[];
+  var allSteps=parts.filter(function(n){return (n.detail||{}).category==="flowStep";});
+  var allFailures=parts.filter(function(n){return (n.detail||{}).category==="failureBranch";});
+  var allImpacts=stateImpactsByScope[scopeId]||[];
+  var allPageStates=pageStatesByScope[scopeId]||[];
+  behaviorStats(view,[["业务场景",roots.length],["行为步骤",allSteps.length],
+    ["状态影响",allImpacts.length],["异常分支",allFailures.length+allPageStates.length]]);
   if(!roots.length){ behaviorEmpty(view,"该模块尚未声明「核心流程（机器可解析）」表。"); return; }
+  var activeRoot=roots.find(function(root){return root.nodeId===state.scenarioId;});
+  if(!activeRoot){
+    activeRoot=roots.find(function(root){
+      return allImpacts.some(function(impact){return (impact.detail||{}).flowId===root.nodeId;});
+    })||roots[0];
+    state.scenarioId=activeRoot.nodeId;
+  }
+  var picker=h("select",{class:"filter-input scenario-picker",
+    id:"scenario-picker","aria-label":"选择业务场景"});
   roots.forEach(function(root){
-    var flowSteps=flowPart(state.moduleId,root.nodeId,"flowStep").sort(function(a,b){
+    picker.appendChild(h("option",{value:root.nodeId},root.title));
+  });
+  picker.value=activeRoot.nodeId;
+  picker.addEventListener("change",function(){
+    state.scenarioId=this.value; renderFlows();
+  });
+  view.appendChild(h("div",{class:"filter-row"},
+    h("label",{for:"scenario-picker"},"选择业务场景"),picker,
+    h("span",{class:"muted-text"},"一次只展开一条主流程；状态与异常按步骤挂载")));
+  [activeRoot].forEach(function(root){
+    var flowSteps=flowPart(scopeId,root.nodeId,"flowStep").sort(function(a,b){
       return String((a.detail||{}).stepId).localeCompare(String((b.detail||{}).stepId),undefined,{numeric:true});
     });
-    var terminals=flowPart(state.moduleId,root.nodeId,"terminal");
-    var group=h("section",{class:"behavior-group"});
+    var terminals=flowPart(scopeId,root.nodeId,"terminal");
+    var failures=flowPart(scopeId,root.nodeId,"failureBranch");
+    var impacts=allImpacts.filter(function(n){return (n.detail||{}).flowId===root.nodeId;});
+    var pageStates=allPageStates.filter(function(n){
+      var d=n.detail||{};
+      return d.flowId===root.nodeId||(!d.flowId&&d.flowTitle===root.title);
+    });
+    var group=h("section",{class:"behavior-group scenario-group","data-flow-id":root.nodeId});
     group.appendChild(h("div",{class:"behavior-head"},
-      h("h3",{},root.title),h("span",{class:"meta"},flowSteps.length+" 步 · 成功/失败双分支")));
+      h("h3",{},root.title),
+      h("span",{class:"meta"},flowSteps.length+" 步 · "+impacts.length+
+        " 个状态变化 · "+(failures.length+pageStates.length)+" 个异常")));
+    var map=h("div",{class:"scenario-map"});
+    var primary=h("div",{class:"scenario-lane"},
+      h("div",{class:"scenario-lane-label"},scopeTitle(scopeId)));
     var track=h("div",{class:"flow-track"});
     track.appendChild(h("button",{class:"flow-start",onclick:function(){openNodeCard(root);}},"开始"));
     flowSteps.forEach(function(step,index){
       var d=step.detail||{};
+      var stepImpacts=impacts.filter(function(n){
+        var x=n.detail||{};
+        return x.stepNodeId===step.nodeId||x.stepId===d.stepId;
+      });
+      var stepStates=pageStates.filter(function(n){
+        var x=n.detail||{};
+        return x.stepNodeId===step.nodeId||x.stepId===d.stepId;
+      });
+      var stepFailures=failures.filter(function(n){
+        return (n.detail||{}).stepId===d.stepId;
+      });
       track.appendChild(h("div",{class:"flow-arrow"},
         h("span",{},"→"),h("small",{},index===0?"入口":(d.condition||"继续"))));
-      var wrap=h("div",{class:"flow-step-wrap"});
+      var wrap=h("div",{class:"flow-step-wrap","data-step-id":d.stepId||""});
       wrap.appendChild(h("button",{class:"flow-node",onclick:function(){openNodeCard(step);}},
         h("div",{class:"step"},d.stepId||("步骤 "+(index+1))),
         h("div",{class:"page"},(d.pageTitle||"未绑定页面")+" · "+(d.role||"未声明角色")),
         h("div",{class:"action"},d.action||step.title),
-        h("div",{class:"result"},"结果 · "+(d.result||"—")),
+        h("div",{class:"result"},"成功 · "+(d.result||"—")),
         h("div",{class:"result"},"下一步 · "+(d.nextStep||"—"))));
-      flowPart(state.moduleId,root.nodeId,"failureBranch").filter(function(n){
-        return (n.detail||{}).stepId===d.stepId;
-      }).forEach(function(failure){
-        wrap.appendChild(h("div",{class:"flow-failure"},
-          h("button",{onclick:function(){openNodeCard(failure);}},
-            "失败 ↘ "+failure.title)));
-      });
+      if(stepImpacts.length){
+        var impactList=h("div",{class:"state-impact-list","aria-label":"状态影响"});
+        stepImpacts.forEach(function(impact){
+          var x=impact.detail||{};
+          var dependency=x.dependency?
+            "依赖 "+behaviorDependencyTitle(x.dependencyScopeId,x.dependency):"";
+          impactList.appendChild(h("button",{class:"state-impact-chip",onclick:function(){openNodeCard(impact);}},
+            h("b",{},"状态 · "+(x.object||"业务对象")),
+            (x.currentState||"—")+" → "+(x.nextState||"—"),
+            dependency?h("small",{},dependency+" · 失败: "+(x.failurePropagation||"未声明")):null));
+        });
+        wrap.appendChild(impactList);
+      }else{
+        wrap.appendChild(h("div",{class:"state-impact-empty"},"未声明本步骤的业务状态变化"));
+      }
+      if(stepFailures.length||stepStates.length){
+        var details=h("details",{class:"step-exceptions"},
+          h("summary",{},"异常 "+(stepFailures.length+stepStates.length)));
+        stepFailures.forEach(function(failure){
+          details.appendChild(h("button",{onclick:function(){openNodeCard(failure);}},
+            "流程失败 · "+failure.title));
+        });
+        stepStates.forEach(function(pageState){
+          var x=pageState.detail||{};
+          details.appendChild(h("button",{onclick:function(){openNodeCard(pageState);}},
+            pageState.title+" · "+(x.systemBehavior||x.acceptance||"查看处理方式")));
+        });
+        wrap.appendChild(details);
+      }
       track.appendChild(wrap);
     });
     if(terminals.length){
       track.appendChild(h("div",{class:"flow-arrow"},h("span",{},"→"),h("small",{},"完成")));
       track.appendChild(h("button",{class:"flow-end",onclick:function(){openNodeCard(terminals[0]);}},"结束"));
     }
-    group.appendChild(track); view.appendChild(group);
+    primary.appendChild(track); map.appendChild(primary);
+    var dependencyItems=[],dependencySeen={};
+    impacts.forEach(function(impact){
+      var x=impact.detail||{},key=x.dependencyScopeId||x.dependency;
+      if(!key||dependencySeen[key]) return;
+      dependencySeen[key]=1; dependencyItems.push(impact);
+    });
+    if(dependencyItems.length){
+      var dependencyLane=h("div",{class:"scenario-lane"},
+        h("div",{class:"scenario-lane-label"},"跨模块 / 外部依赖"));
+      var dependencyCards=h("div",{class:"scenario-dependencies"});
+      dependencyItems.forEach(function(impact){
+        var x=impact.detail||{};
+        dependencyCards.appendChild(h("button",{class:"dependency-card",onclick:function(){openNodeCard(impact);}},
+          h("b",{},behaviorDependencyTitle(x.dependencyScopeId,x.dependency)),
+          " · "+(x.failurePropagation||"失败传播未声明")));
+      });
+      dependencyLane.appendChild(dependencyCards); map.appendChild(dependencyLane);
+    }
+    group.appendChild(map);
+    var unbound=pageStates.filter(function(n){return !(n.detail||{}).stepId;});
+    var moduleBoundaries=boundariesByScope[scopeId]||[];
+    if(unbound.length||moduleBoundaries.length){
+      var extra=h("details",{class:"scenario-details"},
+        h("summary",{},"查看流程级异常与模块职责边界 ("+
+          (unbound.length+moduleBoundaries.length)+")"));
+      var extraGrid=h("div",{class:"scenario-details-grid"});
+      unbound.forEach(function(n){var d=n.detail||{};
+        extraGrid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
+          h("h4",{},"异常 · "+n.title),
+          kvList([["页面",d.pageTitle||"流程级"],["系统",d.systemBehavior],
+            ["恢复",d.acceptance]])));
+      });
+      moduleBoundaries.forEach(function(n){var d=n.detail||{};
+        extraGrid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
+          h("h4",{},"边界 · "+n.title),
+          kvList([["负责",d.responsibility],["不负责",d.excluded],
+            ["依赖",d.dependency]])));
+      });
+      extra.appendChild(extraGrid); group.appendChild(extra);
+    }
+    view.appendChild(group);
   });
 }
 function renderStateMachines(){
@@ -991,7 +1129,7 @@ function renderBoundaries(){
 
 /* ---------- navigation ---------- */
 function selectModule(scopeId){
-  state.moduleId=scopeId; state.focusId=null; state.selKey=null; closeDrawer();
+  state.moduleId=scopeId; state.scenarioId=null; state.focusId=null; state.selKey=null; closeDrawer();
   if(state.view==="flow") renderFlows();
   else if(state.view==="state") renderStateMachines();
   else if(state.view==="boundary") renderBoundaries();
@@ -999,12 +1137,12 @@ function selectModule(scopeId){
   renderSidebar(); renderCrumbs();
 }
 function openModule(scopeId){
+  state.level="module"; state.moduleId=scopeId; state.scenarioId=null;
+  state.focusId=null; state.selKey=null; closeDrawer();
   setView("graph");
-  state.level="module"; state.moduleId=scopeId; state.focusId=null; state.selKey=null;
-  renderSidebar(); renderCrumbs(); renderGraph();
 }
 function backToOverview(){
-  state.level="overview"; state.moduleId=null; state.focusId=null; state.selKey=null;
+  state.level="overview"; state.moduleId=null; state.scenarioId=null; state.focusId=null; state.selKey=null;
   closeDrawer();
   renderSidebar(); renderCrumbs();
   if(state.view!=="graph") setView("graph"); else renderGraph();
@@ -1133,6 +1271,12 @@ function openNodeCard(n){
     }else if(d.category==="failureBranch"){
       body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"失败分支"),
         kvList([["步骤ID",d.stepId],["处理",d.handling]])));
+    }else if(d.category==="stateImpact"){
+      body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"步骤状态影响"),
+        kvList([["所属流程",d.flowTitle],["步骤ID",d.stepId],
+          ["业务对象",d.object],["状态变化",(d.currentState||"—")+" → "+(d.nextState||"—")],
+          ["依赖",behaviorDependencyTitle(d.dependencyScopeId,d.dependency)],
+          ["失败传播",d.failurePropagation]])));
     }else if(d.category==="boundary"){
       body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"模块边界"),
         kvList([["本模块负责",d.responsibility],["不负责",d.excluded],["依赖",d.dependency]])));
@@ -1140,9 +1284,10 @@ function openNodeCard(n){
   }
   if(n.kind==="state"&&d.category==="pageState"){
     body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"页面边缘状态"),
-      kvList([["所属流程",d.flowTitle],["页面",d.pageTitle||"流程级"],
-        ["触发条件",d.trigger],["系统行为",d.systemBehavior],
-        ["用户可执行",d.userAction],["恢复/验收",d.acceptance]])));
+      kvList([["所属流程",d.flowTitle],["步骤ID",d.stepId||"未绑定"],
+        ["页面",d.pageTitle||"流程级"],["触发条件",d.trigger],
+        ["系统行为",d.systemBehavior],["用户可执行",d.userAction],
+        ["恢复/验收",d.acceptance]])));
   }
   if(n.kind==="state"&&d.category==="businessState"){
     body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"业务状态"),
@@ -1329,8 +1474,8 @@ function buildSearchIndex(){
     else if(n.kind==="requirement") idx.push({type:"req",label:n.title,sub:(n.detail||{}).state||"",node:n});
     else if(n.kind==="flow"){
       var fc=(n.detail||{}).category;
-      idx.push({type:fc==="boundary"?"boundary":"flow",label:n.title,
-        sub:scopeTitle(n.scopeId)+" · "+fc,node:n,scope:n.scopeId});
+      idx.push({type:fc==="boundary"?"boundary":fc==="stateImpact"?"stateImpact":"flow",
+        label:n.title,sub:scopeTitle(n.scopeId)+" · "+fc,node:n,scope:n.scopeId});
     }else if(n.kind==="state"){
       var sc=(n.detail||{}).category;
       idx.push({type:sc==="pageState"?"pageState":"businessState",label:n.title,
@@ -1366,8 +1511,8 @@ function renderResults(){
   resultsEl.textContent="";
   if(!curResults.length){ resultsEl.hidden=true; searchEl.setAttribute("aria-expanded","false"); return; }
   resultsEl.hidden=false; searchEl.setAttribute("aria-expanded","true");
-  var kindLabel={page:"页面",data:"数据",flow:"流程",businessState:"状态",
-    pageState:"边缘",boundary:"边界",req:"需求",oq:"OQ",module:"模块"};
+  var kindLabel={page:"页面",data:"数据",flow:"流程",stateImpact:"状态影响",
+    businessState:"状态",pageState:"边缘",boundary:"边界",req:"需求",oq:"OQ",module:"模块"};
   curResults.forEach(function(it,i){
     var b=h("button",{class:"result"+(i===activeRes?" active":""),role:"option",onclick:function(){ chooseResult(it); }},
       h("span",{class:"rkind"},kindLabel[it.type]||it.type),
@@ -1379,15 +1524,22 @@ function renderResults(){
 function chooseResult(it){
   hideResults();
   searchEl.value=it.label||"";
+  var flowDetail=it.node&&it.node.detail||{};
+  if(it.type==="flow"||it.type==="stateImpact"){
+    state.scenarioId=flowDetail.category==="userFlow"?
+      it.node.nodeId:flowDetail.flowId||state.scenarioId;
+  }
   if(it.type==="page"||it.type==="data"){
     openModule(it.scope);
     // wait for layout then focus
     focusOn(it.node.nodeId); openNodeCard(it.node); applyFocus(); markSelected();
     var el=svg.querySelector('[data-node="'+cssEsc(it.node.nodeId)+'"]'); if(el&&el.focus) el.focus();
-  }else if(it.type==="flow"||it.type==="businessState"||
-           it.type==="pageState"||it.type==="boundary"){
+  }else if(it.type==="flow"||it.type==="stateImpact"||
+           it.type==="businessState"||it.type==="pageState"||
+           it.type==="boundary"){
     state.moduleId=it.scope;
-    setView(it.type==="flow"?"flow":it.type==="businessState"?"state":"boundary");
+    setView((it.type==="flow"||it.type==="stateImpact")?"flow":
+      it.type==="businessState"?"state":"boundary");
     openNodeCard(it.node);
   }else if(it.type==="module"){
     openModule(it.scope);
@@ -1425,9 +1577,7 @@ function cssEsc(v){ if(window.CSS&&CSS.escape) return CSS.escape(v); return Stri
 
 /* ---------- init ---------- */
 window.addEventListener("resize",function(){ if(state.view==="graph"&&contentBounds) fitView(); });
-renderSidebar();
-renderCrumbs();
-renderGraph();
+setView("flow");
 
 })();
 </script>

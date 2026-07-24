@@ -110,6 +110,7 @@
         "pageStateCount": { "type": "integer", "minimum": 0 },
         "businessStateCount": { "type": "integer", "minimum": 0 },
         "boundaryCount": { "type": "integer", "minimum": 0 },
+        "stateImpactCount": { "type": "integer", "minimum": 0 },
         "edgeCount": { "type": "integer", "minimum": 0 },
         "requirementCount": { "type": "integer", "minimum": 0 },
         "gapCount": { "type": "integer", "minimum": 0 }

@@ -36,7 +36,7 @@ from .canonical_store import (
     sha256_of_bytes,
 )
 
-GENERATOR_VERSION = "1.1.0"
+GENERATOR_VERSION = "1.2.0"
 LOGIC_MODEL_SCHEMA_VERSION = 1
 
 WORKTREE_MANIFEST_RELPATH = "prd-worktree.json"
@@ -60,6 +60,11 @@ _INTERACT_MARKER = "模块交互（机器可解析）"
 _PAGE_HEADER = ["页面", "入口", "角色", "前置条件", "用户动作", "系统结果"]
 _FLOW_HEADER = ["流程", "步骤ID", "关联页面", "角色", "用户动作/触发", "条件/分支",
                 "系统结果", "下一步", "失败处理", "需求编号"]
+_IMPACT_MARKER = "流程状态影响（机器可解析）"
+_IMPACT_HEADER = ["流程", "步骤ID", "业务对象", "当前状态", "下一状态",
+                  "依赖模块/系统", "失败传播", "需求编号"]
+_STEP_PAGE_STATE_HEADER = ["步骤ID", "页面", "状态", "触发条件", "系统行为",
+                           "用户可执行操作", "验收要点"]
 _PAGE_STATE_HEADER = ["页面", "状态", "触发条件", "系统行为", "用户可执行操作", "验收要点"]
 _LEGACY_PAGE_STATE_HEADER = ["状态", "触发条件", "系统行为", "用户可执行操作", "验收要点"]
 _BOUNDARY_MARKER = "模块边界"
@@ -297,6 +302,16 @@ def _flow_page_titles(text):
 
 
 # ---------------------------------------------------------------- 作用域发现
+def _resolve_module_scope(reference, module_scopes):
+    if reference in module_scopes:
+        return reference
+    matches = [
+        scope for scope in module_scopes
+        if scope.split("/")[-1] == reference
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 
 def _module_prds(root):
     """发现全部模块 prd.md：返回 [(module_scope_id, system_scope_id, path)]，
@@ -405,12 +420,15 @@ def _source_with_requirements(module_scope, anchor, text=""):
     return source
 
 
-def _compile_module(root, module_scope, text, nodes, edges, gaps):
+def _compile_module(root, module_scope, text, module_scopes,
+                    nodes, edges, gaps):
     """解析单模块结构化契约，向 nodes/edges/gaps 追加确定性读模型。"""
     page_titles = {}
     flow_ids_by_title = {}
+    flow_steps_by_title = {}
     seen_edge_ids = set()
     business_state_nodes = {}
+    external_dependency_nodes = {}
 
     def _add_edge(edge):
         # 同一逻辑边多行声明时合并来源，绝不产出重复 edgeId。
@@ -552,6 +570,7 @@ def _compile_module(root, module_scope, text, nodes, edges, gaps):
                 "detail": {"category": "userFlow",
                            "stepCount": len(declared_steps)}})
             step_nodes = {}
+            flow_steps_by_title[_flow_title_key(flow_title)] = step_nodes
             for row in declared_steps:
                 step_id, page_title = row[1], row[2]
                 referenced_pages = _flow_page_titles(page_title)
@@ -659,26 +678,36 @@ def _compile_module(root, module_scope, text, nodes, edges, gaps):
             "detail": "模块缺少核心路径「边缘状态」表，加载/空态/异常恢复待深化",
             "backlogRef": None})
     for flow_title, state_header, state_rows in page_state_tables:
-        if state_header not in (_PAGE_STATE_HEADER, _LEGACY_PAGE_STATE_HEADER):
+        if state_header not in (
+                _STEP_PAGE_STATE_HEADER, _PAGE_STATE_HEADER,
+                _LEGACY_PAGE_STATE_HEADER):
             gaps.append({
                 "gapId": f"gap:{module_scope}:page-states:{flow_title}",
                 "scopeId": module_scope, "kind": "unparsed",
                 "detail": f"流程「{flow_title}」边缘状态表头列序不符: {state_header}",
                 "backlogRef": None})
             continue
-        explicit_page = state_header == _PAGE_STATE_HEADER
-        flow_id = flow_ids_by_title.get(_flow_title_key(flow_title))
+        has_step = state_header == _STEP_PAGE_STATE_HEADER
+        explicit_page = state_header in (
+            _STEP_PAGE_STATE_HEADER, _PAGE_STATE_HEADER)
+        flow_key = _flow_title_key(flow_title)
+        flow_id = flow_ids_by_title.get(flow_key)
         for row_index, row in enumerate(state_rows, 1):
             expected = len(state_header)
             if len(row) < expected:
                 continue
-            offset = 1 if explicit_page else 0
-            page_title = row[0] if explicit_page else None
+            step_id = row[0] if has_step else None
+            page_column = 1 if has_step else 0
+            offset = 2 if has_step else 1 if explicit_page else 0
+            page_title = row[page_column] if explicit_page else None
             referenced_pages = _flow_page_titles(page_title) if page_title else []
             referenced_page_ids = [
                 page_titles[title] for title in referenced_pages
                 if title in page_titles
             ]
+            step_node_id = (
+                flow_steps_by_title.get(flow_key, {}).get(step_id)
+                if step_id else None)
             state_title = row[offset]
             if not state_title:
                 continue
@@ -687,14 +716,16 @@ def _compile_module(root, module_scope, text, nodes, edges, gaps):
                 module_scope, f"{flow_title} / 边缘状态", " ".join(row))
             page_state_id = (
                 f"pagestate:{module_scope}:{flow_title}:"
-                f"{page_title or 'flow'}:{state_title}:{row_index}")
+                f"{step_id or 'flow'}:{page_title or 'flow'}:"
+                f"{state_title}:{row_index}")
             nodes.append({
                 "nodeId": page_state_id, "kind": "state",
                 "scopeId": module_scope, "title": state_title,
                 "status": "original", "sources": [source],
                 "detail": {
                     "category": "pageState", "flowTitle": flow_title,
-                    "flowId": flow_id,
+                    "flowId": flow_id, "stepId": step_id,
+                    "stepNodeId": step_node_id,
                     "pageTitle": page_title,
                     "pageId": (
                         referenced_page_ids[0]
@@ -710,6 +741,23 @@ def _compile_module(root, module_scope, text, nodes, edges, gaps):
                     "kind": "traces", "from": page_state_id, "to": flow_id,
                     "status": "original", "sources": [source],
                     "detail": {"relation": "page-state-flow"}})
+            if step_id and step_node_id:
+                _add_edge({
+                    "edgeId": f"trace:{page_state_id}:step",
+                    "kind": "traces", "from": page_state_id,
+                    "to": step_node_id, "status": "original",
+                    "sources": [source],
+                    "detail": {"relation": "page-state-step"}})
+            elif step_id:
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:page-state:{flow_title}:"
+                        f"{row_index}:step"),
+                    "scopeId": module_scope, "kind": "missing-source",
+                    "detail": (
+                        f"流程「{flow_title}」边缘状态引用不存在步骤: "
+                        f"{step_id}"),
+                    "backlogRef": None})
             for page_index, referenced_title in enumerate(referenced_pages):
                 referenced_id = page_titles.get(referenced_title)
                 if referenced_id:
@@ -847,6 +895,133 @@ def _compile_module(root, module_scope, text, nodes, edges, gaps):
             "scopeId": module_scope, "kind": "unparsed",
             "detail": f"状态机表头列序不符，无法机械解析: {state_header}",
             "backlogRef": None})
+    impact_status, impact_header, impact_rows = _find_section_table(
+        text, _IMPACT_MARKER)
+    if impact_status == "absent" and flow_ids_by_title:
+        gaps.append({
+            "gapId": f"gap:{module_scope}:state-impacts",
+            "scopeId": module_scope, "kind": "missing-section",
+            "detail": "模块缺少「流程状态影响（机器可解析）」表，流程步骤与业务状态变化尚未关联",
+            "backlogRef": None})
+    elif impact_status == "ok" and impact_header != _IMPACT_HEADER:
+        gaps.append({
+            "gapId": f"gap:{module_scope}:state-impacts",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": f"流程状态影响表头列序不符，无法机械解析: {impact_header}",
+            "backlogRef": None})
+    elif impact_status == "ok":
+        for row_index, row in enumerate(impact_rows, 1):
+            if len(row) < len(_IMPACT_HEADER) or not row[0] or not row[1]:
+                continue
+            (flow_title, step_id, object_name, current_state,
+             next_state, dependency, failure, requirements) = row[:8]
+            flow_key = _flow_title_key(flow_title)
+            flow_id = flow_ids_by_title.get(flow_key)
+            step_node_id = flow_steps_by_title.get(flow_key, {}).get(step_id)
+            gap_prefix = (
+                f"gap:{module_scope}:state-impact:{flow_title}:{row_index}")
+            if not flow_id or not step_node_id:
+                gaps.append({
+                    "gapId": f"{gap_prefix}:step",
+                    "scopeId": module_scope, "kind": "missing-source",
+                    "detail": (
+                        f"流程状态影响引用不存在步骤: {step_id}"
+                        f"（流程: {flow_title}）"),
+                    "backlogRef": None})
+                continue
+            from_state_id = (
+                f"state:{module_scope}:{object_name}:{current_state}")
+            to_state_id = f"state:{module_scope}:{object_name}:{next_state}"
+            transition = next((
+                edge for edge in edges
+                if edge["kind"] == "transition"
+                and edge["from"] == from_state_id
+                and edge["to"] == to_state_id
+            ), None)
+            if transition is None:
+                gaps.append({
+                    "gapId": f"{gap_prefix}:transition",
+                    "scopeId": module_scope, "kind": "missing-source",
+                    "detail": (
+                        f"流程状态影响未找到状态流转: {object_name} "
+                        f"{current_state} → {next_state}"),
+                    "backlogRef": None})
+                continue
+            source = _source_with_requirements(
+                module_scope, _IMPACT_MARKER,
+                " ".join((flow_title, step_id, object_name, current_state,
+                          next_state, dependency, failure, requirements)))
+            impact_id = (
+                f"stateimpact:{module_scope}:{flow_title}:{step_id}:"
+                f"{object_name}:{current_state}->{next_state}:{row_index}")
+            dependency_id = None
+            dependency_scope_id = None
+            if dependency not in {"", "无", "—", "-"}:
+                external_match = re.match(
+                    r"^(?:external|外部)\s*[:：]\s*(.+)$",
+                    dependency, re.IGNORECASE)
+                if external_match:
+                    external_name = external_match.group(1).strip()
+                    dependency_id = (
+                        f"external:{module_scope}:{external_name}")
+                    dependency_scope_id = dependency_id
+                    if dependency_id not in external_dependency_nodes:
+                        external_dependency_nodes[dependency_id] = True
+                        nodes.append({
+                            "nodeId": dependency_id, "kind": "flow",
+                            "scopeId": module_scope, "title": external_name,
+                            "status": "original", "sources": [source],
+                            "detail": {"category": "externalDependency"},
+                        })
+                else:
+                    dependency_scope_id = _resolve_module_scope(
+                        dependency, module_scopes)
+                    dependency_id = dependency_scope_id
+                    if dependency_scope_id is None:
+                        gaps.append({
+                            "gapId": f"{gap_prefix}:dependency",
+                            "scopeId": module_scope,
+                            "kind": "missing-source",
+                            "detail": (
+                                f"流程状态影响依赖模块不存在: {dependency}"),
+                            "backlogRef": None})
+            nodes.append({
+                "nodeId": impact_id, "kind": "flow",
+                "scopeId": module_scope,
+                "title": f"{object_name}: {current_state} → {next_state}",
+                "status": "original", "sources": [source],
+                "detail": {
+                    "category": "stateImpact", "flowTitle": flow_title,
+                    "flowId": flow_id, "stepId": step_id,
+                    "stepNodeId": step_node_id, "object": object_name,
+                    "currentState": current_state, "nextState": next_state,
+                    "fromStateId": from_state_id, "toStateId": to_state_id,
+                    "transitionEdgeId": transition["edgeId"],
+                    "dependency": dependency,
+                    "dependencyScopeId": dependency_scope_id,
+                    "failurePropagation": failure,
+                }})
+            for suffix, target, relation in (
+                    ("step", step_node_id, "state-impact-step"),
+                    ("from", from_state_id, "state-impact-from"),
+                    ("to", to_state_id, "state-impact-to")):
+                _add_edge({
+                    "edgeId": f"trace:{impact_id}:{suffix}",
+                    "kind": "traces", "from": impact_id, "to": target,
+                    "status": "original", "sources": [source],
+                    "detail": {"relation": relation}})
+            if dependency_id:
+                _add_edge({
+                    "edgeId": f"interaction:{impact_id}:{dependency_id}",
+                    "kind": "interacts", "from": impact_id,
+                    "to": dependency_id, "status": "original",
+                    "sources": [source],
+                    "detail": {
+                        "relation": "state-impact-dependency",
+                        "direction": "依赖", "trigger": flow_title,
+                        "failurePropagation": failure,
+                    }})
+
     status, header, rows = _find_section_table(text, _DATA_MARKER)
     if status == "absent":
         gaps.append({"gapId": f"gap:{module_scope}:data-rw",
@@ -929,7 +1104,7 @@ def _compile_model(root):
     gaps = []
     for module_scope, _system_scope, path in module_prds:
         _compile_module(root, module_scope, path.read_text(encoding="utf-8"),
-                        nodes, edges, gaps)
+                        module_scopes, nodes, edges, gaps)
     _resolve_interact_targets(edges, module_scopes)
 
     nodes.sort(key=lambda n: (n["kind"], n["nodeId"]))
@@ -958,6 +1133,11 @@ def _compile_model(root):
             n for n in nodes
             if n["kind"] == "flow"
             and (n.get("detail") or {}).get("category") == "boundary"
+        ]),
+        "stateImpactCount": len([
+            n for n in nodes
+            if n["kind"] == "flow"
+            and (n.get("detail") or {}).get("category") == "stateImpact"
         ]),
         "edgeCount": len(edges),
         "requirementCount": len([n for n in nodes if n["kind"] == "requirement"]),
@@ -1291,9 +1471,9 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "3.0.0"
+RENDERER_VERSION = "4.0.0"
 BROWSER_MATRIX_VERSION = "2026-07"
-VALIDATION_HARNESS_VERSION = "3.0.0"
+VALIDATION_HARNESS_VERSION = "4.0.0"
 
 _FIXTURE_MODULE = "01-portal/01-module"
 _FIXTURE_MODULE_B = "01-portal/02-module"
@@ -1322,6 +1502,8 @@ def _fixture_model():
     flow_src["requirementIds"] = ["REQ-100"]
     state_src = _fixture_source(f"{_FIXTURE_MODULE}/prd.md", _STATE_MARKER)
     boundary_src = _fixture_source(f"{_FIXTURE_MODULE}/prd.md", _BOUNDARY_MARKER)
+    impact_src = _fixture_source(f"{_FIXTURE_MODULE}/prd.md", _IMPACT_MARKER)
+    impact_src["requirementIds"] = ["REQ-100"]
     home_id = f"page:{_FIXTURE_MODULE}:{_FIXTURE_HOME_TITLE}"
     probe_id = f"page:{_FIXTURE_MODULE}:{_FIXTURE_PROBE_TITLE}"
     object_id = f"obj:{_FIXTURE_MODULE}:{_FIXTURE_OBJECT_TITLE}"
@@ -1333,6 +1515,7 @@ def _fixture_model():
     page_state_id = f"pagestate:{_FIXTURE_MODULE}:查看订单详情:首页:加载中:1"
     active_state_id = f"state:{_FIXTURE_MODULE}:订单:处理中"
     done_state_id = f"state:{_FIXTURE_MODULE}:订单:已完成"
+    impact_id = f"stateimpact:{_FIXTURE_MODULE}:查看订单详情:S2:订单"
 
     scopes = [
         {"scopeId": WORKTREE_SCOPE_ID, "kind": "worktree",
@@ -1384,13 +1567,29 @@ def _fixture_model():
          "sources": [flow_src],
          "detail": {"category": "failureBranch", "flowId": flow_id,
                     "stepId": "S1", "handling": "提示订单不存在并停留"}},
+        {"nodeId": impact_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
+         "title": "订单: 处理中 → 已完成", "status": "original",
+         "sources": [impact_src],
+         "detail": {
+             "category": "stateImpact", "flowTitle": "查看订单详情",
+             "flowId": flow_id, "stepId": "S2", "stepNodeId": step2_id,
+             "object": "订单", "currentState": "处理中",
+             "nextState": "已完成", "fromStateId": active_state_id,
+             "toStateId": done_state_id,
+             "transitionEdgeId": (
+                 f"transition:{_FIXTURE_MODULE}:订单:处理中->已完成"),
+             "dependency": _FIXTURE_MODULE_B,
+             "dependencyScopeId": _FIXTURE_MODULE_B,
+             "failurePropagation": "协作模块不可用时保留处理中并支持重试",
+         }},
         {"nodeId": page_state_id, "kind": "state", "scopeId": _FIXTURE_MODULE,
          "title": "加载中", "status": "original", "sources": [flow_src],
          "detail": {"category": "pageState", "flowTitle": "查看订单详情",
-                    "flowId": flow_id, "pageTitle": _FIXTURE_HOME_TITLE,
-                    "pageId": home_id, "trigger": "首次进入",
-                    "systemBehavior": "显示骨架屏", "userAction": "等待",
-                    "acceptance": "数据返回后展示详情"}},
+                    "flowId": flow_id, "stepId": "S1",
+                    "stepNodeId": step1_id, "pageTitle": _FIXTURE_HOME_TITLE,
+                    "pageId": home_id, "pageIds": [home_id],
+                    "trigger": "首次进入", "systemBehavior": "显示骨架屏",
+                    "userAction": "等待", "acceptance": "数据返回后展示详情"}},
         {"nodeId": active_state_id, "kind": "state", "scopeId": _FIXTURE_MODULE,
          "title": "处理中", "status": "original", "sources": [state_src],
          "detail": {"category": "businessState", "object": "订单",
@@ -1448,11 +1647,29 @@ def _fixture_model():
         {"edgeId": f"trace:{page_state_id}:page", "kind": "traces",
          "from": page_state_id, "to": home_id, "status": "original",
          "sources": [flow_src], "detail": {"relation": "page-state"}},
+        {"edgeId": f"trace:{page_state_id}:step", "kind": "traces",
+         "from": page_state_id, "to": step1_id, "status": "original",
+         "sources": [flow_src], "detail": {"relation": "page-state-step"}},
         {"edgeId": f"transition:{_FIXTURE_MODULE}:订单:处理中->已完成",
          "kind": "transition", "from": active_state_id, "to": done_state_id,
          "status": "original", "sources": [state_src],
          "detail": {"condition": "处理成功", "action": "完成订单",
                     "reversible": "否", "notifications": "记录日志"}},
+        {"edgeId": f"trace:{impact_id}:step", "kind": "traces",
+         "from": impact_id, "to": step2_id, "status": "original",
+         "sources": [impact_src], "detail": {"relation": "state-impact-step"}},
+        {"edgeId": f"trace:{impact_id}:from", "kind": "traces",
+         "from": impact_id, "to": active_state_id, "status": "original",
+         "sources": [impact_src], "detail": {"relation": "state-impact-from"}},
+        {"edgeId": f"trace:{impact_id}:to", "kind": "traces",
+         "from": impact_id, "to": done_state_id, "status": "original",
+         "sources": [impact_src], "detail": {"relation": "state-impact-to"}},
+        {"edgeId": f"interaction:{impact_id}:{_FIXTURE_MODULE_B}",
+         "kind": "interacts", "from": impact_id, "to": _FIXTURE_MODULE_B,
+         "status": "original", "sources": [impact_src],
+         "detail": {"relation": "state-impact-dependency",
+                    "direction": "依赖", "trigger": "查看订单详情",
+                    "failurePropagation": "协作模块不可用时保留处理中并支持重试"}},
     ]
     gaps = [
         {"gapId": f"gap:{_FIXTURE_MODULE_B}:page-contract",
@@ -1472,6 +1689,7 @@ def _fixture_model():
         "coverage": {
             "moduleCount": 2, "pageCount": 2, "flowCount": 1,
             "pageStateCount": 1, "businessStateCount": 2, "boundaryCount": 1,
+            "stateImpactCount": 1,
             "edgeCount": len(edges), "requirementCount": 1,
             "gapCount": len(gaps),
         },

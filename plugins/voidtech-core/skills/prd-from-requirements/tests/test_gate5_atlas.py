@@ -106,6 +106,34 @@ class CompileTest(unittest.TestCase):
                          ["TST-001", "TST-002", "TST-003"])
         self.assertEqual(model["coverage"]["flowCount"], 1)
 
+    def test_links_step_to_verified_state_transition_and_dependency(self):
+        model = atlas.compile(self.root)
+        impacts = [
+            n for n in model["nodes"]
+            if n["kind"] == "flow"
+            and n["detail"].get("category") == "stateImpact"
+        ]
+        self.assertEqual(len(impacts), 1)
+        impact = impacts[0]
+        self.assertEqual(impact["detail"]["stepId"], "S1")
+        self.assertEqual(impact["detail"]["object"], "客户")
+        self.assertEqual(impact["detail"]["currentState"], "待激活")
+        self.assertEqual(impact["detail"]["nextState"], "已激活")
+        self.assertEqual(impact["detail"]["dependencyScopeId"],
+                         "01-test-system/02-module-b")
+        relations = {
+            (e["kind"], e["detail"].get("relation"), e["to"])
+            for e in model["edges"] if e["from"] == impact["nodeId"]
+        }
+        self.assertIn((
+            "traces", "state-impact-step",
+            "flowstep:01-test-system/01-module-a:查看客户详情:S1",
+        ), relations)
+        self.assertIn((
+            "interacts", "state-impact-dependency",
+            "01-test-system/02-module-b",
+        ), relations)
+
     def test_extracts_page_states_with_page_traceability(self):
         model = atlas.compile(self.root)
         page_states = [
@@ -125,6 +153,17 @@ class CompileTest(unittest.TestCase):
             "page:01-test-system/01-module-a:客户详情页",
         })
         self.assertEqual(model["coverage"]["pageStateCount"], 2)
+        step_trace_ids = {
+            e["to"] for e in model["edges"]
+            if e["kind"] == "traces"
+            and e["detail"].get("relation") == "page-state-step"
+        }
+        self.assertEqual(step_trace_ids, {
+            "flowstep:01-test-system/01-module-a:查看客户详情:S1",
+            "flowstep:01-test-system/01-module-a:查看客户详情:S2",
+        })
+        self.assertEqual({n["detail"]["stepId"] for n in page_states},
+                         {"S1", "S2"})
 
     def test_page_state_can_trace_to_multiple_declared_pages(self):
         write_atlas_module(
@@ -194,6 +233,7 @@ class CompileTest(unittest.TestCase):
 ## 2.1 账号状态
 
 
+
 | 对象 | 当前状态 | 进入条件 | 可执行操作 | 下一状态 | 触发方式 | 是否可逆 | 通知/日志 |
 |---|---|---|---|---|---|---|---|
 | 账号 | 正常 | 注册成功 | 封禁 | 封禁 | 人工 | 是 | 记录操作人 |
@@ -213,6 +253,31 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(len([
             e for e in model["edges"] if e["kind"] == "transition"
         ]), 2)
+
+    def test_invalid_step_state_and_dependency_links_are_gaps(self):
+        cases = [
+            (
+                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S404 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "引用不存在步骤: S404",
+            ),
+            (
+                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S1 | 客户 | 未知状态 | 已激活 | 02-module-b |",
+                "未找到状态流转: 客户 未知状态 → 已激活",
+            ),
+            (
+                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 99-ghost-module |",
+                "依赖模块不存在: 99-ghost-module",
+            ),
+        ]
+        for old, new, expected in cases:
+            with self.subTest(expected=expected):
+                write_atlas_module(self.root, ATLAS_MODULE_PRD.replace(old, new))
+                details = [g["detail"] for g in atlas.compile(self.root)["gaps"]]
+                self.assertTrue(any(expected in detail for detail in details),
+                                details)
 
     def test_invalid_behavior_references_are_reported_as_gaps(self):
         broken = ATLAS_MODULE_PRD.replace(
