@@ -77,6 +77,8 @@ class CompileTest(unittest.TestCase):
         model = atlas.compile(self.root)
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
+        self.assertEqual(atlas._validate_references(model), [])
+        self.assertEqual(model["generatorVersion"], "1.3.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -105,6 +107,298 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(flow_step["sources"][0]["requirementIds"],
                          ["TST-001", "TST-002", "TST-003"])
         self.assertEqual(model["coverage"]["flowCount"], 1)
+
+    def test_extracts_terminal_interaction_chains_with_step_and_page_traces(self):
+        model = atlas.compile(self.root)
+        interactions = [
+            node for node in model["nodes"]
+            if node["kind"] == "flow"
+            and node["detail"].get("category") == "interactionStep"
+        ]
+        self.assertEqual(len(interactions), 3)
+        self.assertEqual(model["coverage"]["interactionCount"], 3)
+        self.assertEqual({
+            (node["detail"]["stepId"], node["detail"]["interactionId"])
+            for node in interactions if node["detail"]["entry"]
+        }, {("S1", "I1"), ("S2", "I1")})
+
+        s1_i1 = next(
+            node for node in interactions
+            if node["detail"]["stepId"] == "S1"
+            and node["detail"]["interactionId"] == "I1")
+        self.assertEqual(s1_i1["detail"]["flowId"],
+                         "flow:01-test-system/01-module-a:查看客户详情")
+        self.assertEqual(s1_i1["detail"]["stepNodeId"],
+                         "flowstep:01-test-system/01-module-a:查看客户详情:S1")
+        self.assertEqual(s1_i1["detail"]["pageId"],
+                         "page:01-test-system/01-module-a:客户列表页")
+        self.assertTrue(s1_i1["detail"]["entry"])
+        self.assertEqual(s1_i1["detail"]["event"], "进入")
+        self.assertEqual(s1_i1["detail"]["nextInteraction"], "I2")
+        self.assertEqual(s1_i1["detail"]["failureRecovery"],
+                         "加载失败时提示重试")
+        expected_fields = {
+            "flowTitle": "查看客户详情",
+            "stepId": "S1",
+            "interactionId": "I1",
+            "pageTitle": "客户列表页",
+            "containerState": "列表",
+            "control": "无",
+            "event": "进入",
+            "availability": "已登录",
+            "immediateFeedback": "显示骨架屏",
+            "systemAction": "读取客户列表",
+            "successResult": "展示客户列表",
+            "failureRecovery": "加载失败时提示重试",
+            "nextInteraction": "I2",
+            "requirements": "TST-001",
+        }
+        self.assertEqual(
+            {key: s1_i1["detail"][key] for key in expected_fields},
+            expected_fields)
+
+        traces = {
+            (edge["detail"]["relation"], edge["to"])
+            for edge in model["edges"]
+            if edge["kind"] == "traces" and edge["from"] == s1_i1["nodeId"]
+        }
+        self.assertEqual(traces, {
+            ("interaction-step", s1_i1["detail"]["stepNodeId"]),
+            ("interaction-page", s1_i1["detail"]["pageId"]),
+        })
+        success = next(
+            edge for edge in model["edges"]
+            if edge["kind"] == "navigates"
+            and edge["from"] == s1_i1["nodeId"]
+            and edge["detail"].get("relation") == "interaction-success")
+        self.assertEqual(success["to"],
+                         "interaction:01-test-system/01-module-a:"
+                         "查看客户详情:S1:I2")
+
+    def test_state_impact_and_page_state_trace_to_declared_interactions(self):
+        model = atlas.compile(self.root)
+        impact = next(
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "stateImpact")
+        loading = next(
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "pageState"
+            and node["title"] == "加载中")
+        self.assertEqual(impact["detail"]["interactionId"], "I2")
+        self.assertEqual(loading["detail"]["interactionId"], "I1")
+        self.assertEqual(impact["detail"]["interactionNodeId"],
+                         "interaction:01-test-system/01-module-a:"
+                         "查看客户详情:S1:I2")
+        self.assertEqual(loading["detail"]["interactionNodeId"],
+                         "interaction:01-test-system/01-module-a:"
+                         "查看客户详情:S1:I1")
+        relations = {
+            (edge["from"], edge["detail"].get("relation"), edge["to"])
+            for edge in model["edges"] if edge["kind"] == "traces"
+        }
+        self.assertIn((
+            impact["nodeId"], "state-impact-interaction",
+            impact["detail"]["interactionNodeId"]), relations)
+        self.assertIn((
+            loading["nodeId"], "page-state-interaction",
+            loading["detail"]["interactionNodeId"]), relations)
+
+    def test_bad_state_and_exception_interaction_references_are_gaps(self):
+        cases = [
+            (
+                "| 查看客户详情 | S1 | I2 | 客户 | 待激活 |",
+                "| 查看客户详情 | S1 | I404 | 客户 | 待激活 |",
+                "流程状态影响引用不存在交互: I404",
+            ),
+            (
+                "| S1 | I1 | 客户列表页 | 加载中 |",
+                "| S1 | I404 | 客户列表页 | 加载中 |",
+                "边缘状态引用不存在交互: I404",
+            ),
+        ]
+        for old, new, expected in cases:
+            with self.subTest(expected=expected):
+                write_atlas_module(self.root, ATLAS_MODULE_PRD.replace(old, new))
+                details = [gap["detail"]
+                           for gap in atlas.compile(self.root)["gaps"]]
+                self.assertTrue(any(expected in detail for detail in details),
+                                details)
+
+    def test_blank_interaction_keeps_step_level_state_association(self):
+        content = ATLAS_MODULE_PRD.replace(
+            "| 查看客户详情 | S1 | I2 | 客户 | 待激活 |",
+            "| 查看客户详情 | S1 |  | 客户 | 待激活 |").replace(
+            "| S1 | I1 | 客户列表页 | 加载中 |",
+            "| S1 |  | 客户列表页 | 加载中 |")
+        write_atlas_module(self.root, content)
+        model = atlas.compile(self.root)
+        impact = next(
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "stateImpact")
+        loading = next(
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "pageState"
+            and node["title"] == "加载中")
+        self.assertEqual(impact["detail"]["interactionId"], "")
+        self.assertIsNone(impact["detail"]["interactionNodeId"])
+        self.assertEqual(loading["detail"]["interactionId"], "")
+        self.assertIsNone(loading["detail"]["interactionNodeId"])
+        self.assertTrue(any(
+            edge["from"] == impact["nodeId"]
+            and edge["detail"].get("relation") == "state-impact-step"
+            for edge in model["edges"]))
+        self.assertTrue(any(
+            edge["from"] == loading["nodeId"]
+            and edge["detail"].get("relation") == "page-state-step"
+            for edge in model["edges"]))
+
+    def test_absent_interaction_table_does_not_add_mandatory_gap(self):
+        before, marker, after = ATLAS_MODULE_PRD.partition(
+            "### 5.0.3 页面交互（机器可解析）")
+        self.assertTrue(marker)
+        _interaction_section, next_heading, remainder = after.partition(
+            "### 5.1 查看客户详情")
+        self.assertTrue(next_heading)
+        write_atlas_module(self.root, before + next_heading + remainder)
+        model = atlas.compile(self.root)
+        self.assertFalse(any(
+            "页面交互" in gap["detail"] for gap in model["gaps"]))
+        self.assertEqual(model["coverage"]["interactionCount"], 0)
+
+    def test_invalid_interaction_references_and_event_are_gaps(self):
+        cases = [
+            (
+                "| 查看客户详情 | S1 | I1 | 客户列表页 |",
+                "| 幽灵流程 | S1 | I1 | 客户列表页 |",
+                "页面交互引用不存在流程: 幽灵流程",
+            ),
+            (
+                "| 查看客户详情 | S1 | I1 | 客户列表页 |",
+                "| 查看客户详情 | S404 | I1 | 客户列表页 |",
+                "页面交互引用不存在步骤: S404",
+            ),
+            (
+                "| 查看客户详情 | S1 | I1 | 客户列表页 |",
+                "| 查看客户详情 | S1 | I1 | 幽灵页面 |",
+                "页面交互引用未声明页面: 幽灵页面",
+            ),
+            (
+                "| 加载失败时提示重试 | I2 | TST-001 |",
+                "| 加载失败时提示重试 | I404 | TST-001 |",
+                "下一交互不存在: I404",
+            ),
+            (
+                "| 无 | 进入 | 已登录 |",
+                "| 无 | hover | 已登录 |",
+                "页面交互事件不受支持: hover",
+            ),
+        ]
+        for old, new, expected in cases:
+            with self.subTest(expected=expected):
+                write_atlas_module(self.root, ATLAS_MODULE_PRD.replace(old, new))
+                details = [gap["detail"]
+                           for gap in atlas.compile(self.root)["gaps"]]
+                self.assertTrue(any(expected in detail for detail in details),
+                                details)
+
+    def test_invalid_interaction_graphs_are_gaps(self):
+        cases = [
+            (
+                ATLAS_MODULE_PRD.replace(
+                    "| 查看客户详情 | S1 | I2 | 客户列表页 |",
+                    "| 查看客户详情 | S1 | I1 | 客户列表页 |"),
+                "交互ID重复: I1",
+            ),
+            (
+                ATLAS_MODULE_PRD.replace(
+                    "| 加载失败时提示重试 | I2 | TST-001 |",
+                    "| 加载失败时提示重试 | 结束 | TST-001 |"),
+                "必须恰有一个入口，实际为 2",
+            ),
+            (
+                ATLAS_MODULE_PRD.replace(
+                    "| 客户不存在时提示并保留列表 | 结束 | TST-001~003 |",
+                    "| 客户不存在时提示并保留列表 | I1 | TST-001~003 |"),
+                "成功链存在循环",
+            ),
+        ]
+        for content, expected in cases:
+            with self.subTest(expected=expected):
+                write_atlas_module(self.root, content)
+                details = [gap["detail"]
+                           for gap in atlas.compile(self.root)["gaps"]]
+                self.assertTrue(any(expected in detail for detail in details),
+                                details)
+
+    def test_qualified_page_reference_is_resolved_without_name_guessing(self):
+        module_b = self.root / "01-test-system/02-module-b/prd.md"
+        module_b.write_text("""# 模块乙
+## 5. 核心用户路径
+### 5.0 页面契约（机器可解析）
+| 页面 | 入口 | 角色 | 前置条件 | 用户动作 | 系统结果 |
+|---|---|---|---|---|---|
+| 订单页 | 主导航 | 管理员 | 已登录 | 查看 | 展示 |
+""", encoding="utf-8")
+        qualified = "01-test-system/02-module-b::订单页"
+        write_atlas_module(
+            self.root,
+            ATLAS_MODULE_PRD.replace(
+                "| 查看客户详情 | S2 | 客户详情页 |",
+                f"| 查看客户详情 | S2 | {qualified} |").replace(
+                "| 查看客户详情 | S2 | I1 | 客户详情页 |",
+                f"| 查看客户详情 | S2 | I1 | {qualified} |"))
+        model = atlas.compile(self.root)
+        target = "page:01-test-system/02-module-b:订单页"
+        step = next(
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "flowStep"
+            and node["detail"]["stepId"] == "S2")
+        interaction = next(
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "interactionStep"
+            and node["detail"]["stepId"] == "S2")
+        self.assertEqual(step["detail"]["pageId"], target)
+        self.assertEqual(interaction["detail"]["pageId"], target)
+        self.assertIn(target, {
+            edge["to"] for edge in model["edges"]
+            if edge["kind"] == "traces"
+            and edge["from"] in {step["nodeId"], interaction["nodeId"]}
+        })
+
+    def test_qualified_page_in_existing_unstructured_module_is_explicit_gap(self):
+        qualified = "01-test-system/02-module-b::订单页"
+        content = ATLAS_MODULE_PRD.replace(
+            "| 客户详情页 | 客户列表页 | 管理员 | 客户存在 | 查看详情 | 展示客户资料 |",
+            "| 客户详情页 | 客户列表页 | 管理员 | 客户存在 | 查看详情 | 展示客户资料 |\n"
+            "| 订单页 | 主导航 | 管理员 | 已登录 | 查看订单 | 展示订单 |")
+        content = content.replace(
+            "| 查看客户详情 | S2 | 客户详情页 |",
+            f"| 查看客户详情 | S2 | {qualified} |").replace(
+            "| 查看客户详情 | S2 | I1 | 客户详情页 |",
+            f"| 查看客户详情 | S2 | I1 | {qualified} |")
+        write_atlas_module(self.root, content)
+        model = atlas.compile(self.root)
+        details = [gap["detail"] for gap in model["gaps"]]
+        self.assertTrue(any(
+            "跨模块页面未结构化: "
+            "01-test-system/02-module-b::订单页" in detail
+            for detail in details), details)
+        local_same_name = "page:01-test-system/01-module-a:订单页"
+        self.assertTrue(any(
+            node["nodeId"] == local_same_name for node in model["nodes"]))
+        self.assertFalse(any(
+            edge["kind"] == "traces" and edge["to"] == local_same_name
+            and (edge["detail"] or {}).get("relation")
+            in {"flow-step-page", "interaction-page"}
+            for edge in model["edges"]))
+        self.assertTrue(any(
+            (node.get("detail") or {}).get("category") == "flowStep"
+            and node["detail"]["stepId"] == "S2"
+            for node in model["nodes"]))
+        self.assertTrue(any(
+            (node.get("detail") or {}).get("category") == "interactionStep"
+            and node["detail"]["stepId"] == "S2"
+            for node in model["nodes"]))
 
     def test_links_step_to_verified_state_transition_and_dependency(self):
         model = atlas.compile(self.root)
@@ -187,6 +481,40 @@ class CompileTest(unittest.TestCase):
         }
         self.assertEqual(traces, set(loading["detail"]["pageIds"]))
 
+    def test_legacy_page_state_table_shapes_remain_readable(self):
+        current = """| 步骤ID | 交互ID | 页面 | 状态 | 触发条件 | 系统行为 | 用户可执行操作 | 验收要点 |
+|---|---|---|---|---|---|---|---|
+| S1 | I1 | 客户列表页 | 加载中 | 首次进入 | 显示骨架屏 | 等待 | 数据返回后展示列表 |
+| S2 | I1 | 客户详情页 | 对象不存在 | 客户已删除 | 提示客户不存在 | 返回列表 | 不展示旧资料 |"""
+        legacy_tables = [
+            """| 步骤ID | 页面 | 状态 | 触发条件 | 系统行为 | 用户可执行操作 | 验收要点 |
+|---|---|---|---|---|---|---|
+| S1 | 客户列表页 | 加载中 | 首次进入 | 显示骨架屏 | 等待 | 数据返回后展示列表 |
+| S2 | 客户详情页 | 对象不存在 | 客户已删除 | 提示客户不存在 | 返回列表 | 不展示旧资料 |""",
+            """| 页面 | 状态 | 触发条件 | 系统行为 | 用户可执行操作 | 验收要点 |
+|---|---|---|---|---|---|
+| 客户列表页 | 加载中 | 首次进入 | 显示骨架屏 | 等待 | 数据返回后展示列表 |
+| 客户详情页 | 对象不存在 | 客户已删除 | 提示客户不存在 | 返回列表 | 不展示旧资料 |""",
+            """| 状态 | 触发条件 | 系统行为 | 用户可执行操作 | 验收要点 |
+|---|---|---|---|---|
+| 加载中 | 首次进入 | 显示骨架屏 | 等待 | 数据返回后展示列表 |
+| 对象不存在 | 客户已删除 | 提示客户不存在 | 返回列表 | 不展示旧资料 |""",
+        ]
+        for legacy in legacy_tables:
+            with self.subTest(header=legacy.splitlines()[0]):
+                write_atlas_module(
+                    self.root, ATLAS_MODULE_PRD.replace(current, legacy))
+                model = atlas.compile(self.root)
+                states = [
+                    node for node in model["nodes"]
+                    if (node.get("detail") or {}).get("category") == "pageState"
+                ]
+                self.assertEqual({node["title"] for node in states},
+                                 {"加载中", "对象不存在"})
+                self.assertFalse(any(
+                    "边缘状态表头列序不符" in gap["detail"]
+                    for gap in model["gaps"]))
+
     def test_extracts_business_transitions_and_boundaries(self):
         model = atlas.compile(self.root)
         business_states = [
@@ -257,18 +585,18 @@ class CompileTest(unittest.TestCase):
     def test_invalid_step_state_and_dependency_links_are_gaps(self):
         cases = [
             (
-                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 02-module-b |",
-                "| 查看客户详情 | S404 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S1 | I2 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S404 | I2 | 客户 | 待激活 | 已激活 | 02-module-b |",
                 "引用不存在步骤: S404",
             ),
             (
-                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 02-module-b |",
-                "| 查看客户详情 | S1 | 客户 | 未知状态 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S1 | I2 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S1 | I2 | 客户 | 未知状态 | 已激活 | 02-module-b |",
                 "未找到状态流转: 客户 未知状态 → 已激活",
             ),
             (
-                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 02-module-b |",
-                "| 查看客户详情 | S1 | 客户 | 待激活 | 已激活 | 99-ghost-module |",
+                "| 查看客户详情 | S1 | I2 | 客户 | 待激活 | 已激活 | 02-module-b |",
+                "| 查看客户详情 | S1 | I2 | 客户 | 待激活 | 已激活 | 99-ghost-module |",
                 "依赖模块不存在: 99-ghost-module",
             ),
         ]

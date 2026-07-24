@@ -120,7 +120,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/scripts/prd-sync.py"
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/scripts/prd-sync.py" status <worktree>
 ```
 
-报告能力开关、各源游标（applied/pending/observed）、open proposal、非终态 operation、读取栅栏与 Atlas 新鲜度（能力开启时）。只读；有栅栏时如实报告并建议工况 5。Atlas 的检查与发布用 `atlas <worktree> [--check|--publish|--gate]`；Logic Atlas 能力阶段的置位用 `atlas <worktree> --enable <markdown|html|polish>`。置位前，模块 `prd.md` 必须补齐模板中适用的机器可解析表；统一场景流程至少需要页面契约、核心流程、流程状态影响、带步骤 ID 的边缘状态，以及本地或领域规格中的可引用状态机。置位后运行 `atlas --publish` 生成或更新生成物。
+报告能力开关、各源游标（applied/pending/observed）、open proposal、非终态 operation、读取栅栏与 Atlas 新鲜度（能力开启时）。只读；有栅栏时如实报告并建议工况 5。Atlas 的检查与发布用 `atlas <worktree> [--check|--publish|--gate]`；Logic Atlas 能力阶段的置位用 `atlas <worktree> --enable <markdown|html|polish>`。置位前，模块 `prd.md` 必须补齐模板中适用的机器可解析表；统一场景流程至少需要页面契约、核心流程、页面交互、流程状态影响、带步骤 ID/交互 ID 的边缘状态，以及本地或领域规格中的可引用状态机。跨模块页面使用 `<module-scope>::<页面名>`；交互成功链必须唯一入口且可终止，坏引用进入 gaps。置位后运行 `atlas --publish` 生成或更新生成物。
 
 ## 明确不做
 

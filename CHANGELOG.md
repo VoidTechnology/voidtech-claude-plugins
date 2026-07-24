@@ -1,5 +1,20 @@
 # Changelog
 
+## voidtech-core 0.13.0 - 2026-07-24
+
+Behavioral Atlas 从单层业务行为图升级为「业务场景 + 步骤内页面交互」两层模型：既保留可读的业务主线，也能直接回答每一步在哪个页面、操作什么、何时可用、即时反馈、系统动作、成功结果、失败恢复和下一操作。
+
+### Added
+
+- 模块 PRD 新增 `§5.0.3 页面交互（机器可解析）` 固定表；generator 1.3.0 编译 `interactionStep` 节点、`interaction-success` 成功关系及 step/page/stateImpact/pageState 追溯，校验交互 ID、事件白名单、唯一入口、断头、循环与可终止性，坏引用 fail closed 进入 gaps。
+- 页面引用支持精确的 `<module-scope>::<页面名>` 跨模块语法；核心流程与页面交互共用解析器，目标模块或页面未结构化时不按同名猜测。
+- renderer fixture 与 CDP 浏览器 harness 覆盖步骤切换、唯一展开轨迹、状态/异常精确挂载、页面级横向裁切防护、XSS、零外链及 console/page error。
+
+### Changed
+
+- viewer 5.0.0：主流程卡只保留场景摘要并严格对齐箭头；点击 S1/S2/S3 后在下方展开当前步骤的页面交互卡网格，状态变化与异常绑定到具体操作，跨模块/外部依赖保留独立泳道，来源抽屉保留为二级入口。
+- 核心插件版本 0.12.0 → 0.13.0；Logic Model schema 继续为 v1，仅使用既有开放 `detail` 与 node/edge 类型并增加 `interactionCount` 覆盖统计。
+
 ## voidtech-core 0.12.0 - 2026-07-23
 
 prd-sync/Logic Atlas 引擎(五门全通)的 skill 层接线交付:引擎能力首次获得面向使用者的命令入口。ADR-0004 第三阶段(overriding 完整流程、复活候选、多可更新源)仍为后续工作。

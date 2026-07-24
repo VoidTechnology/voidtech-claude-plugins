@@ -227,6 +227,11 @@ async function runBrowserAssertions(fixture) {
       var app = document.querySelector(".app");
       out.mainTextLen = app ? app.innerText.trim().length : 0;
       out.sidebarChildren = (document.getElementById("mods") || {}).childElementCount || 0;
+      out.pageOverflow = {
+        html: getComputedStyle(document.documentElement).overflowX,
+        body: getComputedStyle(document.body).overflowX,
+        bodyClipped: document.body.scrollWidth > document.body.clientWidth
+      };
       out.behaviorViews = {};
       var flowPanel = document.getElementById("view-flow");
       out.scenarioFlow = {
@@ -234,11 +239,40 @@ async function runBrowserAssertions(fixture) {
         selector: !!document.getElementById("scenario-picker"),
         groups: flowPanel ? flowPanel.querySelectorAll(".scenario-group").length : 0,
         steps: flowPanel ? flowPanel.querySelectorAll(".flow-step-wrap").length : 0,
-        impacts: flowPanel ? flowPanel.querySelectorAll(".state-impact-chip").length : 0,
-        exceptionGroups: flowPanel ? flowPanel.querySelectorAll(".step-exceptions").length : 0,
+        selectedSteps: flowPanel ? flowPanel.querySelectorAll('.flow-node[aria-pressed="true"]').length : 0,
+        interactionPanels: flowPanel ? flowPanel.querySelectorAll(".interaction-panel").length : 0,
+        interactions: flowPanel ? flowPanel.querySelectorAll(".interaction-card").length : 0,
+        attachments: flowPanel ? flowPanel.querySelectorAll(".interaction-attachments button").length : 0,
+        failureDisclosures: flowPanel ? flowPanel.querySelectorAll(".interaction-attachments details").length : 0,
         dependencyLanes: flowPanel ? flowPanel.querySelectorAll(".scenario-lane").length - 1 : 0,
         boundaryDisclosures: flowPanel ? flowPanel.querySelectorAll(".scenario-details").length : 0
       };
+      var stepButtons = flowPanel ? flowPanel.querySelectorAll(".flow-node") : [];
+      var beforeStep = flowPanel && flowPanel.querySelector(".interaction-head") ?
+        flowPanel.querySelector(".interaction-head").textContent : "";
+      var beforeAttachments = flowPanel && flowPanel.querySelector(".interaction-panel") ?
+        flowPanel.querySelector(".interaction-panel").innerText : "";
+      if (stepButtons.length > 1) stepButtons[1].click();
+      var switchedPanel = document.getElementById("view-flow");
+      var afterStep = switchedPanel && switchedPanel.querySelector(".interaction-head") ?
+        switchedPanel.querySelector(".interaction-head").textContent : "";
+      var afterAttachments = switchedPanel && switchedPanel.querySelector(".interaction-panel") ?
+        switchedPanel.querySelector(".interaction-panel").innerText : "";
+      var switchedSelected = switchedPanel ?
+        switchedPanel.querySelectorAll('.flow-node[aria-pressed="true"]').length : 0;
+      var switchedCards = switchedPanel ?
+        switchedPanel.querySelectorAll(".interaction-card").length : 0;
+      out.scenarioFlow.stepSwitch = {
+        changed: !!beforeStep && !!afterStep && beforeStep !== afterStep,
+        oneSelected: switchedSelected === 1,
+        hasInteractions: switchedCards > 0,
+        firstHasOnlyException: beforeAttachments.includes("异常与恢复")
+          && !beforeAttachments.includes("状态 ·"),
+        secondHasOnlyState: afterAttachments.includes("状态 ·")
+          && !afterAttachments.includes("异常与恢复")
+      };
+      var switchedButtons = switchedPanel ? switchedPanel.querySelectorAll(".flow-node") : [];
+      if (switchedButtons.length) switchedButtons[0].click();
       ["flow", "state", "boundary"].forEach(function(name){
         var tab = document.getElementById("tab-" + name);
         var panel = document.getElementById("view-" + name);
@@ -283,6 +317,10 @@ async function runBrowserAssertions(fixture) {
     if (dom.sidebarChildren === 0) failures.push("模块导航未渲染任何条目");
     if (!dom.hasSearch) failures.push("搜索框 #search 缺失");
     if (!dom.hasThemeBtn) failures.push("主题切换按钮 #themeBtn 缺失");
+    if (dom.pageOverflow?.html !== "hidden" || dom.pageOverflow?.body !== "hidden"
+        || dom.pageOverflow?.bodyClipped) {
+      failures.push(`页面级横向裁切未受控: ${JSON.stringify(dom.pageOverflow)}`);
+    }
     if (!dom.searchTypable) failures.push("搜索框无法输入（value 未按写入生效）");
     if (!dom.probeVisibleAsText) failures.push("XSS 探针标题未以纯文本形式在搜索结果中呈现");
     for (const [name, result] of Object.entries(dom.behaviorViews ?? {})) {
@@ -299,14 +337,24 @@ async function runBrowserAssertions(fixture) {
       failures.push(`场景流程主干未渲染完整: ${JSON.stringify(scenario)}`);
     }
     if (!scenario.selector) failures.push("场景流程缺少业务场景选择器");
-    if (scenario.impacts < 1) failures.push("场景步骤未嵌入业务状态变化");
-    if (scenario.exceptionGroups < 1) failures.push("场景步骤未嵌入可展开异常");
+    if (scenario.selectedSteps !== 1 || scenario.interactionPanels !== 1 || scenario.interactions < 1) {
+      failures.push(`场景步骤未展开唯一页面交互轨迹: ${JSON.stringify(scenario)}`);
+    }
+    if (scenario.attachments < 1) failures.push("页面交互未精确挂载状态变化或异常");
+    if (scenario.failureDisclosures < 1) failures.push("页面交互未提供可展开异常");
+    if (!scenario.stepSwitch?.changed || !scenario.stepSwitch?.oneSelected
+        || !scenario.stepSwitch?.hasInteractions
+        || !scenario.stepSwitch?.firstHasOnlyException
+        || !scenario.stepSwitch?.secondHasOnlyState) {
+      failures.push(`场景步骤切换或精确附件挂载失败: ${JSON.stringify(scenario.stepSwitch)}`);
+    }
     if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
     if (scenario.boundaryDisclosures < 1) failures.push("场景流程未集成模块职责边界");
     if (failures.length > 0) {
       throw new Error(`浏览器断言失败:\n- ${failures.join("\n- ")}`);
     }
 
+    console.log(`- 页面级横向裁切防护: ${JSON.stringify(dom.pageOverflow)}`);
     console.log("浏览器断言全部通过:");
     console.log(`- console/page 错误: 0`);
     console.log(`- alert/confirm/prompt 探针触发次数: ${dom.alertCount}`);
@@ -317,7 +365,7 @@ async function runBrowserAssertions(fixture) {
     console.log(`- 搜索框存在且可输入: ${dom.hasSearch}/${dom.searchTypable}；主题切换按钮: ${dom.hasThemeBtn}`);
     console.log(`- XSS 探针以纯文本可见: ${dom.probeVisibleAsText}`);
     console.log(`- 行为视图可见且可交互: ${JSON.stringify(dom.behaviorViews)}`);
-    console.log(`- 场景流程默认入口及四层信息: ${JSON.stringify(dom.scenarioFlow)}`);
+    console.log(`- 场景流程、步骤切换与页面交互轨迹: ${JSON.stringify(dom.scenarioFlow)}`);
     ws.close();
   } finally {
     if (chrome.exitCode === null) {
