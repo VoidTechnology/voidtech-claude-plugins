@@ -88,7 +88,7 @@ class LifecycleIrTest(unittest.TestCase):
         )
         json.loads(lifecycle_ir.canonical_ir_bytes(ir))
 
-    def test_cycle_without_terminal_does_not_invent_terminal_types(self):
+    def test_cycle_without_terminal_expands_across_columns(self):
         nodes = [state("待命"), state("运行")]
         edges = [transition("待命", "运行", "启动"), transition("运行", "待命", "复位")]
 
@@ -97,10 +97,12 @@ class LifecycleIrTest(unittest.TestCase):
 
         self.assertEqual({item["lane"] for item in ir["states"]}, {"main"})
         self.assertEqual({item["type"] for item in ir["states"]}, {"waiting", "active"})
-        self.assertEqual({item["col"] for item in ir["states"]}, {0})
+        # 互转小环沿列展开为横链，不再同列 yOffset 堆叠（密度灾难根源）。
+        self.assertEqual({item["col"] for item in ir["states"]}, {0, 1})
+        self.assertTrue(all("yOffset" not in item for item in ir["states"]))
         self.assertNotIn("terminal", {lane["id"] for lane in ir["lanes"]})
 
-    def test_same_column_cycles_route_outward_from_their_column(self):
+    def test_cycles_expand_and_back_edges_take_top_channel(self):
         nodes = [
             state("审核中"), state("已拒绝"),
             state("已通过"), state("已过期"),
@@ -116,21 +118,20 @@ class LifecycleIrTest(unittest.TestCase):
         ir = lifecycle_ir.build_lifecycle_ir(
             lifecycle_ir.extract_machines(model(nodes, edges))[0])
         layout = {item["id"]: item for item in ir["states"]}
-        same_column = [
-            item for item in ir["transitions"]
-            if layout[item["from"]]["col"] == layout[item["to"]]["col"]
-        ]
+        by_label = {item["label"]: item for item in ir["states"]}
 
+        # 两个 SCC 依深度顺序沿列展开，分量内入口态在前。
         self.assertEqual(
-            {
-                (layout[item["from"]]["col"], item["route"],
-                 item["fromSide"], item["toSide"])
-                for item in same_column
-            },
-            {
-                (0, "left-channel", "left", "left"),
-                (1, "right-channel", "right", "right"),
-            })
+            [by_label[label]["col"] for label in ("审核中", "已拒绝", "已通过", "已过期")],
+            [0, 1, 2, 3])
+        self.assertTrue(all("yOffset" not in item for item in ir["states"]))
+        back_edges = {
+            (item["route"], item.get("fromSide"), item.get("toSide"))
+            for item in ir["transitions"]
+            if layout[item["to"]]["col"] < layout[item["from"]]["col"]
+        }
+        # 回边（环返程）统一走顶部通道，与正向直边分离。
+        self.assertEqual(back_edges, {("top-channel", "top", "top")})
 
     def test_groups_transitions_by_scope_and_business_object(self):
         other = state("审核通过")

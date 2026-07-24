@@ -180,7 +180,8 @@ class ArchifyBridgeTest(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="v20.12.0\n", stderr="")
             output = Path(args[5])
             output.write_text(
-                '<html><body><svg data-proof="fixed"><text>订单</text></svg></body></html>',
+                '<html><body><svg viewBox="0 0 640 240" data-proof="fixed">'
+                '<text>订单</text></svg></body></html>',
                 encoding="utf-8")
             receipt = {"schemaVersion": 1, "ok": True, "artifact": {"sha256": "abc", "bytes": 80}}
             return SimpleNamespace(returncode=0, stdout=json.dumps(receipt), stderr="")
@@ -197,9 +198,53 @@ class ArchifyBridgeTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "ok")
-        self.assertIn('<svg data-proof="fixed">', first["svg"])
+        self.assertIn('data-proof="fixed"', first["svg"])
         self.assertEqual(first["attempts"], 1)
         self.assertGreaterEqual(len(calls), 2)
+
+    def test_svg_text_overflow_audit_is_cjk_aware(self):
+        clean = ('<svg viewBox="0 0 640 240">'
+                 '<text x="320" font-size="12" text-anchor="middle">生效中</text>'
+                 '<text data-detail="context" x="320" font-size="7" '
+                 'text-anchor="middle">缴费生效</text></svg>')
+        self.assertEqual(archify_bridge.svg_text_overflows(clean), [])
+        # 中文标题按 CJK 宽度越出 viewBox 右缘（vendor 拉丁口径测不出）。
+        clipped = ('<svg viewBox="0 0 200 240">'
+                   '<text x="190" font-size="12" text-anchor="middle">'
+                   '已建套餐记录但付款凭证未确认到账</text></svg>')
+        self.assertEqual(len(archify_bridge.svg_text_overflows(clipped)), 1)
+        # 超宽子标签压相邻状态盒。
+        wide_sub = ('<svg viewBox="0 0 640 240">'
+                    '<text data-detail="context" x="320" font-size="7" '
+                    'text-anchor="middle">'
+                    '已建套餐记录但付款凭证未确认到账,机构后台权益未开通</text></svg>')
+        self.assertEqual(len(archify_bridge.svg_text_overflows(wide_sub)), 1)
+        # 缺 viewBox 一律不可信。
+        self.assertEqual(
+            len(archify_bridge.svg_text_overflows("<svg><text x=\"1\">x</text></svg>")), 1)
+
+    def test_text_overflow_degrades_machine(self):
+        def runner(args, **kwargs):
+            if args[-1] == "--version" or args[1:] == ["--version"]:
+                return SimpleNamespace(returncode=0, stdout="v20.12.0\n", stderr="")
+            Path(args[5]).write_text(
+                '<html><body><svg viewBox="0 0 100 240">'
+                '<text x="90" font-size="12" text-anchor="middle">'
+                '已建套餐记录但付款凭证未确认到账</text></svg></body></html>',
+                encoding="utf-8")
+            receipt = {"schemaVersion": 1, "ok": True}
+            return SimpleNamespace(returncode=0, stdout=json.dumps(receipt), stderr="")
+
+        machine = {
+            "machineId": "machine-b", "scopeId": "02-backend/01-order", "object": "订单",
+            "states": [], "transitions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = archify_bridge.render_machine(
+                machine, copy.deepcopy(IR), runner=runner, temp_root=Path(temp_dir))
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["diagnostics"][0]["code"], "artifact/text-overflow")
+        self.assertNotIn("svg", result)
 
 
 if __name__ == "__main__":

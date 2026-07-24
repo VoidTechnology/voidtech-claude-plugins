@@ -108,6 +108,61 @@ def extract_single_svg(html):
     return html[starts[0].start():ends[0].end()]
 
 
+_SVG_TEXT_TAG_RE = re.compile(r"<text\b([^>]*)>([^<]*)</text>")
+_SVG_ATTR_RE = re.compile(r'([\w:-]+)="([^"]*)"')
+_SVG_VIEWBOX_RE = re.compile(r'viewBox="0 0 ([\d.]+) ([\d.]+)"')
+# 与 vendor 一致的口径下限：最宽状态盒 126px（event 带半宽 63）。
+_SUBLABEL_BOX_LIMIT = 126.0
+
+
+def _est_text_width(text, font_size):
+    """CJK 感知估宽：全宽字形 ≈ font_size px，半宽 ≈ 0.55×font_size。"""
+    return sum(
+        font_size if ord(ch) > 0x2E80 else font_size * 0.55 for ch in text)
+
+
+def svg_text_overflows(svg):
+    """SVG 文本几何审计（fail-closed 守门）。
+
+    vendor 校验器按拉丁口径估宽且完全不校验子标签，中文文本可以通过
+    deliver 却在画布上溢出（2026-07-24 客户套餐验收：子标签压邻、标签越界）。
+    审计两类可判事实：任何文本横向越出 viewBox；子标签估宽超过最宽状态盒。
+    返回违规描述列表，空列表即通过。
+    """
+    box = _SVG_VIEWBOX_RE.search(svg)
+    if not box:
+        return ["SVG 缺少 viewBox，无法审计文本几何"]
+    width = float(box.group(1))
+    violations = []
+    for raw_attrs, content in _SVG_TEXT_TAG_RE.findall(svg):
+        text = content.strip()
+        if not text:
+            continue
+        attrs = dict(_SVG_ATTR_RE.findall(raw_attrs))
+        try:
+            x = float(attrs.get("x", ""))
+        except ValueError:
+            continue
+        font_size = float(attrs.get("font-size", 12) or 12)
+        est = _est_text_width(text, font_size)
+        anchor = attrs.get("text-anchor", "start")
+        if anchor == "middle":
+            left, right = x - est / 2, x + est / 2
+        elif anchor == "end":
+            left, right = x - est, x
+        else:
+            left, right = x, x + est
+        if left < -2 or right > width + 2:
+            violations.append(
+                f"文本「{text[:24]}」估宽 {est:.0f}px 越出 viewBox"
+                f"（[{left:.0f},{right:.0f}] vs 0..{width:.0f}）")
+        if attrs.get("data-detail") == "context" and est > _SUBLABEL_BOX_LIMIT:
+            violations.append(
+                f"子标签「{text[:24]}」估宽 {est:.0f}px 超过状态盒 "
+                f"{_SUBLABEL_BOX_LIMIT:.0f}px，会压到相邻状态")
+    return violations
+
+
 def _template_css_rules(template_path=None):
     """扫描模板顶层 CSS 规则 → [(归一化选择器, 规则体)]。
 
@@ -461,6 +516,12 @@ def render_machine(machine, ir, *, runner=subprocess.run, executable="node",
                     return _degraded_machine(machine, working_ir, [{
                         "code": "artifact/svg-invalid",
                         "message": str(error)[:500],
+                    }], attempt)
+                overflow = svg_text_overflows(svg)
+                if overflow:
+                    return _degraded_machine(machine, working_ir, [{
+                        "code": "artifact/text-overflow",
+                        "message": "；".join(overflow)[:500],
                     }], attempt)
                 return {
                     "machineId": machine["machineId"],

@@ -2278,7 +2278,7 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "8.2.0"
+RENDERER_VERSION = "8.3.0"
 BROWSER_MATRIX_VERSION = "2026-07"
 VALIDATION_HARNESS_VERSION = "8.2.0"
 

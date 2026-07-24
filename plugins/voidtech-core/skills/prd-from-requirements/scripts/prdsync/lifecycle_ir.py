@@ -209,18 +209,39 @@ def _main_components(components, paths, terminal_components):
 
 
 def _compressed_columns(state_rows):
+    """按分量沿列展开：小环（互转 SCC）成员占用相邻列而非同列堆叠。
+
+    同列 yOffset 堆叠是密度灾难的根源（盒子上下叠、边穿标题、子标签互压，
+    见 2026-07-24 客户套餐验收）。列数超出车道上限时回退按深度压缩 + 堆叠。
+    """
     columns = {}
     by_lane = defaultdict(list)
     for row in state_rows:
         by_lane[row["lane"]].append(row)
     for lane, rows in by_lane.items():
-        if lane == "terminal" and len(rows) <= _LANE_MAX_COL[lane] + 1:
+        max_col = _LANE_MAX_COL[lane]
+        if lane == "terminal" and len(rows) <= max_col + 1:
             for column, row in enumerate(sorted(
                     rows, key=lambda item: (item["depth"], item["nodeId"]))):
                 columns[row["nodeId"]] = column
             continue
+        if len(rows) <= max_col + 1:
+            grouped = defaultdict(list)
+            for row in rows:
+                grouped[row["component"]].append(row)
+            ordered = sorted(
+                grouped.values(),
+                key=lambda members: (
+                    members[0]["depth"],
+                    min(item["nodeId"] for item in members),
+                ))
+            column = 0
+            for members in ordered:
+                for row in sorted(members, key=lambda item: item["rank"]):
+                    columns[row["nodeId"]] = column
+                    column += 1
+            continue
         depths = sorted({row["depth"] for row in rows})
-        max_col = _LANE_MAX_COL[lane]
         rank = {depth: index for index, depth in enumerate(depths)}
         for row in rows:
             if len(depths) <= 1:
@@ -231,6 +252,32 @@ def _compressed_columns(state_rows):
                 column = round(rank[row["depth"]] * max_col / (len(depths) - 1))
             columns[row["nodeId"]] = column
     return columns
+
+
+def _component_ranks(node_ids, edges, component_of):
+    """分量内成员的确定性展开顺序：入口态（有分量外入边或零入度）在前，
+    其余按 nodeId。返回 node_id -> rank。"""
+    entries = set()
+    targeted = set()
+    for edge in edges:
+        source, target = edge["from"], edge["to"]
+        targeted.add(target)
+        if component_of[source] != component_of[target]:
+            entries.add(target)
+    members = defaultdict(list)
+    for node_id in node_ids:
+        members[component_of[node_id]].append(node_id)
+    ranks = {}
+    for group in members.values():
+        ordered = sorted(
+            group,
+            key=lambda node_id: (
+                0 if node_id in entries or node_id not in targeted else 1,
+                node_id,
+            ))
+        for index, node_id in enumerate(ordered):
+            ranks[node_id] = index
+    return ranks
 
 
 def _state_type(node, indegree, outdegree):
@@ -265,6 +312,18 @@ def _label_width(text):
     return max(32.0, units * 4.9 + 12)
 
 
+# 子标签为 font-size 7 的单行 <text>，vendor 不换行、不裁剪、也不校验其宽度
+# （校验器只查标题宽）——超宽子标签会横向溢出压到相邻状态（2026-07-24 客户
+# 套餐验收）。CJK 字形 ≈ 7px、半宽 ≈ 3.85px；仅当估宽放得进最窄状态盒
+# （118px，留 8px 边距）时才上画布，完整文本始终保留在状态与流转来源面板。
+_SUBLABEL_MAX_WIDTH = 110.0
+
+
+def _sublabel_fits(text):
+    width = sum(7.0 if ord(ch) > 0x2E80 else 3.85 for ch in text)
+    return width <= _SUBLABEL_MAX_WIDTH
+
+
 def _left_channel_label_dx(label):
     """左通道标签以通道 x=48 为心，宽标签会向左越过 viewBox 左缘（x 恒从 0
     起）被裁切。给一个正的 labelDx 把标签右移到左缘内，仍落在两个堆叠回环状态
@@ -281,12 +340,13 @@ def _band_of(lane):
     return "event"
 
 
-def _tight_viewbox(ir_states):
+def _tight_viewbox(ir_states, ir_transitions):
     """把 viewBox 收紧到内容外接框，消除小状态机「内容挤一角 + 全屏空白」。
 
     列心/带位由 Archify 渲染器固定，收紧只影响右侧与底部留白：宽度覆盖最右
-    状态右缘，并为右向回环通道（渲染器取 state_right+36）及其贴边标签预留
-    _RIGHT_CHANNEL_RESERVE，避免收紧后通道/标签落到 viewBox 之外被裁切；高度
+    状态右缘；仅当存在右向回环通道（渲染器取 state_right+36）时才预留
+    _RIGHT_CHANNEL_RESERVE 容纳通道及其贴边标签，否则只留描边/箭头小边距——
+    无右通道的机器不再为不存在的回环空出右侧 160px（2026-07-24 验收）。高度
     只有在存在 terminal 带节点时才延伸到底部结果带，否则收到 schema 下限 566。"""
     max_right = 0
     used_terminal = False
@@ -296,7 +356,10 @@ def _tight_viewbox(ir_states):
         if band == "terminal":
             used_terminal = True
         max_right = max(max_right, center + _STATE_HALF_W[band])
-    width = max(int(max_right) + _RIGHT_CHANNEL_RESERVE, _VIEWBOX_LEGEND_FLOOR)
+    uses_right_channel = any(
+        item.get("route") == "right-channel" for item in ir_transitions)
+    reserve = _RIGHT_CHANNEL_RESERVE if uses_right_channel else 24
+    width = max(int(max_right) + reserve, _VIEWBOX_LEGEND_FLOOR)
     height = 660 if used_terminal else 566
     return [width, height]
 
@@ -320,6 +383,7 @@ def build_lifecycle_ir(machine):
     }
     main_components = _main_components(components, paths, terminal_components)
 
+    ranks = _component_ranks(node_ids, edges, component_of)
     rows = []
     for node_id in node_ids:
         if outdegrees[node_id] == 0:
@@ -332,6 +396,8 @@ def build_lifecycle_ir(machine):
             "nodeId": node_id,
             "lane": lane,
             "depth": depths[component_of[node_id]],
+            "component": component_of[node_id],
+            "rank": ranks[node_id],
         })
     columns = _compressed_columns(rows)
 
@@ -361,7 +427,7 @@ def build_lifecycle_ir(machine):
             "col": columns[node_id],
         }
         sublabel = detail.get("meaning") or detail.get("entryCondition")
-        if sublabel:
+        if sublabel and _sublabel_fits(str(sublabel)):
             item["sublabel"] = str(sublabel)
         if node_id in offsets:
             item["yOffset"] = offsets[node_id]
@@ -400,6 +466,15 @@ def build_lifecycle_ir(machine):
                 label_dx = _left_channel_label_dx(item["label"])
                 if label_dx:
                     item["labelDx"] = label_dx
+        elif (source_layout["lane"] == target_layout["lane"]
+                and target_layout["col"] < source_layout["col"]):
+            # 同车道回边（环的返程）：走顶部通道，与正向直边分离，避免
+            # 双向箭头叠在同一水平线上互相穿越。
+            item.update({
+                "route": "top-channel",
+                "fromSide": "top",
+                "toSide": "top",
+            })
         ir_transitions.append(item)
 
     # 已声明终点：mermaid `X --> [*]` 出口。只有当声明出口的状态仍有后继业务
@@ -451,7 +526,7 @@ def build_lifecycle_ir(machine):
             "subtitle": machine["scopeId"],
             "animation": "none",
             "visual_preset": "blueprint",
-            "viewBox": _tight_viewbox(ir_states),
+            "viewBox": _tight_viewbox(ir_states, ir_transitions),
         },
         "lanes": [
             {"id": lane, "label": _LANE_LABELS[lane]}
