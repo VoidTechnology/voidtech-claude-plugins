@@ -1,5 +1,19 @@
 # Changelog
 
+## voidtech-core 0.15.0 - 2026-07-24
+
+引入 archify（MIT, v2.12.0 @ eb847fa）作为 Logic Atlas 的类型化图渲染基础设施：五种图型（Architecture / Workflow / Sequence / Data Flow / Lifecycle）的 typed JSON IR + 预编译 schema 校验 + fail-closed 布局验证 + 确定性 SVG/HTML 渲染，运行时零 npm 依赖（Node >= 18）。
+
+### Added
+
+- `prd-from-requirements/vendor/archify/`:保留 bin、renderers(含预编译 validators)、schemas、assets/template.html、delta、recipes、scripts 与上游 SKILL.md;裁剪 examples(仅留 doctor 必需的 7 个示例)与上游测试,来源与升级方式见 `vendor/archify/VENDOR.md`。
+- 接线纪律:Atlas 仅对已有真实关系数据的图型接线(首个目标为 Lifecycle 状态机视图);Architecture/Sequence 等上游数据具备后再启用,禁止对空数据渲染虚构关系。
+- 验证:`archify.mjs doctor` 全绿;五种图型 validate+deliver 冒烟通过;以示例项目「会籍」状态机真实数据(5 状态 7 流转,membership §2.2 + MBR-016/018/023)手工构建 IR 渲染验收——每个状态仅出现一次,终态无出边可直读,上游 action 字段按状态整团复制的抽取缺陷在图上直接显形。
+
+### Changed
+
+- 核心插件版本 0.14.0 → 0.15.0。
+
 ## voidtech-core 0.14.0 - 2026-07-24
 
 Logic Atlas 视觉表达按信息语义分型：业务流程用角色泳道 Workflow，生命周期用状态图，系统关系保留 Architecture 图；不再用一套卡片布局承载所有问题。
