@@ -1,0 +1,12 @@
+{
+  "rendererVersion": "8.4.0",
+  "generatorVersion": "1.5.0",
+  "schemaVersion": "1",
+  "assetDigest": "sha256:2a31943d6ecf32b8a794294d0ccf882a3c9824687b65eef71ed629bb3fea1d9d",
+  "archifyDigest": "sha256:911070ce35563793be34cbf425deb309c0d3a724d851b98cc9719cfe9e690816",
+  "fixtureDigest": "sha256:2dcd48a1e376645a2130ca9ff3409d3af746346d4c3d270bc81d00ea871e7d93",
+  "validationHarnessVersion": "8.3.0",
+  "browserMatrixVersion": "2026-07",
+  "browserValidated": true,
+  "validatedAt": "2026-07-27T01:57:54.429Z"
+}

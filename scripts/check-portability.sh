@@ -3,9 +3,13 @@
 set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-loop\nvoidtech-mcp-apple\nvoidtech-mcp-common'
-EXPECTED_CORE_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nhandoff\nimplement\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nprd-from-requirements\nprd-maintain\nprd-sync\nprepare-issue\nprototype\nresearch\nsetup-git-checks\nship\ntdd\ntext-naturalizer\nto-design-brief\nto-issues\nto-prd\nwrite-skills'
-EXPECTED_CORE_AGENTS=$'architect\nproduct-manager'
+EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-design\nvoidtech-engineering\nvoidtech-loop\nvoidtech-mcp-apple\nvoidtech-mcp-common\nvoidtech-product'
+EXPECTED_CORE_SKILLS=$'handoff\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nresearch\ntext-naturalizer\nwrite-skills'
+EXPECTED_PRODUCT_SKILLS=$'prd-from-requirements\nprd-maintain\nprd-sync'
+EXPECTED_DESIGN_SKILLS=$'to-design-brief\nui-prototype'
+EXPECTED_ENGINEERING_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nimplement\nlogic-spike\nprepare-issue\nsetup-git-checks\nship\ntdd\nto-issues\nto-prd'
+EXPECTED_PRODUCT_AGENTS='product-manager'
+EXPECTED_ENGINEERING_AGENTS='architect'
 failures=0
 
 pass() {
@@ -116,73 +120,91 @@ if [[ -d plugins/voidtech-core ]]; then
     fail "更新检查脚本行为测试未通过"
   fi
 
-  core_skill_count=$(find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
-  if [[ "$core_skill_count" == "26" ]]; then
-    pass "voidtech-core 发布 26 个技能"
-  else
-    fail "voidtech-core 技能数量异常：$core_skill_count"
-  fi
+  for domain in core product design engineering; do
+    plugin_name="voidtech-$domain"
+    plugin_root="plugins/$plugin_name"
+    case "$domain" in
+      core)
+        expected_skills="$EXPECTED_CORE_SKILLS"
+        expected_agents=""
+        ;;
+      product)
+        expected_skills="$EXPECTED_PRODUCT_SKILLS"
+        expected_agents="$EXPECTED_PRODUCT_AGENTS"
+        ;;
+      design)
+        expected_skills="$EXPECTED_DESIGN_SKILLS"
+        expected_agents=""
+        ;;
+      engineering)
+        expected_skills="$EXPECTED_ENGINEERING_SKILLS"
+        expected_agents="$EXPECTED_ENGINEERING_AGENTS"
+        ;;
+    esac
 
-  actual_core_skills=$(
-    find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md -print0 |
-      while IFS= read -r -d '' skill_file; do
-        basename "$(dirname "$skill_file")"
-      done |
-      sort
-  )
-  if [[ "$actual_core_skills" == "$EXPECTED_CORE_SKILLS" ]]; then
-    pass "voidtech-core 技能名称符合公共命令契约"
-  else
-    fail "voidtech-core 技能名称不符合公共命令契约"
-  fi
-
-  core_agent_count=$(find plugins/voidtech-core/agents -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
-  if [[ "$core_agent_count" == "2" ]]; then
-    pass "voidtech-core 发布 2 个 subagent"
-  else
-    fail "voidtech-core subagent 数量异常：$core_agent_count"
-  fi
-
-  actual_core_agents=$(
-    find plugins/voidtech-core/agents -maxdepth 1 -type f -name '*.md' -print0 |
-      while IFS= read -r -d '' agent_file; do
-        basename "$agent_file" .md
-      done |
-      sort
-  )
-  if [[ "$actual_core_agents" == "$EXPECTED_CORE_AGENTS" ]]; then
-    pass "voidtech-core subagent 名称符合公共契约"
-  else
-    fail "voidtech-core subagent 名称不符合公共契约"
-  fi
-
-  while IFS= read -r -d '' skill_file; do
-    skill_dir=$(basename "$(dirname "$skill_file")")
-    declared_name=$(sed -n 's/^name: *//p' "$skill_file" | head -n 1)
-    if [[ "$declared_name" == "$skill_dir" ]]; then
-      pass "$skill_dir 的目录名与展示名一致"
+    actual_skills=$(
+      find "$plugin_root/skills" -mindepth 2 -maxdepth 2 -name SKILL.md -print0 |
+        while IFS= read -r -d '' skill_file; do
+          basename "$(dirname "$skill_file")"
+        done |
+        sort
+    )
+    if [[ "$actual_skills" == "$expected_skills" ]]; then
+      pass "$plugin_name 技能名称符合公共命令契约"
     else
-      fail "$skill_dir 的目录名与展示名不一致：$declared_name"
+      fail "$plugin_name 技能名称不符合公共命令契约"
     fi
-  done < <(find plugins/voidtech-core/skills -mindepth 2 -maxdepth 2 -name SKILL.md -print0)
+
+    actual_agents=$(
+      if [[ -d "$plugin_root/agents" ]]; then
+        find "$plugin_root/agents" -maxdepth 1 -type f -name '*.md' -print0 |
+          while IFS= read -r -d '' agent_file; do
+            basename "$agent_file" .md
+          done |
+          sort
+      fi
+    )
+    if [[ "$actual_agents" == "$expected_agents" ]]; then
+      pass "$plugin_name subagent 名称符合公共契约"
+    else
+      fail "$plugin_name subagent 名称不符合公共契约"
+    fi
+
+    while IFS= read -r -d '' skill_file; do
+      skill_dir=$(basename "$(dirname "$skill_file")")
+      declared_name=$(sed -n 's/^name: *//p' "$skill_file" | head -n 1)
+      if [[ "$declared_name" == "$skill_dir" ]]; then
+        pass "$plugin_name:$skill_dir 的目录名与展示名一致"
+      else
+        fail "$plugin_name:$skill_dir 的目录名与展示名不一致：$declared_name"
+      fi
+    done < <(
+      find "$plugin_root/skills" -mindepth 2 -maxdepth 2 -name SKILL.md -print0
+    )
+  done
 
   while IFS= read -r skill_ref; do
-    referenced_skill=${skill_ref#voidtech-core:}
-    if grep -Fxq "$referenced_skill" <<<"$EXPECTED_CORE_SKILLS"; then
-      pass "跨组件调用指向已发布技能 $skill_ref"
-    elif grep -Fxq "$referenced_skill" <<<"$EXPECTED_CORE_AGENTS"; then
-      pass "跨组件调用指向已发布 subagent $skill_ref"
+    referenced_plugin=${skill_ref%%:*}
+    referenced_name=${skill_ref#*:}
+    if [[ -f "plugins/$referenced_plugin/skills/$referenced_name/SKILL.md" ]]; then
+      pass "跨插件调用指向已发布技能 $skill_ref"
+    elif [[ -f "plugins/$referenced_plugin/agents/$referenced_name.md" ]]; then
+      pass "跨插件调用指向已发布 subagent $skill_ref"
     else
-      fail "跨组件调用指向未发布技能或 subagent $skill_ref"
+      fail "跨插件调用指向未发布技能或 subagent $skill_ref"
     fi
   done < <(
-    rg -o --no-filename 'voidtech-core:[a-z0-9-]+' plugins/voidtech-core/skills |
+    rg -o --no-filename \
+      'voidtech-(core|product|design|engineering):[a-z0-9-]+' \
+      plugins/voidtech-core plugins/voidtech-product \
+      plugins/voidtech-design plugins/voidtech-engineering |
       sort -u
   )
 
   if rg -n \
     '/setup-matt-pocock-skills|`/(codebase-design|domain-modeling|tdd|review)`|cdn\.tailwindcss\.com|cdn\.jsdelivr\.net' \
-    plugins/voidtech-core/skills >/dev/null; then
+    plugins/voidtech-core/skills plugins/voidtech-product/skills \
+    plugins/voidtech-design/skills plugins/voidtech-engineering/skills >/dev/null; then
     fail "发布技能仍依赖未分发命令或远程运行时"
   else
     pass "发布技能不依赖未分发命令或远程运行时"
@@ -190,7 +212,8 @@ if [[ -d plugins/voidtech-core ]]; then
 
   if rg -n \
     '不留情面|盘问循环|曳光弹|流畅强度|储存强度|用完即弃|子形态|拧出确定性|三个桶|预重构|垃圾测试|车灯照不到|调试的超能力|参数化的臆测|无情地修剪|脑内草图|不配占位置' \
-    plugins/voidtech-core/skills >/dev/null; then
+    plugins/voidtech-core/skills plugins/voidtech-product/skills \
+    plugins/voidtech-design/skills plugins/voidtech-engineering/skills >/dev/null; then
     fail "汉化技能重新出现已淘汰的生硬译法"
   else
     pass "汉化技能不包含已淘汰的生硬译法"
@@ -198,7 +221,7 @@ if [[ -d plugins/voidtech-core ]]; then
 
   if rg -n \
     '<script[^>]+src=|<link[^>]+href="https?://|<img[^>]+src="https?://|url\(https?://|import[^;]*https?://' \
-    plugins/voidtech-core/skills/architecture-review >/dev/null; then
+    plugins/voidtech-engineering/skills/architecture-review >/dev/null; then
     fail "架构审查仍包含远程 HTML 运行时"
   else
     pass "架构审查 HTML 完全离线"
@@ -225,7 +248,11 @@ if [[ -d plugins/voidtech-core ]]; then
       ' "$resource_file" |
         rg -o --no-filename '\]\([^)]+\)' || true
     )
-  done < <(find plugins/voidtech-core/skills -type f -name '*.md' -print0)
+  done < <(
+    find plugins/voidtech-core/skills plugins/voidtech-product/skills \
+      plugins/voidtech-design/skills plugins/voidtech-engineering/skills \
+      -type f -name '*.md' -print0
+  )
 
   if [[ -f plugins/voidtech-core/skills/text-naturalizer/LICENSE ]]; then
     pass "text-naturalizer 随附许可证"
@@ -233,16 +260,25 @@ if [[ -d plugins/voidtech-core ]]; then
     fail "text-naturalizer 声明的 LICENSE 未随插件分发"
   fi
 
+  for vendored_plugin in voidtech-core voidtech-design voidtech-engineering; do
+    vendor_license="plugins/$vendored_plugin/skills/_vendor-licenses/mattpocock-LICENSE"
+    if [[ -f "$vendor_license" ]]; then
+      pass "$vendored_plugin 随附 vendored 技能许可证"
+    else
+      fail "$vendored_plugin 缺少 vendored 技能许可证"
+    fi
+  done
+
   if rg -F '${CLAUDE_PLUGIN_ROOT}/skills/debug/scripts/hitl-loop.template.sh' \
-      plugins/voidtech-core/skills/debug/SKILL.md >/dev/null && \
+      plugins/voidtech-engineering/skills/debug/SKILL.md >/dev/null && \
     rg -F '${CLAUDE_PLUGIN_ROOT}/skills/git-safety/scripts/block-dangerous-git.sh' \
-      plugins/voidtech-core/skills/git-safety/SKILL.md >/dev/null; then
+      plugins/voidtech-engineering/skills/git-safety/SKILL.md >/dev/null; then
     pass "随附脚本通过 CLAUDE_PLUGIN_ROOT 定位"
   else
     fail "随附脚本缺少可移植的 CLAUDE_PLUGIN_ROOT 定位"
   fi
 
-  git_guard=plugins/voidtech-core/skills/git-safety/scripts/block-dangerous-git.sh
+  git_guard=plugins/voidtech-engineering/skills/git-safety/scripts/block-dangerous-git.sh
   if printf '%s\n' '{"tool_input":{"command":"git status"}}' | "$git_guard" >/dev/null 2>&1; then
     pass "Git 防护脚本允许只读命令"
   else
@@ -359,7 +395,7 @@ DELIVERED_GATE_TESTS=(
   test_cli test_check_prd_tree test_renderer_env
 )
 if command -v python3 >/dev/null 2>&1; then
-  if (cd plugins/voidtech-core/skills/prd-from-requirements/tests && \
+  if (cd plugins/voidtech-product/skills/prd-from-requirements/tests && \
       python3 -m unittest "${DELIVERED_GATE_TESTS[@]}" >/dev/null 2>&1); then
     pass "prd-from-requirements 已过门 unittest 套件"
   else
@@ -373,19 +409,25 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
   audit_dir=$(mktemp -d "${TMPDIR:-/tmp}/voidtech-plugin-audit.XXXXXX")
   if CLAUDE_CONFIG_DIR="$audit_dir" claude plugin marketplace add ./ >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-core@voidtech --scope user >/dev/null && \
+    CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-product@voidtech --scope user >/dev/null && \
+    CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-design@voidtech --scope user >/dev/null && \
+    CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-engineering@voidtech --scope user >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-loop@voidtech --scope user >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-mcp-common@voidtech --scope user >/dev/null && \
     CLAUDE_CONFIG_DIR="$audit_dir" claude plugin install voidtech-mcp-apple@voidtech --scope user >/dev/null; then
     installed_json=$(CLAUDE_CONFIG_DIR="$audit_dir" claude plugin list --json)
     installed_count=$(jq 'length' <<<"$installed_json")
-    if [[ "$installed_count" == "4" ]]; then
-      pass "隔离安装四个插件"
+    if [[ "$installed_count" == "7" ]]; then
+      pass "隔离安装七个插件"
     else
       fail "隔离环境安装数量异常：$installed_count"
     fi
 
     if jq -e '
       (map(select(.id == "voidtech-core@voidtech" and .enabled == true)) | length == 1) and
+      (map(select(.id == "voidtech-product@voidtech" and .enabled == true)) | length == 1) and
+      (map(select(.id == "voidtech-design@voidtech" and .enabled == true)) | length == 1) and
+      (map(select(.id == "voidtech-engineering@voidtech" and .enabled == true)) | length == 1) and
       (map(select(.id == "voidtech-loop@voidtech" and .enabled == true)) | length == 1) and
       (map(select(.id == "voidtech-mcp-common@voidtech" and .enabled == false)) | length == 1) and
       (map(select(.id == "voidtech-mcp-apple@voidtech" and .enabled == false)) | length == 1)
@@ -395,50 +437,87 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       fail "隔离安装后的启用状态错误"
     fi
 
-    core_install_path=$(
-      jq -r '.[] | select(.id == "voidtech-core@voidtech") | .installPath' <<<"$installed_json"
-    )
     installed_resources=(
-      "hooks/check-update.sh"
-      "hooks/zh-locale.sh"
-      "agents/architect.md"
-      "agents/product-manager.md"
-      "skills/prd-from-requirements/SKILL.md"
-      "skills/prd-from-requirements/scripts/xlsx-to-markdown.py"
-      "skills/prd-from-requirements/scripts/check-prd-tree.py"
-      "skills/prd-from-requirements/scripts/generate-dashboard.py"
-      "skills/prd-from-requirements/templates/product-overview.md"
-      "skills/prd-from-requirements/templates/domain-spec.md"
-      "skills/prd-from-requirements/templates/feature-gating-matrix.md"
-      "skills/prd-from-requirements/templates/deepening-backlog.md"
-      "skills/prd-maintain/SKILL.md"
-      "skills/_shared/ISSUE-TRACKER.md"
-      "skills/architecture-review/HTML-REPORT.md"
-      "skills/debug/scripts/hitl-loop.template.sh"
-      "skills/git-safety/scripts/block-dangerous-git.sh"
-      "skills/research/SKILL.md"
-      "skills/ship/SKILL.md"
-      "skills/prd-from-requirements/scripts/prd-sync.py"
-      "skills/prd-from-requirements/assets/renderer-validation-proof.json"
-      "skills/prd-sync/SKILL.md"
-      "skills/text-naturalizer/LICENSE"
+      "voidtech-core|hooks/check-update.sh"
+      "voidtech-core|hooks/zh-locale.sh"
+      "voidtech-core|skills/research/SKILL.md"
+      "voidtech-core|skills/text-naturalizer/LICENSE"
+      "voidtech-core|runtime/archify/voidtech_archify/archify_bridge.py"
+      "voidtech-core|runtime/archify/voidtech_archify/architecture_ir.py"
+      "voidtech-core|runtime/archify/voidtech_archify/lifecycle_ir.py"
+      "voidtech-core|vendor/archify/bin/archify.mjs"
+      "voidtech-product|agents/product-manager.md"
+      "voidtech-product|skills/prd-from-requirements/SKILL.md"
+      "voidtech-product|skills/prd-from-requirements/scripts/xlsx-to-markdown.py"
+      "voidtech-product|skills/prd-from-requirements/scripts/check-prd-tree.py"
+      "voidtech-product|skills/prd-from-requirements/scripts/generate-dashboard.py"
+      "voidtech-product|skills/prd-from-requirements/scripts/prd-sync.py"
+      "voidtech-product|skills/prd-from-requirements/scripts/prdsync/core_archify.py"
+      "voidtech-product|skills/prd-from-requirements/templates/product-overview.md"
+      "voidtech-product|skills/prd-from-requirements/templates/domain-spec.md"
+      "voidtech-product|skills/prd-from-requirements/templates/feature-gating-matrix.md"
+      "voidtech-product|skills/prd-from-requirements/templates/deepening-backlog.md"
+      "voidtech-product|skills/prd-from-requirements/assets/renderer-validation-proof.json"
+      "voidtech-product|skills/prd-maintain/SKILL.md"
+      "voidtech-product|skills/prd-sync/SKILL.md"
+      "voidtech-design|skills/to-design-brief/SKILL.md"
+      "voidtech-design|skills/ui-prototype/SKILL.md"
+      "voidtech-engineering|agents/architect.md"
+      "voidtech-engineering|skills/_shared/ISSUE-TRACKER.md"
+      "voidtech-engineering|skills/architecture-review/HTML-REPORT.md"
+      "voidtech-engineering|skills/debug/scripts/hitl-loop.template.sh"
+      "voidtech-engineering|skills/git-safety/scripts/block-dangerous-git.sh"
+      "voidtech-engineering|skills/logic-spike/SKILL.md"
+      "voidtech-engineering|skills/ship/SKILL.md"
     )
     missing_installed_resource=0
     for installed_resource in "${installed_resources[@]}"; do
-      if [[ -f "$core_install_path/$installed_resource" ]]; then
-        pass "隔离安装包含 $installed_resource"
+      resource_plugin=${installed_resource%%|*}
+      relative_path=${installed_resource#*|}
+      install_path=$(
+        jq -r --arg id "$resource_plugin@voidtech" \
+          '.[] | select(.id == $id) | .installPath' <<<"$installed_json"
+      )
+      if [[ -f "$install_path/$relative_path" ]]; then
+        pass "隔离安装包含 $resource_plugin/$relative_path"
       else
-        fail "隔离安装缺少 $installed_resource"
+        fail "隔离安装缺少 $resource_plugin/$relative_path"
         missing_installed_resource=1
       fi
     done
 
+    core_install_path=$(
+      jq -r '.[] | select(.id == "voidtech-core@voidtech") | .installPath' <<<"$installed_json"
+    )
+    engineering_install_path=$(
+      jq -r '.[] | select(.id == "voidtech-engineering@voidtech") | .installPath' <<<"$installed_json"
+    )
     if ((missing_installed_resource == 0)) && \
       [[ -x "$core_install_path/hooks/check-update.sh" ]] && \
-      [[ -x "$core_install_path/skills/git-safety/scripts/block-dangerous-git.sh" ]]; then
+      [[ -x "$engineering_install_path/skills/git-safety/scripts/block-dangerous-git.sh" ]]; then
       pass "隔离安装保留随附脚本执行权限"
     else
       fail "隔离安装未保留随附脚本执行权限"
+    fi
+
+    product_install_path=$(
+      jq -r '.[] | select(.id == "voidtech-product@voidtech") | .installPath' <<<"$installed_json"
+    )
+    if CLAUDE_CONFIG_DIR="$audit_dir" \
+      PYTHONPATH="$product_install_path/skills/prd-from-requirements/scripts" \
+      python3 -c 'from prdsync.core_archify import archify_bridge; print(archify_bridge.vendor_digest())' \
+      >/dev/null 2>&1; then
+      pass "隔离安装后的 Product 可解析 Core Archify Runtime"
+    else
+      fail "隔离安装后的 Product 无法解析 Core Archify Runtime"
+    fi
+
+    if CLAUDE_CONFIG_DIR="$audit_dir" \
+      python3 "$product_install_path/skills/prd-from-requirements/scripts/prd-sync.py" \
+      --help >/dev/null 2>&1; then
+      pass "隔离安装后的 Product PRD CLI 可真实启动"
+    else
+      fail "隔离安装后的 Product PRD CLI 启动失败"
     fi
   else
     fail "隔离安装失败"

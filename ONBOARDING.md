@@ -2,7 +2,7 @@
 
 ## 1. 前置条件
 
-- `voidtech-core`：Claude Code 2.1.154 或更高版本
+- `voidtech-core`、`voidtech-product`、`voidtech-design`、`voidtech-engineering`：Claude Code 2.1.154 或更高版本；Product 的 Logic Atlas 复用 Core 的共享 Runtime，因此 Product 与 Core 配套安装
 - `voidtech-loop`：Claude Code 2.1.210 或更高版本；当前 F3 阶段仅支持 macOS arm64，并依赖 Node.js 18+、Git 与 `jq`
 - 使用 MCP 插件时需要 Node.js 20.19 或更高版本
 - Apple MCP 仅支持安装了 Xcode 的 macOS
@@ -12,13 +12,16 @@ claude --version
 node --version
 ```
 
-## 2. 安装核心插件与工程内循环
+## 2. 安装工作流插件与工程内循环
 
 项目的 `.claude/settings.json` 应合入 `templates/project-settings.json`（其中已为 `voidtech` marketplace 声明 `"autoUpdate": true`）。手动安装时执行：
 
 ```bash
 claude plugin marketplace add VoidTechnology/voidtech-claude-plugins
 claude plugin install voidtech-core@voidtech
+claude plugin install voidtech-product@voidtech
+claude plugin install voidtech-design@voidtech
+claude plugin install voidtech-engineering@voidtech
 ```
 
 `voidtech-loop` 用于完成条件可由命令退出码判定的无人值守工程任务。满足 macOS arm64、Claude Code 2.1.210+、Node.js 18+、Git 与 `jq` 后再安装：
@@ -27,7 +30,7 @@ claude plugin install voidtech-core@voidtech
 claude plugin install voidtech-loop@voidtech
 ```
 
-不满足试点条件时跳过该插件，不影响 `voidtech-core`。loop 不自动 push、merge、创建 PR/MR 或改写用户分支；机器 eval 通过后仍需人工复核。
+不满足试点条件时跳过该插件，不影响 Core、Product、Design 与 Engineering。loop 不自动 push、merge、创建 PR/MR 或改写用户分支；机器 eval 通过后仍需人工复核。
 
 ### 2.1 开启 marketplace 自动更新（必做）
 
@@ -54,12 +57,22 @@ claude plugin install voidtech-loop@voidtech
 >
 > 仓库为私有时，后台自动更新依赖本机 git 凭据：先执行 `gh auth setup-git`（或配置等效 credential helper），否则后台拉取会失败。
 
-从旧版迁移时，先把项目 `.claude/settings.json` 中的 `voidtech-toolkit@voidtech` 替换为 `voidtech-core@voidtech`，再更新 Marketplace 并移除旧插件：
+从仅有 `voidtech-core` 的旧版迁移到四插件架构时：
+
+1. 执行 `claude plugin marketplace update voidtech`；
+2. 安装 `voidtech-product@voidtech`、`voidtech-design@voidtech`、`voidtech-engineering@voidtech`；
+3. 在 `/plugin` 中更新 `voidtech-core`，再运行 `/reload-plugins`；
+4. 将脚本、团队文档和个人习惯中的旧命令改成新命名空间。迁移是 clean cutover，不保留旧命令别名。
+
+更早的 `voidtech-toolkit@voidtech` 用户先卸载旧插件，再按上面的四插件安装命令执行：
 
 ```bash
 claude plugin marketplace update voidtech
 claude plugin uninstall voidtech-toolkit@voidtech
 claude plugin install voidtech-core@voidtech
+claude plugin install voidtech-product@voidtech
+claude plugin install voidtech-design@voidtech
+claude plugin install voidtech-engineering@voidtech
 ```
 
 满足上述试点条件、需要工程内循环时，再单独安装 `voidtech-loop@voidtech`。
@@ -111,7 +124,7 @@ glab auth login --hostname gitlab.example.com
 
 ## 5. 按需安装官方插件
 
-官方插件是增强层，不替代 `voidtech-core` 的团队默认工作流。建议只按项目需要安装：
+官方插件是增强层，不替代 VoidTech 四个工作流插件。建议只按项目需要安装：
 
 ```bash
 claude plugin marketplace add anthropics/claude-plugins-official
@@ -128,7 +141,7 @@ claude plugin install youdotcom-agent-skills@claude-plugins-official
 
 - 维护 Claude plugin 时安装 `plugin-dev`。
 - 团队希望增加代码安全提醒时安装 `security-guidance`。
-- 需要在 `/voidtech-core:ship` 前后做独立 PR/MR 审查时安装 `pr-review-toolkit` 或 `code-review`，二选一。
+- 需要在 `/voidtech-engineering:ship` 前后做独立 PR/MR 审查时安装 `pr-review-toolkit` 或 `code-review`，二选一。
 - 做前端 UI 时安装 `frontend-design`；需要设计稿上下文时再安装 `figma`。
 - 需要开放网络调研时安装 `exa`、`firecrawl`、`youdotcom-agent-skills`，配合 `/voidtech-core:research` 做多信源搜索、抓取和带引用研究。
 - 已安装 `voidtech-mcp-common` 时，不再重复安装官方 `context7` 或 `chrome-devtools-mcp`。
@@ -149,4 +162,4 @@ claude plugin list
 /doctor
 ```
 
-预期结果：`voidtech-core` 已启用；试点环境中 `voidtech-loop` 已启用，`/skills` 可看到 `voidtech-loop:goal`、`voidtech-loop:goal-spec` 与 `voidtech-loop:review`；中文约定由 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。
+预期结果：Core、Product、Design、Engineering 均已启用；`/skills` 中迁移技能只出现在各自新命名空间，旧 `/voidtech-core:*` 入口不再出现。试点环境中 `voidtech-loop` 已启用，并可看到 `voidtech-loop:goal`、`voidtech-loop:goal-spec` 与 `voidtech-loop:review`；中文约定由 Core 的 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。

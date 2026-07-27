@@ -1,0 +1,8 @@
+{
+  "name": "voidtech-engineering",
+  "version": "0.1.0",
+  "description": "VoidTech 工程工作流：架构、实现、调试、测试、Issue 与发布",
+  "author": {
+    "name": "VoidTech"
+  }
+}

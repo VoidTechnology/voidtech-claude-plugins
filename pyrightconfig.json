@@ -1,14 +1,15 @@
 {
   "include": [
-    "plugins/voidtech-core/skills/prd-from-requirements/scripts",
-    "plugins/voidtech-core/skills/prd-from-requirements/tests"
+    "plugins/voidtech-product/skills/prd-from-requirements/scripts",
+    "plugins/voidtech-product/skills/prd-from-requirements/tests",
+    "plugins/voidtech-core/runtime/archify/voidtech_archify"
   ],
   "exclude": [
     "**/__pycache__"
   ],
   "extraPaths": [
-    "plugins/voidtech-core/skills/prd-from-requirements/scripts",
-    "plugins/voidtech-core/skills/prd-from-requirements/tests"
+    "plugins/voidtech-product/skills/prd-from-requirements/scripts",
+    "plugins/voidtech-product/skills/prd-from-requirements/tests"
   ],
   "pythonVersion": "3.14",
   "typeCheckingMode": "basic",

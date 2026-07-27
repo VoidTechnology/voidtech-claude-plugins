@@ -1,0 +1,8 @@
+{
+  "name": "voidtech-product",
+  "version": "0.1.0",
+  "description": "VoidTech 产品工作流：需求研究、模块化 PRD、需求同步与产品验收",
+  "author": {
+    "name": "VoidTech"
+  }
+}

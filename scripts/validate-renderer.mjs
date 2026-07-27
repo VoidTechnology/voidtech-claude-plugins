@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SKILL_ROOT = path.join(
-  REPO_ROOT, "plugins", "voidtech-core", "skills", "prd-from-requirements");
+  REPO_ROOT, "plugins", "voidtech-product", "skills", "prd-from-requirements");
 const PROOF_PATH = path.join(SKILL_ROOT, "assets", "renderer-validation-proof.json");
 
 // 与 atlas._PROOF_INHERIT_KEYS 同序；比较语义等价于 atlas.proof_inherits
@@ -370,10 +370,33 @@ async function runBrowserAssertions(fixture) {
       });
       var graphTab = document.getElementById("tab-graph");
       if (graphTab) graphTab.click();
-      out.architectureIcons = document.querySelectorAll(
-        "#view-graph .n-card .semantic-icon,#view-graph .n-focus .semantic-icon").length;
-      var structuredCard = document.querySelector("#view-graph .n-card.structured");
-      if (structuredCard) structuredCard.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+      var archEmbed = document.getElementById("archEmbed");
+      var archSvg = archEmbed
+        ? archEmbed.querySelector(".archify-architecture-svg > svg") : null;
+      var archLabels = archSvg ? Array.prototype.map.call(
+        archSvg.querySelectorAll("[data-edge-label]"),
+        function(node){return node.getAttribute("data-edge-label");}) : [];
+      var archProbeText = archSvg ? archSvg.querySelector("text.t-primary") : null;
+      out.architecture = {
+        marker: archSvg ? archSvg.getAttribute("data-archify-diagram") : null,
+        embedVisible: !!archEmbed && !archEmbed.hidden,
+        components: archSvg ? archSvg.querySelectorAll("[data-node-id]").length : 0,
+        totalConnections: archLabels.length,
+        labeledConnections: archLabels.filter(
+          function(text){return text && text.length;}).length,
+        styleTag: !!document.getElementById("archify-architecture-style"),
+        fill: archProbeText ? getComputedStyle(archProbeText).fill : null,
+        stageHidden: (function(){
+          var stage = document.getElementById("svg");
+          return stage ? getComputedStyle(stage).display === "none" : false;
+        })()
+      };
+      // 点击嵌入的 fixture structured 组件下钻：核心「系统关系」导航必须保留。
+      var drillComp = archSvg ?
+        archSvg.querySelector('[data-node-id="m-01-portal__01-module"]') : null;
+      if (drillComp) drillComp.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+      out.architecture.drilledToModule =
+        document.querySelectorAll("#view-graph .n-focus").length > 0;
       var pageNode = document.querySelector("#view-graph .n-focus.page");
       if (pageNode) pageNode.dispatchEvent(new MouseEvent("click",{bubbles:true}));
       out.pageDataAudit = {
@@ -450,11 +473,17 @@ async function runBrowserAssertions(fixture) {
         var tab=document.getElementById("tab-state");
         if(tab) tab.click();
         var panel=document.getElementById("view-state");
+        var graphTab=document.getElementById("tab-graph");
+        if(graphTab) graphTab.click();
+        var archEmbed=document.getElementById("archEmbed");
         return JSON.stringify({
           riskBanner: !!(panel&&panel.querySelector(".lifecycle-risk")),
           builtInNodes: panel?panel.querySelectorAll(".state-graph-node").length:0,
           archifySvgs: panel?panel.querySelectorAll(".archify-lifecycle-svg > svg").length:0,
-          topRisk: !!document.querySelector(".topmeta .chip.risk")
+          topRisk: !!document.querySelector(".topmeta .chip.risk"),
+          archEmbedHidden: !archEmbed || archEmbed.hidden,
+          archEmbedSvgs: archEmbed?archEmbed.querySelectorAll(".archify-architecture-svg > svg").length:0,
+          builtInOverviewCards: document.querySelectorAll("#view-graph .n-card").length
         });
       })()`,
       returnByValue: true,
@@ -575,8 +604,19 @@ async function runBrowserAssertions(fixture) {
         || fallback.archifySvgs !== 0 || !fallback.topRisk) {
       failures.push(`Lifecycle 降级路径不可达或风险未标注: ${JSON.stringify(fallback)}`);
     }
-    if (dom.architectureIcons < 2) {
-      failures.push(`系统关系图缺少架构节点类型图标: ${dom.architectureIcons}`);
+    if (!fallback.archEmbedHidden || fallback.archEmbedSvgs !== 0
+        || fallback.builtInOverviewCards < 2) {
+      failures.push(`Architecture 降级路径未回落到内建总览: ${JSON.stringify(fallback)}`);
+    }
+    if (!dom.architecture || dom.architecture.marker !== "architecture"
+        || !dom.architecture.embedVisible || !dom.architecture.stageHidden
+        || dom.architecture.components < 2
+        || dom.architecture.labeledConnections < 1
+        || dom.architecture.labeledConnections !== dom.architecture.totalConnections
+        || !dom.architecture.styleTag || !dom.architecture.fill
+        || dom.architecture.fill === "rgb(0, 0, 0)"
+        || !dom.architecture.drilledToModule) {
+      failures.push(`系统关系 Architecture 总览未嵌入/标签缺失/样式未落地/点击下钻不可用: ${JSON.stringify(dom.architecture)}`);
     }
     if (!dom.traceability?.summary.includes("会员可查看订单详情并完成订单")
         || dom.traceability.references < 1 || !dom.traceability.navigated

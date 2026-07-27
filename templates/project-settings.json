@@ -6,6 +6,9 @@
     }
   },
   "enabledPlugins": {
-    "voidtech-core@voidtech": true
+    "voidtech-core@voidtech": true,
+    "voidtech-product@voidtech": true,
+    "voidtech-design@voidtech": true,
+    "voidtech-engineering@voidtech": true
   }
 }

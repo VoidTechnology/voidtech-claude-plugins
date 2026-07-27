@@ -2,7 +2,7 @@
 
 ## 状态
 
-已接受（已实现）
+已接受（已实现；Suite 共享化由 ADR-0007 规划）
 
 ## 日期
 
@@ -304,6 +304,7 @@ Atlas 状态不压成一个布尔值，分维度报告：
 
 - `docs/decisions/0004-prd-source-sync-and-requirement-identity.md`（需求身份、ledger 与同步流程；本 ADR 由其初版拆分而来）
 - `docs/decisions/0002-rename-core-skills.md`（公共命令与公共契约的命名登记）
+- `docs/decisions/0007-voidtech-suite-plugin-architecture.md`（Logic Atlas 升级为 Core Suite Atlas、Product 输出领域 Fragment 的上位决策）
 - `plugins/voidtech-core/skills/prd-from-requirements/SKILL.md`
 - `plugins/voidtech-core/skills/prd-maintain/SKILL.md`
 - `plugins/voidtech-core/skills/text-naturalizer/SKILL.md`
@@ -322,3 +323,4 @@ Atlas 状态不压成一个布尔值，分维度报告：
 | 2026-07-22 | 机械修正：发布顺序统一为「全部文件发布完成后推进唯一提交点」；过期入口语义细化（校验失败不算过期、HTML 自述快照摘要、检查器只读、替换入口需显式写 operation）；证明继承键补 `fixtureDigest`/`validationHarnessVersion`/`browserMatrixVersion` | 技术设计冻结评审发现发布顺序与 ADR-0004 相反、过期写入者与只读检查器矛盾、证明继承漏 fixture 维度 |
 | 2026-07-22 | 终审修正：无浏览器场景的 Atlas 标记从「内容最新、使用已验证渲染器生成」改为「生成快照摘要及渲染器验证状态」 | 终审要求 Atlas 一律自述快照，不出现「最新」类静态断言 |
 | 2026-07-24 | Lifecycle 呈现层允许调用 vendored Archify（Node >= 18），失败时按单状态机降级；证明继承增加 `archifyDigest` | 状态机需要经 fail-closed 校验的确定性 SVG，同时必须保持用户机器缺 Node 时内容维护可完成 |
+| 2026-07-24 | 接受 ADR-0007 上位归属：当前 PRD Logic Model 后续拆为 Product Atlas Fragment；Atlas Engine、Viewer、coverage/gaps/freshness/change impact、Archify Runtime 与 Atlas→Archify Adapter 迁入 Core。现有 Product View 的来源、fail-closed、内容门/呈现门和单图降级不变 | Product、Design、Engineering、QA 都需要同一套关系、追溯与影响分析能力；不能各建一套 Atlas，也不能把当前写死 Product 枚举的 Schema 原样声明为 Core 公共契约 |

@@ -1,5 +1,22 @@
 # Changelog
 
+## VoidTech Product Delivery Suite 0.1.0 / voidtech-core 0.18.0 - 2026-07-24
+
+将原先集中在 `voidtech-core` 的产品、设计与工程工作流按交付责任拆成四个独立插件；Core 只保留共享约定、跨领域能力和唯一 Archify Runtime。此次为一次性命名空间迁移，不保留旧命令别名。
+
+### Added
+
+- 新增 `voidtech-product 0.1.0`：`prd-from-requirements`、`prd-maintain`、`prd-sync` 与 `product-manager` agent；完整迁移 PRD templates、references、scripts、tests、assets 与 Logic Atlas 适配代码。
+- 新增 `voidtech-design 0.1.0`：`to-design-brief` 与从原 `prototype` 明确更名的 `ui-prototype`，区分 UI 结构试验与工程逻辑试验。
+- 新增 `voidtech-engineering 0.1.0`：架构、实现、调试、TDD、Issue、Git 与发布技能，以及 `architect` agent；原 `prototype` 的状态/逻辑/TUI 部分独立为 `logic-spike`。
+- Product 的 Logic Atlas 通过 `core_archify` adapter 定位已安装的 `voidtech-core` 并复用唯一 Archify Runtime；Core Runtime 暴露稳定的 `architecture_ir`、`archify_bridge`、`lifecycle_ir` 接口，不复制 vendor。
+
+### Changed
+
+- `voidtech-core` 收口为 6 个公共技能与共享 Archify Runtime，版本 0.17.2 → 0.18.0。
+- Marketplace、默认项目配置、README、USAGE 与可移植性门禁更新为四插件架构；隔离安装冒烟同时验证跨插件 Runtime 解析、脚本执行权限和 27 个现有技能 / 2 个 agent 的精确归属。
+- 公开命令改为 `/voidtech-product:*`、`/voidtech-design:*`、`/voidtech-engineering:*`；原 `/voidtech-core:*` 迁移命令不再保留兼容入口，避免命令重复和长期双轨。
+
 ## voidtech-core 0.17.2 - 2026-07-24
 
 状态机布局返工：0.17.1 的打磨在放大目检下暴露三个真问题——互转小环同列堆叠导致节点叠压、长中文子标签溢出状态盒互压、vendor 校验器按拉丁口径估宽且不查子标签使上述缺陷可静默过 fail-closed 门禁。本次修根因并补上 CJK 感知的机器守门。
