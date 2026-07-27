@@ -1,0 +1,82 @@
+name: 缺陷报告
+description: 报告可复现的插件、Skill、Agent、Hook、MCP 或 Loop 问题
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞不要在这里公开提交，请按 SECURITY.md 使用私下报告渠道。
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: 受影响插件
+      options:
+        - voidtech-core
+        - voidtech-product
+        - voidtech-design
+        - voidtech-engineering
+        - voidtech-loop
+        - voidtech-mcp-common
+        - voidtech-mcp-apple
+        - Marketplace / 文档 / CI
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 插件与 Claude Code 版本
+      placeholder: "voidtech-loop 0.3.0；Claude Code 2.1.220"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 实际问题
+      description: 说明发生了什么，以及它如何影响用户完成工作。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 稳定复现步骤
+      placeholder: |
+        1. 安装……
+        2. 执行……
+        3. 观察到……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 日志与证据
+      description: 删除凭据、Token、用户名、绝对路径和其他敏感信息后再粘贴。
+      render: shell
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - macOS arm64
+        - macOS x64
+        - Linux x64
+        - Linux arm64
+        - Windows x64
+        - 其他
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认这不是需要私下报告的安全漏洞
+          required: true
+        - label: 我已搜索现有 Issue，没有发现同一问题
+          required: true

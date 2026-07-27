@@ -1,0 +1,17 @@
+# 默认由仓库维护者审查。
+* @ripplek
+
+# 执行任意命令、修改 Git 或扩大权限的高风险路径必须由维护者审查。
+/plugins/voidtech-loop/ @ripplek
+/plugins/voidtech-core/hooks/ @ripplek
+/plugins/voidtech-engineering/skills/git-safety/ @ripplek
+/plugins/voidtech-mcp-common/ @ripplek
+/plugins/voidtech-mcp-apple/ @ripplek
+/.github/workflows/ @ripplek
+/.claude-plugin/ @ripplek
+/scripts/ @ripplek
+
+# 第三方代码和许可证边界。
+/archive/ @ripplek
+/plugins/*/vendor/ @ripplek
+/plugins/*/skills/_vendor-licenses/ @ripplek

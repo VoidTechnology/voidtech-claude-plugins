@@ -7,22 +7,24 @@ name: Renderer validation
 on:
   pull_request:
     paths:
-      - plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/atlas.py
-      - plugins/voidtech-core/skills/prd-from-requirements/schemas/logic-model.schema.json
-      - plugins/voidtech-core/skills/prd-from-requirements/assets/renderer-validation-proof.json
-      - scripts/validate-renderer.mjs
-      - .github/workflows/renderer-validation.yml
+      - 'plugins/voidtech-product/skills/prd-from-requirements/**'
+      - 'plugins/voidtech-core/runtime/archify/**'
+      - 'scripts/validate-renderer.mjs'
+      - '.github/workflows/renderer-validation.yml'
   push:
     branches: [main]
     paths:
-      - plugins/voidtech-core/skills/prd-from-requirements/scripts/prdsync/atlas.py
-      - plugins/voidtech-core/skills/prd-from-requirements/schemas/logic-model.schema.json
-      - plugins/voidtech-core/skills/prd-from-requirements/assets/renderer-validation-proof.json
-      - scripts/validate-renderer.mjs
-      - .github/workflows/renderer-validation.yml
+      - 'plugins/voidtech-product/skills/prd-from-requirements/**'
+      - 'plugins/voidtech-core/runtime/archify/**'
+      - 'scripts/validate-renderer.mjs'
+      - '.github/workflows/renderer-validation.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: renderer-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

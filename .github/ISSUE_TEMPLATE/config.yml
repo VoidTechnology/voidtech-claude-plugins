@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞私下报告
+    url: https://github.com/VoidTechnology/voidtech-claude-plugins/security/advisories/new
+    about: 不要公开提交漏洞利用细节，请使用 GitHub Security Advisory。
