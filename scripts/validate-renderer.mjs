@@ -399,10 +399,20 @@ async function runBrowserAssertions(fixture) {
         document.querySelectorAll("#view-graph .n-focus").length > 0;
       var pageNode = document.querySelector("#view-graph .n-focus.page");
       if (pageNode) pageNode.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+      // fixture 模块声明了 §7.0 模块级读写但没有 §7.0.1 页面映射。
+      // 读者必须看得出「这条关系只到模块」：页面列不得长出任何读写边，
+      // 模块级读写只能从独立契约轨引出并带 .module-level 区分样式。
       out.pageDataAudit = {
         explicitGap: !!document.querySelector("#view-graph .module-data-gap"),
         misleadingModuleEdges: document.querySelectorAll(
-          "#view-graph .edge.reads,#view-graph .edge.writes").length,
+          "#view-graph .edge.reads:not(.module-level)," +
+          "#view-graph .edge.writes:not(.module-level)").length,
+        moduleLevelEdges: document.querySelectorAll(
+          "#view-graph .edge.module-level").length,
+        moduleLevelRail: document.querySelectorAll(
+          "#view-graph .rail-label").length,
+        unboundPageMarkers: document.querySelectorAll(
+          "#view-graph .page-unbound").length,
         dimmedAfterUnmappedPageFocus: document.querySelectorAll(
           "#view-graph .n-focus.dim").length
       };
@@ -571,6 +581,13 @@ async function runBrowserAssertions(fixture) {
         || dom.pageDataAudit.misleadingModuleEdges !== 0
         || dom.pageDataAudit.dimmedAfterUnmappedPageFocus !== 0) {
       failures.push(`页面↔数据关系缺失未显式呈现或仍绘制模块扇形边: ${JSON.stringify(dom.pageDataAudit)}`);
+    }
+    // 模块级读写必须真的画出来（否则原文已声明的数据流仍然看不见），
+    // 且必须挂在带标注的独立契约轨上、每个未绑定页面都要有缺失标记。
+    if (dom.pageDataAudit?.moduleLevelEdges < 1
+        || dom.pageDataAudit?.moduleLevelRail < 1
+        || dom.pageDataAudit?.unboundPageMarkers < 1) {
+      failures.push(`模块级读写未成图或缺少「仅模块级」区分: ${JSON.stringify(dom.pageDataAudit)}`);
     }
     if (!dom.lifecycle?.legend || !dom.lifecycle.archifySvg
         || dom.lifecycle.archifyMarker !== "lifecycle"

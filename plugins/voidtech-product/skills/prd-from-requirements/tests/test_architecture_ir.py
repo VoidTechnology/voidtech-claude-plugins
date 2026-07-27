@@ -32,6 +32,14 @@ def _interacts(edge_id, src, dst, **detail):
             "detail": detail}
 
 
+def _data_edge(edge_id, kind, src, dst):
+    return {"edgeId": edge_id, "kind": kind, "from": src, "to": dst,
+            "status": "original",
+            "sources": [{"path": "prd.md", "anchor": "数据读写",
+                         "requirementIds": [], "oqIds": []}],
+            "detail": {}}
+
+
 def _model():
     scopes = [
         _scope("wt", "worktree", "工作树", None),
@@ -59,6 +67,17 @@ def _model():
         _interacts("e5", "01-a/01-y", "external:pay:channel", direction="调用"),
         # 自环 → 亦记入缺口。
         _interacts("e6", "01-a/00-x", "01-a/00-x", direction="调用"),
+        # 数据流：owns 起点是主本模块，终点是消费方模块声明的对象节点。
+        _data_edge("e7", "owns", "02-b/01-q", "obj:01-a/02-z:会籍"),
+        # 数据流：shares 两端都是对象节点，解析回各自模块。
+        _data_edge("e8", "shares", "obj:01-a/02-z:账号", "obj:02-b/01-q:账号"),
+        # 系统内部数据流 → 总览不画（模块视图已逐对象呈现），记入缺口。
+        _data_edge("e9", "owns", "01-a/00-x", "obj:01-a/02-z:配置"),
+        # 本模块拥有本模块的对象 → 自环，记入缺口而非画成自连接。
+        _data_edge("e10", "owns", "01-a/01-y", "obj:01-a/01-y:客户"),
+        # 跨系统且与 e12 同一有向对：调用与数据流合并成一条连接。
+        _interacts("e11", "01-a/02-z", "02-b/00-p", direction="调用"),
+        _data_edge("e12", "owns", "01-a/02-z", "obj:02-b/00-p:配置"),
     ]
     return {"scopes": scopes, "nodes": nodes, "edges": edges, "gaps": []}
 
@@ -91,10 +110,57 @@ class ArchitectureExtractTest(unittest.TestCase):
 
     def test_external_and_self_loop_recorded_as_data_gap(self):
         unresolved = {e["edgeId"] for e in self.data["unresolved"]}
-        self.assertEqual(unresolved, {"e5", "e6"})
+        self.assertEqual(unresolved, {"e5", "e6", "e10"})
 
     def test_no_connection_is_unlabeled(self):
         self.assertTrue(all(c["label"] for c in self.data["connections"]))
+
+    def test_data_flow_edges_become_their_own_module_connection(self):
+        """owns 指向的对象节点解析回消费方模块，形成主本→消费方的数据流连接。"""
+        conns = {c["id"]: c for c in self.data["connections"]}
+        owns = conns[architecture_ir.connection_id("02-b/01-q", "01-a/02-z")]
+        self.assertEqual(owns["label"], "数据主本")
+        self.assertEqual(owns["variant"], "dashed")
+        self.assertEqual(owns["edgeIds"], ["e7"])
+
+    def test_shares_pair_is_labeled_as_shared_object(self):
+        conns = {c["id"]: c for c in self.data["connections"]}
+        shared = conns[architecture_ir.connection_id("01-a/02-z", "02-b/01-q")]
+        self.assertEqual(shared["label"], "共用对象")
+        self.assertEqual(shared["variant"], "dashed")
+
+    def test_call_and_data_flow_on_same_pair_merge_and_emphasize(self):
+        """同一模块对既有调用又有数据流：合并成一条，标签并列，加重呈现。"""
+        conns = {c["id"]: c for c in self.data["connections"]}
+        merged = conns[architecture_ir.connection_id("01-a/02-z", "02-b/00-p")]
+        self.assertEqual(merged["label"], "调用/数据主本 ×2")
+        self.assertEqual(merged["variant"], "emphasis")
+        self.assertEqual(sorted(merged["edgeIds"]), ["e11", "e12"])
+
+    def test_interacts_only_pair_keeps_default_variant(self):
+        conns = {c["id"]: c for c in self.data["connections"]}
+        plain = conns[architecture_ir.connection_id("01-a/00-x", "01-a/01-y")]
+        self.assertEqual(plain["variant"], "default")
+
+    def test_same_module_data_flow_is_gap_not_self_connection(self):
+        """本模块自己拥有的对象不是跨模块耦合，不得画成自环。"""
+        unresolved = {e["edgeId"] for e in self.data["unresolved"]}
+        self.assertIn("e10", unresolved)
+        self.assertFalse([
+            c for c in self.data["connections"] if c["from"] == c["to"]])
+
+    def test_intra_system_data_flow_is_drawn_like_any_other(self):
+        """系统内部数据流照画不误——是否上图由几何容量决定，不按系统边界预筛。
+
+        早期版本按「只画跨系统」硬筛，那是拿单个 24 模块项目的实测阈值当通用
+        规则；换成按需撑开间隙后，任何规模的项目都不会因为这条规则丢关系。
+        """
+        conns = {c["id"]: c for c in self.data["connections"]}
+        pair = conns[architecture_ir.connection_id("01-a/00-x", "01-a/02-z")]
+        self.assertEqual(pair["variant"], "emphasis")
+        self.assertEqual(sorted(pair["edgeIds"]), ["e4", "e9"])
+        self.assertNotIn(
+            "e9", {e["edgeId"] for e in self.data["unresolved"]})
 
 
 class ArchitectureIrTest(unittest.TestCase):
@@ -171,6 +237,48 @@ class ArchitectureIrTest(unittest.TestCase):
         self.assertEqual(
             sorted(ceids[architecture_ir.connection_id(
                 "01-a/01-y", "02-b/01-q")]), ["e2", "e3"])
+
+    def test_gutter_widens_to_fit_lanes_instead_of_dropping(self):
+        """间隙按车道需求撑开：连接只增不减，宽度随需求增长。
+
+        通用性守门——不允许因为「放不下」而丢关系。丢关系会让读者把
+        「图上没有」误读成「关系不存在」；撑宽只是多滚动一点。
+        """
+        base = architecture_ir.build_architecture_ir(self.model)
+        crowded = _model()
+        # 在同一条列间隙上再压 3 条跨列连接，逼出更多车道。
+        for index, (src, dst) in enumerate((
+                ("01-a/00-x", "02-b/01-q"),
+                ("01-a/01-y", "02-b/00-p"),
+                ("01-a/02-z", "02-b/01-q"))):
+            crowded["edges"].append(
+                _interacts(f"x{index}", src, dst, direction="调用"))
+        dense = architecture_ir.build_architecture_ir(crowded)
+        self.assertGreater(len(dense["connections"]), len(base["connections"]))
+        base_cols = sorted({c["pos"][0] for c in base["components"]})
+        dense_cols = sorted({c["pos"][0] for c in dense["components"]})
+        self.assertGreater(dense_cols[1] - dense_cols[0],
+                           base_cols[1] - base_cols[0])
+        # 每条声明的连接都在 IR 里，一条不落。
+        declared = {c["id"]
+                    for c in architecture_ir.extract_architecture(
+                        crowded)["connections"]}
+        self.assertEqual({c["id"] for c in dense["connections"]}, declared)
+
+    def test_small_tree_keeps_baseline_gap(self):
+        """需求不超基准时不无谓撑宽——小项目画布保持紧凑。"""
+        sparse = _model()
+        sparse["edges"] = [
+            _interacts("s1", "01-a/00-x", "01-a/01-y", direction="调用")]
+        ir = architecture_ir.build_architecture_ir(sparse)
+        self.assertEqual(ir["layout"]["gapX"], architecture_ir._GAPX)
+
+    def test_shared_gutter_channels_do_not_overlap(self):
+        """inter 与中列 intra 共用同一条间隙时，各占互不重叠的一段。"""
+        ir = architecture_ir.build_architecture_ir(self.model)
+        xs = [c["via"][0][0] for c in ir["connections"] if "via" in c]
+        self.assertEqual(len(xs), len(set(xs)),
+                         f"通道 x 坐标重复，说明两条通道压线: {sorted(xs)}")
 
     def test_deterministic_bytes(self):
         again = architecture_ir.build_architecture_ir(self.model)

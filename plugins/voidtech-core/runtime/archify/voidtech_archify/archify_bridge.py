@@ -10,6 +10,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 from . import architecture_ir, lifecycle_ir
 
@@ -447,6 +448,78 @@ def _safe_diagnostics(diagnostics, temporary_root=None, stderr=""):
     return safe or [{"code": "delivery/unknown", "message": "Archify 未返回可解析诊断"}]
 
 
+_RECEIPT_INVALID_CODE = "delivery/receipt-invalid"
+
+
+def _ok_result(completed):
+    """复核通过后，把 deliver 的非零退出码归一为成功，其余字段保持原样。"""
+    return SimpleNamespace(
+        returncode=0,
+        stdout=getattr(completed, "stdout", ""),
+        stderr=getattr(completed, "stderr", ""))
+
+
+def _receipt_was_truncated(receipt):
+    """deliver 因回执不可解析而失败（与真正的渲染失败区分开）。"""
+    if receipt.get("ok") is True:
+        return False
+    return any(
+        (item or {}).get("code") == _RECEIPT_INVALID_CODE
+        for item in (receipt.get("diagnostics") or []))
+
+
+def _recover_via_file_receipt(runner, executable, diagram_type, input_path,
+                              output_path, work):
+    """绕开 deliver 内层管道重做交付；无法复核时返回 None。
+
+    vendored `deliver` 用 spawnSync(stdio:'pipe') 读 check 回执，而
+    `check-render-output.mjs` 在 console.log 大 JSON 后立即 process.exit()。
+    管道上 stdout 写是异步的，exit 会丢掉未排空的部分（约 64KB 后截断），
+    于是一张渲染完全正常的图会因回执不可解析被误判为交付失败。
+
+    按 vendor 政策不修改 vendored 代码，改从调用侧重做 deliver 的两步：
+    - `render` 直接产出 output_path（deliver 在回执阶段失败时不会把候选产物
+      提升过去，所以必须自己渲染，不能只对着不存在的文件重跑 check）；
+    - `check` 是独立命令，其 runNode 用 stdio 'inherit'，没有内层管道；把
+      stdout 重定向到文件即可拿到完整回执（文件写同步，不受 exit 截断影响）。
+
+    只取回执的 ok 判定与失败项，不复制 vendor 的诊断分类表。
+    """
+    receipt_path = Path(work) / "check-receipt.json"
+    try:
+        rendered = runner([
+            executable, str(_ARCHIFY_CLI), "render", diagram_type,
+            str(input_path), str(output_path),
+        ], capture_output=True, text=True, check=False, timeout=60)
+        if getattr(rendered, "returncode", 1) != 0:
+            return None
+        with open(receipt_path, "w", encoding="utf-8") as handle:
+            runner([
+                executable, str(_ARCHIFY_CLI), "check", str(output_path),
+            ], stdout=handle, stderr=subprocess.PIPE, text=True,
+                check=False, timeout=60)
+        return json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, UnicodeError, ValueError,
+            subprocess.SubprocessError):
+        return None
+
+
+def _checker_failure_diagnostics(checker):
+    """复核判定为失败时的诊断：只报可直接读出的失败项，不复制 vendor 分类表。"""
+    failed = [
+        str(check.get("name"))
+        for check in (checker.get("checks") or []) if not check.get("ok")]
+    composition = (checker.get("composition") or {}).get("status")
+    detail = "；".join(filter(None, [
+        ("未通过检查：" + "、".join(failed)) if failed else "",
+        f"composition={composition}" if composition else "",
+    ])) or "未给出可归类的失败项"
+    return [{
+        "code": "artifact/check-failed",
+        "message": f"文件回执复核判定产物不合格：{detail}"[:500],
+    }]
+
+
 def _machine_maps(machine):
     return {
         "stateNodeIds": {
@@ -512,6 +585,18 @@ def render_machine(machine, ir, *, runner=subprocess.run, executable="node",
                 return _degraded_machine(
                     machine, working_ir,
                     _safe_diagnostics([], work, completed.stderr), attempt)
+            if _receipt_was_truncated(receipt):
+                checker = _recover_via_file_receipt(
+                    runner, executable, "lifecycle", input_path, output_path,
+                    work)
+                if checker is not None:
+                    if checker.get("ok") is True:
+                        receipt = {"ok": True, "diagnostics": []}
+                        completed = _ok_result(completed)
+                    else:
+                        return _degraded_machine(
+                            machine, working_ir,
+                            _checker_failure_diagnostics(checker), attempt)
             if completed.returncode == 0 and receipt.get("ok") is True:
                 try:
                     svg = extract_single_svg(output_path.read_text(encoding="utf-8"))
@@ -655,6 +740,18 @@ def render_architecture(model, ir, *, runner=subprocess.run, executable="node",
                 return _degraded_architecture(
                     model, working_ir,
                     _safe_diagnostics([], work, completed.stderr), attempt)
+            if _receipt_was_truncated(receipt):
+                checker = _recover_via_file_receipt(
+                    runner, executable, "architecture", input_path,
+                    output_path, work)
+                if checker is not None:
+                    if checker.get("ok") is True:
+                        receipt = {"ok": True, "diagnostics": []}
+                        completed = _ok_result(completed)
+                    else:
+                        return _degraded_architecture(
+                            model, working_ir,
+                            _checker_failure_diagnostics(checker), attempt)
             if completed.returncode == 0 and receipt.get("ok") is True:
                 try:
                     svg = extract_single_svg(
