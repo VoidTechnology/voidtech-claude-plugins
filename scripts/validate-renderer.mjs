@@ -666,7 +666,15 @@ async function runBrowserAssertions(fixture) {
       chrome.kill("SIGKILL");
       await exited;
     }
-    rmSync(workDir, { recursive: true, force: true });
+    // Chrome 的 zygote/renderer 子进程可能在父进程退出后仍短暂写 profile 目录，
+    // 直连 rmSync 会撞 ENOTEMPTY（Linux CI 上偶发）。带重试；且清理失败不得让
+    // 已经全部通过的断言判负——临时目录残留是环境问题，不是渲染器问题。
+    try {
+      rmSync(workDir, {
+        recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (error) {
+      console.warn(`- 清理临时目录失败（不影响断言结论）: ${error.code || error.message}`);
+    }
   }
 }
 
