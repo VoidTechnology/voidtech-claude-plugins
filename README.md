@@ -1,20 +1,26 @@
 # voidtech-claude-plugins
 
-> VoidTech 内部 Claude Code 插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
+> 开源 Claude Code 插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
 
-`voidtech-core v0.18.0` · `voidtech-product/design/engineering v0.1.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · 内部分发
+`voidtech-core v0.18.0` · `voidtech-product/design/engineering v0.1.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · Apache-2.0
 
-VoidTech 团队的 Claude Code Marketplace。公共约定与跨领域能力在 `voidtech-core`，Product、Design、Engineering 各自发布独立工作流，`voidtech-loop` 负责有机器验收条件的无人值守工程循环；高权限 MCP 仍按需启用。
+VoidTech 维护的开源 Claude Code Marketplace。公共约定与跨领域能力在 `voidtech-core`，Product、Design、Engineering 各自发布独立工作流，`voidtech-loop` 负责有机器验收条件的无人值守工程循环；高权限 MCP 仍按需启用。
 
 ## 亮点
 
-- **27 个自包含技能 + 2 个专业 subagent**，按 Core、Product、Design、Engineering 分层发布；能力不重复，命令归属与交付责任一致。
+- **30 个自包含技能 + 2 个专业 subagent**，按 Core、Product、Design、Engineering 与 Loop 分层发布；能力不重复，命令归属与交付责任一致。
 - **独立的工程内循环**：`voidtech-loop` 用不可变 Goal Spec、隔离 worktree 和指定 commit eval 推进可机器判定的任务；验收通过后仍由人复核、接受和合入。
 - **中文协作约定**：核心插件通过 `SessionStart` hook 注入团队的中文交流约定，代码与标识符仍用英文。
 - **每日更新提示**：核心插件每天最多检查一次远端版本；只提示更新命令，不自动修改本地环境。
 - **副作用受用户掌控**：会提交、推送、合并、部署的动作只在你显式要求时发生。
 - **MCP 与核心能力分离**：通用与 Apple 两组 MCP 默认禁用、固定精确版本，按需启用。
 - **发布即合规**：第三方技能保留来源、上游 commit 与许可证；可移植性由自动检查约束。
+
+## 开源与贡献
+
+本仓库按 [Apache License 2.0](LICENSE) 开源。参与贡献前请阅读
+[贡献指南](CONTRIBUTING.md) 与 [行为准则](CODE_OF_CONDUCT.md)；安全漏洞按
+[安全政策](SECURITY.md) 私下报告，不要创建公开 Issue。
 
 ## 快速开始
 
@@ -205,17 +211,33 @@ glab auth login
 ```
 
 ```bash
-scripts/check-portability.sh                 # 静态检查 + Claude 官方严格校验
-scripts/check-portability.sh --install-smoke # 额外在隔离配置目录安装全部七个插件
+# 快速契约：文档、版本、测试覆盖清单
+node scripts/run-quality.mjs --tier contract
+
+# Product 与 Loop 行为测试
+node scripts/run-quality.mjs --tier unit
+
+# 完整本地质量门
+node scripts/run-quality.mjs --all
+
+# 静态检查 + Claude 官方严格校验
+scripts/check-portability.sh
+
+# 额外在隔离配置目录安装全部七个插件
+scripts/check-portability.sh --install-smoke
 ```
+
+详细工作流、风险路径和版本规则见 [贡献指南](CONTRIBUTING.md) 与
+[`docs/dev-rules/`](docs/dev-rules/)。
 
 ## 发布流程
 
 1. 修改插件内容时，提升该插件 `plugin.json` 的语义化版本（版本是发布边界）。
-2. 运行完整可移植性检查。
-3. 检查 `git diff`，确认没有密钥、浮动依赖或归档技能回流。
-4. 推送 Marketplace 仓库后，让成员执行 `claude plugin marketplace update voidtech` 与对应插件更新。
-5. 项目仓库启用 Core、Product、Design、Engineering；`voidtech-loop` 按试点安排安装，MCP 插件由成员按需安装。
+2. 同步更新 README 插件表与 `CHANGELOG.md`。
+3. 运行 `node scripts/run-quality.mjs --all` 和完整隔离安装冒烟。
+4. 检查完整 diff，确认没有密钥、浮动依赖或归档技能回流。
+5. 由维护者显式触发 GitHub Release 工作流；自动化不自行决定版本、不自动发布。
+6. 用户执行 `claude plugin marketplace update voidtech` 与对应插件更新。
 
 ## 分发原则
 

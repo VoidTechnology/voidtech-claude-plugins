@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: voidtech-loop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   behavior:
     runs-on: macos-15

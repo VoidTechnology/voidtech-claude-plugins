@@ -1,0 +1,54 @@
+name: 功能建议
+description: 提议新的工作流、能力或用户体验改进
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: user-problem
+    attributes:
+      label: 给谁用，解决什么问题
+      description: 描述目标用户、发生场景、当前绕行方式和真实痛点。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 预期结果
+      description: 描述用户最终能完成什么工作，不要只描述按钮、命令或实现方案。
+    validations:
+      required: true
+  - type: textarea
+    id: current-workaround
+    attributes:
+      label: 当前替代方案
+    validations:
+      required: true
+  - type: dropdown
+    id: ownership
+    attributes:
+      label: 建议归属
+      options:
+        - Core 公共能力
+        - Product 工作流
+        - Design 工作流
+        - Engineering 工作流
+        - Loop 确定性工程循环
+        - MCP 外部连接
+        - 仓库维护能力
+        - 尚不确定
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 最小完整范围与明确不做
+      description: 写清最小完整用户路径、边缘状态和暂不支持的场景。
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: 如何衡量成功
+      description: 给出可观察、可判真伪的验收标准或指标。
+    validations:
+      required: true
