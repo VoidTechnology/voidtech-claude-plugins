@@ -4,11 +4,19 @@
 # 完整跑一次浏览器断言，验证已提交证明宣称的结论真实成立。
 name: Renderer validation
 
+# 触发路径必须覆盖 renderer_env() 八个继承键的全部输入源，少一个就会出现
+# 「渲染器已变、CI 不跑」的静默漏网：
+#   assetDigest    ← assets/（viewer 模板）+ atlas.py + voidtech-core runtime/archify
+#   archifyDigest  ← voidtech-core vendor/archify（升级 vendored Archify 必须重签证明）
+#   fixtureDigest  ← atlas.py 内的 fixture
+#   schemaVersion  ← logic-model.schema.json
+# 两份 paths 必须保持一致；改一处漏一处正是本文件此前失效的原因。
 on:
   pull_request:
     paths:
       - 'plugins/voidtech-product/skills/prd-from-requirements/**'
       - 'plugins/voidtech-core/runtime/archify/**'
+      - 'plugins/voidtech-core/vendor/archify/**'
       - 'scripts/validate-renderer.mjs'
       - '.github/workflows/renderer-validation.yml'
   push:
@@ -16,6 +24,7 @@ on:
     paths:
       - 'plugins/voidtech-product/skills/prd-from-requirements/**'
       - 'plugins/voidtech-core/runtime/archify/**'
+      - 'plugins/voidtech-core/vendor/archify/**'
       - 'scripts/validate-renderer.mjs'
       - '.github/workflows/renderer-validation.yml'
 
