@@ -37,7 +37,7 @@ from .canonical_store import (
     sha256_of_bytes,
 )
 
-GENERATOR_VERSION = "1.5.0"
+GENERATOR_VERSION = "1.6.0"
 LOGIC_MODEL_SCHEMA_VERSION = 1
 
 WORKTREE_MANIFEST_RELPATH = "prd-worktree.json"
@@ -470,6 +470,20 @@ def _resolve_module_scope(reference, module_scopes):
         if scope.split("/")[-1] == reference
     ]
     return matches[0] if len(matches) == 1 else None
+
+
+def _authority_key(authority):
+    """把「权威来源」列归一成可比较的主本标识，只做机械截断，不做同义判断。
+
+    去掉括号补充说明与 `§` 小节引用，例：
+    `03-platform-orders(状态机见 payment-order §2.2)` -> `03-platform-orders`
+    `payment-order §2.2`                              -> `payment-order`
+    截断后仍是原文声明的字面主本名，不推测两个不同名字是否指同一主本。
+    """
+    text = (authority or "").strip()
+    text = re.split(r"[（(]", text, maxsplit=1)[0]
+    text = re.split(r"\s*§", text, maxsplit=1)[0]
+    return text.strip().strip("、,;；").strip()
 
 
 
@@ -1719,11 +1733,28 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             obj_id = f"obj:{module_scope}:{obj}"
             if obj_id not in seen_objects:
                 seen_objects[obj_id] = True
+                authority_key = _authority_key(authority)
+                owner_scope = _resolve_module_scope(
+                    authority_key, module_scopes)
+                if owner_scope == module_scope:
+                    authority_kind = "self"
+                elif owner_scope is not None:
+                    authority_kind = "module"
+                else:
+                    authority_kind = "spec"
                 nodes.append({
                     "nodeId": obj_id, "kind": "dataObject",
                     "scopeId": module_scope, "title": obj,
                     "status": "original", "sources": [source],
-                    "detail": {"authoritativeSource": authority}})
+                    "detail": {
+                        "authoritativeSource": authority,
+                        "authorityKey": authority_key,
+                        "authorityKind": authority_kind,
+                        "authorityScopeId": owner_scope,
+                        # 同名 + 同字面主本 = 同一逻辑对象；跨模块归并只认这两个
+                        # 声明键的机械相等，不按语义猜测（ADR-0005 §3.2）。
+                        "canonicalId": f"data:{authority_key}:{obj}",
+                    }})
             kinds = [
                 kind for marker, kind in (("读", "reads"), ("写", "writes"))
                 if marker in op]
@@ -1871,6 +1902,94 @@ def _resolve_interact_targets(edges, module_scopes):
             edge["to"] = by_last[edge["to"]]
 
 
+def _link_data_objects(nodes, edges, gaps):
+    """把各模块独立声明的数据对象按「标题 + 权威来源」接成跨模块关系。
+
+    编译器只做两件机械的事，都不引入新事实：
+
+    - `owns`：某模块声明的对象，其权威来源指向树内另一个模块 → 从主本模块
+      连一条边到该对象节点。这条事实原文已写在「权威来源」列，此前只以
+      字符串存在节点属性里，无法成图。
+    - `shares`：不同模块声明了同名且同权威来源的对象 → 判定为同一逻辑对象，
+      在各副本之间连边。锚点优先取主本模块自己声明的那份，否则取 nodeId
+      字典序最小的一份，保证两次编译结果逐字节一致。
+
+    同名但权威来源声明不一致时不归并，改为如实记录 ambiguous-relation 缺口：
+    这是主本之间的口径冲突，编译器无权替 PRD 决定谁是主本。
+    """
+    data_nodes = sorted(
+        (n for n in nodes if n["kind"] == "dataObject"),
+        key=lambda n: n["nodeId"])
+
+    for node in data_nodes:
+        detail = node.get("detail") or {}
+        if detail.get("authorityKind") != "module":
+            continue
+        owner = detail.get("authorityScopeId")
+        edges.append({
+            "edgeId": f"owns:{owner}:{node['nodeId']}",
+            "kind": "owns", "from": owner, "to": node["nodeId"],
+            "status": "original", "sources": list(node["sources"]),
+            "detail": {
+                "authoritativeSource": detail.get("authoritativeSource"),
+                "canonicalId": detail.get("canonicalId"),
+                "consumerScopeId": node["scopeId"],
+            }})
+
+    by_canonical = {}
+    by_title = {}
+    for node in data_nodes:
+        detail = node.get("detail") or {}
+        by_canonical.setdefault(detail.get("canonicalId"), []).append(node)
+        by_title.setdefault(node["title"], []).append(node)
+
+    for canonical_id in sorted(k for k in by_canonical if k):
+        members = by_canonical[canonical_id]
+        if len({m["scopeId"] for m in members}) < 2:
+            continue
+        owner_scope = (members[0].get("detail") or {}).get("authorityScopeId")
+        anchors = [m for m in members if m["scopeId"] == owner_scope]
+        anchor = anchors[0] if anchors else members[0]
+        anchor_role = "authoritative" if anchors else "lexical"
+        for member in members:
+            if member["nodeId"] == anchor["nodeId"]:
+                continue
+            edges.append({
+                "edgeId": f"shares:{anchor['nodeId']}:{member['nodeId']}",
+                "kind": "shares",
+                "from": anchor["nodeId"], "to": member["nodeId"],
+                "status": "original",
+                "sources": list(anchor["sources"]) + list(member["sources"]),
+                "detail": {
+                    "canonicalId": canonical_id,
+                    "authorityKey": (
+                        (anchor.get("detail") or {}).get("authorityKey")),
+                    "anchorRole": anchor_role,
+                }})
+
+    for title in sorted(by_title):
+        members = by_title[title]
+        if len({m["scopeId"] for m in members}) < 2:
+            continue
+        keys = {(m.get("detail") or {}).get("authorityKey") for m in members}
+        if len(keys) < 2:
+            continue
+        declarations = "；".join(
+            f"{m['scopeId']} 声明为 "
+            f"{(m.get('detail') or {}).get('authorityKey')}"
+            for m in sorted(members, key=lambda m: m["nodeId"]))
+        for member in sorted(members, key=lambda m: m["nodeId"]):
+            gaps.append({
+                "gapId": (
+                    f"gap:{member['scopeId']}:data-authority-conflict:{title}"),
+                "scopeId": member["scopeId"],
+                "kind": "ambiguous-relation",
+                "detail": (
+                    f"数据对象「{title}」跨模块权威来源声明不一致，无法归并为"
+                    f"同一逻辑对象：{declarations}"),
+                "backlogRef": None})
+
+
 def _compile_model(root):
     root = Path(root)
     module_prds = _module_prds(root)
@@ -1885,6 +2004,7 @@ def _compile_model(root):
         _compile_module(root, module_scope, path.read_text(encoding="utf-8"),
                         module_scopes, page_catalog, nodes, edges, gaps)
     _resolve_interact_targets(edges, module_scopes)
+    _link_data_objects(nodes, edges, gaps)
 
     nodes.sort(key=lambda n: (n["kind"], n["nodeId"]))
     edges.sort(key=lambda e: (e["kind"], e["edgeId"]))

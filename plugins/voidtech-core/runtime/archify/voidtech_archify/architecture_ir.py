@@ -1,9 +1,14 @@
-"""把 Logic Model 的系统/模块/interacts 边确定性编译为 Archify Architecture IR。
+"""把 Logic Model 的系统/模块/交互/数据流边确定性编译为 Archify Architecture IR。
 
 「系统关系」总览的唯一权威布局来源：列 = 系统边界，列内行序 = 侧栏顺序
-（byPath），连接 = 既有 interacts 边按有向模块对聚合。绝不为布局发明或删减
-关系；无法落到模块组件上的端点（external:* 等）记入数据缺口，与既有 viewer
-行为一致（那些边本就不在总览渲染）。
+（byPath），连接 = interacts（模块调用）与 owns/shares（数据流）按有向模块对
+聚合。绝不为布局发明或删减关系；无法落到模块组件上的端点（external:* 等）
+记入数据缺口，与既有 viewer 行为一致（那些边本就不在总览渲染）。
+
+密度靠几何自适应，不靠按系统边界预筛：列间隙宽度由该间隙实际承载的车道数与
+最宽标签算出，需求大就撑开画布，绝不因为「放不下」而丢关系——丢关系会让读者
+把「图上没有」误读成「关系不存在」。模块少、关系稀疏的项目维持基准间隙，
+画布不会无谓变宽。
 
 几何与路由经可行性 spike 校准：24 组件 + 21 连接在 quality standard 下 deliver
 零诊断、零文本溢出、字节可复现。同色无标签边不可辨、锚点合并穿卡、方向读不出
@@ -34,6 +39,8 @@ _LANE_STEP = 38    # 外通道相邻层水平步距
 _LANE_BASE = 20    # 外通道首层距盒缘偏移
 _GUTTER_MARGIN = 16  # 间隙通道距边界描边的安全余量
 _LABEL_FONT = 8.0    # 连接标签字号（与渲染器 architecture 标签同口径估宽）
+_LABEL_CLEARANCE = 10  # 相邻车道标签之间的最小水平净空（低于此值即判为压叠）
+_LABEL_ROW = 11      # 外通道标签逐车道纵向错开的行距（字号 8 + 行间距）
 
 
 def component_id(scope_id):
@@ -84,21 +91,174 @@ def _resolve_module(endpoint, module_set):
     return None
 
 
+# 数据流边（owns/shares）没有 direction/relation 字段，按边类型给固定词条。
+_DATA_FLOW_TERMS = {"owns": "数据主本", "shares": "共用对象"}
+
+
 def _connection_label(edges):
     """逐边真实方向文字聚合为短标签；聚合多条时缀 ×N（呈现聚合非数据删减）。"""
     def _field(name):
         values = []
         for edge in edges:
+            if edge.get("kind") != "interacts":
+                continue
             value = (edge.get("detail") or {}).get(name)
             if value and value not in values:
                 values.append(value)
         return sorted(values)
 
     parts = _field("direction") or _field("relation")
+    data_terms = sorted({
+        _DATA_FLOW_TERMS[edge["kind"]] for edge in edges
+        if edge.get("kind") in _DATA_FLOW_TERMS})
+    parts = list(parts) + data_terms
     label = "/".join(parts) if parts else "interacts"
     if len(edges) > 1:
         label += " ×" + str(len(edges))
     return label
+
+
+def _connection_variant(edges):
+    """调用与数据流的视觉分层：只有数据流走虚线，两者兼有的耦合最强，加重。"""
+    kinds = {edge.get("kind") for edge in edges}
+    has_call = "interacts" in kinds
+    has_data = bool(kinds & set(_DATA_FLOW_TERMS))
+    if has_call and has_data:
+        return "emphasis"
+    if has_data:
+        return "dashed"
+    return "default"
+
+
+def _grid_positions(systems, modules_by_system):
+    """模块 scopeId → (列, 行)。列 = 系统序，行 = 列内侧栏序。"""
+    col_row = {}
+    for col, system in enumerate(systems):
+        for row, module in enumerate(modules_by_system[system["scopeId"]]):
+            col_row[module["scopeId"]] = (col, row)
+    return col_row
+
+
+def _channel_of(conn, col_row, pair_set):
+    """连接归属：直连不占通道；其余落到某条外侧/列间通道。"""
+    src, dst = conn["from"], conn["to"]
+    cf, ct = col_row[src][0], col_row[dst][0]
+    if cf == ct:
+        bidir = (dst, src) in pair_set
+        if abs(col_row[src][1] - col_row[dst][1]) == 1 and not bidir:
+            return None
+        return ("intra", cf)
+    return ("inter", min(cf, ct))
+
+
+def _group_connections(connections, col_row):
+    """按通道分组；返回 (直连列表, {通道: 连接列表})。布局与预算共用同一套判定。"""
+    pair_set = {(conn["from"], conn["to"]) for conn in connections}
+    straight = []
+    channels = defaultdict(list)
+    for conn in connections:
+        channel = _channel_of(conn, col_row, pair_set)
+        if channel is None:
+            straight.append(conn)
+        else:
+            channels[channel].append(conn)
+    return straight, channels
+
+
+def _channel_lane_count(conns, col_row):
+    """该通道占用的车道数：y 区间重叠的连接必须分层，这才是争抢水平净空的量。"""
+    items = []
+    for conn in conns:
+        ys = sorted((_row_y(col_row[conn["from"]][1]) + _CH / 2,
+                     _row_y(col_row[conn["to"]][1]) + _CH / 2))
+        items.append(((conn["from"], conn["to"]), ys[0], ys[1]))
+    lanes = _lane_assign(items)
+    return (max(lanes.values()) + 1) if lanes else 0
+
+
+def _channel_demand(conns, col_row):
+    """该通道需要的净宽：车道数 ×（最宽标签 + 净空）。"""
+    if not conns:
+        return 0.0
+    lanes = _channel_lane_count(conns, col_row)
+    widest = max(_est_label_width(conn["label"]) for conn in conns)
+    return lanes * (widest + _LABEL_CLEARANCE)
+
+
+def _gutter_index(kind, col, col_count):
+    """通道落在哪条列间隙上；首/末列的 intra 走画布外，返回 None。"""
+    if kind == "inter":
+        return col
+    if 0 < col < col_count - 1:
+        return col - 1        # 中列 intra 外挂在左侧相邻间隙
+    return None
+
+
+def _gap_widths(channels, col_row, col_count):
+    """逐条列间隙按实际需求定宽，不足处撑开，绝不因放不下而裁掉关系。
+
+    宽度随需求增长而不是把连接裁掉：撑宽画布只让读者多滚动一点，裁连接却会让
+    「图上没有」被误读成「关系不存在」。同一条间隙可能同时承载跨列 inter 与
+    中列外挂 intra，二者物理共用净空，按需求求和后再各分一段，避免互相压线。
+    """
+    gaps = [float(_GAPX)] * max(0, col_count - 1)
+    for (kind, col), conns in channels.items():
+        index = _gutter_index(kind, col, col_count)
+        if index is None or not 0 <= index < len(gaps):
+            continue
+        gaps[index] = max(gaps[index], 0.0)
+    demand = [0.0] * len(gaps)
+    for (kind, col), conns in channels.items():
+        index = _gutter_index(kind, col, col_count)
+        if index is None or not 0 <= index < len(gaps):
+            continue
+        demand[index] += _channel_demand(conns, col_row)
+    for index, need in enumerate(demand):
+        required = need + 2 * (_PAD + _GUTTER_MARGIN)
+        gaps[index] = max(_GAPX, required)
+    return [round(width, 1) for width in gaps]
+
+
+def _outer_step(conns):
+    """列外侧通道的车道间距，保持基准步距。
+
+    不按标签宽度横向撑开：外通道车道多时横向撑开会把画布拉宽数百像素、整图
+    缩到看不清。相邻车道的标签改为逐层纵向错开（labelDy），同样不压叠，
+    但不吃画布宽度。有界的列间隙才靠撑宽解决（见 _gap_widths）。
+    """
+    del conns
+    return float(_LANE_STEP)
+
+
+def _left_margin(channels, col_row):
+    """首列外侧通道向左伸出的距离，决定画布原点。
+
+    viewBox 原点固定在 (0,0)，负坐标会被直接裁掉；外通道按标签撑开后伸得更远，
+    原点必须跟着右移，否则最外侧那条车道的标签会被切掉（文本越界回归）。
+    """
+    conns = channels.get(("intra", 0))
+    if not conns:
+        return float(_X0)
+    lanes = _channel_lane_count(conns, col_row)
+    widest = max(_est_label_width(conn["label"]) for conn in conns)
+    reach = (_PAD + _LANE_BASE + max(0, lanes - 1) * _outer_step(conns)
+             + widest / 2 + _LABEL_CLEARANCE)
+    return max(float(_X0), reach)
+
+
+def _column_positions(gaps, origin=None):
+    """由逐条间隙宽度累加出每列左缘 x。"""
+    xs = [float(_X0) if origin is None else float(origin)]
+    for width in gaps:
+        xs.append(xs[-1] + _CW + width)
+    return xs
+
+
+def _gutter_span(col_x, index):
+    """第 index 条间隙的可用净空区间（避开两侧 region 描边）。"""
+    lo = col_x[index] + _CW + _PAD + _GUTTER_MARGIN
+    hi = col_x[index + 1] - _PAD - _GUTTER_MARGIN
+    return lo, hi
 
 
 def extract_architecture(model):
@@ -120,7 +280,9 @@ def extract_architecture(model):
     pairs = defaultdict(list)
     unresolved = []
     for edge in model.get("edges") or []:
-        if edge.get("kind") != "interacts":
+        # 总览呈现两类跨模块耦合：interacts（模块调用）与 owns/shares（数据流）。
+        # 数据流边此前只存在于模块内视图，总览看不到「谁的数据流向谁」。
+        if edge.get("kind") not in ("interacts", "owns", "shares"):
             continue
         src = _resolve_module(edge.get("from", ""), module_set)
         dst = _resolve_module(edge.get("to", ""), module_set)
@@ -128,18 +290,21 @@ def extract_architecture(model):
             unresolved.append(edge)
             continue
         if src == dst:
+            # 同模块内的 owns/shares 不是跨模块耦合，正常跳过；与 interacts
+            # 自环一并如实记入 unresolved，不静默丢弃。
             unresolved.append(edge)
             continue
         pairs[(src, dst)].append(edge)
 
     connections = []
     for (src, dst) in sorted(pairs):
-        edges = pairs[(src, dst)]
+        edges = sorted(pairs[(src, dst)], key=lambda item: item["edgeId"])
         connections.append({
             "id": connection_id(src, dst),
             "from": src,
             "to": dst,
             "label": _connection_label(edges),
+            "variant": _connection_variant(edges),
             "edgeIds": [edge["edgeId"] for edge in edges],
         })
     return {
@@ -189,45 +354,35 @@ def build_architecture_ir(model):
     systems = data["systems"]
     modules_by_system = data["modulesBySystem"]
     structured = data["structured"]
-    sys_index = {s["scopeId"]: i for i, s in enumerate(systems)}
     last_col = len(systems) - 1
 
-    col_row = {}
+    # 行序与列序不依赖 x，可先定；再按各间隙的实际车道需求把 x 撑开。
+    col_row = _grid_positions(systems, modules_by_system)
+    _, channels = _group_connections(data["connections"], col_row)
+    gaps = _gap_widths(channels, col_row, len(systems))
+    origin_x = _left_margin(channels, col_row)
+    col_x = _column_positions(gaps, origin_x)
+
     components = []
     for system in systems:
-        col = sys_index[system["scopeId"]]
-        for row, module in enumerate(modules_by_system[system["scopeId"]]):
+        for module in modules_by_system[system["scopeId"]]:
             scope_id = module["scopeId"]
-            col_row[scope_id] = (col, row)
+            col, row = col_row[scope_id]
             components.append({
                 "id": component_id(scope_id),
                 "type": "backend" if scope_id in structured else "external",
                 "label": str(module.get("title") or scope_id),
-                "pos": [_col_x(col), _row_y(row)],
+                "pos": [round(col_x[col], 1), _row_y(row)],
                 "size": [_CW, _CH],
             })
 
     def cx(scope):
-        return _col_x(col_row[scope][0]) + _CW / 2
+        return col_x[col_row[scope][0]] + _CW / 2
 
     def cy(scope):
         return _row_y(col_row[scope][1]) + _CH / 2
 
-    # 连接分组：直连（同列相邻单向）/ 通道（同列非相邻或双向、跨列）
-    pair_set = {(conn["from"], conn["to"]) for conn in data["connections"]}
-    straight = []
-    channels = defaultdict(list)
-    for conn in data["connections"]:
-        src, dst = conn["from"], conn["to"]
-        cf, ct = col_row[src][0], col_row[dst][0]
-        if cf == ct:
-            bidir = (dst, src) in pair_set
-            if abs(col_row[src][1] - col_row[dst][1]) == 1 and not bidir:
-                straight.append(conn)
-            else:
-                channels[("intra", cf)].append(conn)
-        else:
-            channels[("inter", min(cf, ct))].append(conn)
+    straight, channels = _group_connections(data["connections"], col_row)
 
     ir_connections = []
     for conn in straight:
@@ -240,12 +395,31 @@ def build_architecture_ir(model):
             "from": component_id(src),
             "to": component_id(dst),
             "label": conn["label"],
+            "variant": conn["variant"],
             "fromSide": "bottom" if below else "top",
             "toSide": "top" if below else "bottom",
             "labelAt": [round(cx(src), 1), round(mid_y, 1)],
         })
 
-    for group, conns in channels.items():
+    # 同一条间隙可能同时挂 inter 与中列 intra，二者物理共用净空。按各自需求把
+    # 净空切成互不重叠的两段，避免两次独立分车道后压线（既有隐患）。
+    gutter_slots = {}
+    for index in range(len(gaps)):
+        span_lo, span_hi = _gutter_span(col_x, index)
+        sharers = sorted(
+            key for key in channels
+            if _gutter_index(key[0], key[1], len(systems)) == index)
+        total = sum(
+            _channel_demand(channels[key], col_row) for key in sharers)
+        cursor = span_lo
+        for key in sharers:
+            share = ((span_hi - span_lo)
+                     * (_channel_demand(channels[key], col_row) / total)
+                     if total else (span_hi - span_lo) / max(1, len(sharers)))
+            gutter_slots[key] = (cursor, cursor + share)
+            cursor += share
+
+    for group, conns in sorted(channels.items()):
         kind, col = group
         items = []
         for conn in conns:
@@ -253,41 +427,46 @@ def build_architecture_ir(model):
             items.append(((conn["from"], conn["to"]), lo, hi))
         lanes = _lane_assign(items)
         lane_count = max(lanes.values()) + 1 if lanes else 1
+        # 列外侧通道向画布外延伸：标签放不下就撑开车道间距，同样不裁连接。
+        outer_step = _outer_step(conns)
         for conn in conns:
             src, dst = conn["from"], conn["to"]
             lane = lanes[(src, dst)]
             sy, ty = cy(src), cy(dst)
+            outer = kind == "intra" and col in (0, last_col)
             if kind == "intra" and col == 0:
-                chx = _col_x(0) - _PAD - _LANE_BASE - lane * _LANE_STEP
+                chx = col_x[0] - _PAD - _LANE_BASE - lane * outer_step
                 from_side = to_side = "left"
             elif kind == "intra" and col == last_col:
-                chx = _col_x(col) + _CW + _PAD + _LANE_BASE + lane * _LANE_STEP
+                chx = col_x[col] + _CW + _PAD + _LANE_BASE + lane * outer_step
                 from_side = to_side = "right"
-            elif kind == "intra":
-                # 中列：挂到左侧相邻间隙内（边界描边之间的净空带），左出左回
-                lo = _col_x(col - 1) + _CW + _PAD + _GUTTER_MARGIN
-                hi = _col_x(col) - _PAD - _GUTTER_MARGIN
+            else:
+                lo, hi = gutter_slots[group]
                 chx = lo + (hi - lo) * (lane + 1) / (lane_count + 1)
-                from_side = to_side = "left"
-            else:  # inter：两列之间的间隙通道
-                lo = _col_x(col) + _CW + _PAD + _GUTTER_MARGIN
-                hi = _col_x(col + 1) - _PAD - _GUTTER_MARGIN
-                chx = lo + (hi - lo) * (lane + 1) / (lane_count + 1)
-                if col_row[src][0] == col:
+                if kind == "intra":
+                    from_side = to_side = "left"
+                elif col_row[src][0] == col:
                     from_side, to_side = "right", "left"
                 else:
                     from_side, to_side = "left", "right"
             chx = round(chx, 1)
-            ir_connections.append({
+            entry = {
                 "id": conn["id"],
                 "from": component_id(src),
                 "to": component_id(dst),
                 "label": conn["label"],
+                "variant": conn["variant"],
                 "fromSide": from_side,
                 "toSide": to_side,
                 "via": [[chx, round(sy, 1)], [chx, round(ty, 1)]],
                 "labelAt": [chx, round((sy + ty) / 2, 1)],
-            })
+            }
+            if outer:
+                # 外通道车道横向只隔 _LANE_STEP，标签必须逐车道纵向错开，
+                # 否则相邻车道的长标签会横向压成一团。
+                entry["labelDy"] = round(
+                    (lane - (lane_count - 1) / 2) * _LABEL_ROW, 1)
+            ir_connections.append(entry)
 
     boundaries = [{
         "kind": "region",
@@ -304,7 +483,7 @@ def build_architecture_ir(model):
         "diagram_type": "architecture",
         "meta": {
             "title": "系统关系总览",
-            "subtitle": "模块交互（interacts）",
+            "subtitle": "模块调用（interacts）与数据流（owns/shares）",
             "quality_profile": "standard",
             # 渲染器默认 preset "classic" 在 vendored 模板无主题变量块，会导致
             # CSS 抽取失败裸嵌黑块；显式选模板支持的 blueprint（与 Lifecycle 同）。
@@ -314,8 +493,10 @@ def build_architecture_ir(model):
         "layout": {
             "mode": "grid",
             "cols": max(len(systems), 1),
-            "origin": [_X0, _Y0],
-            "gapX": _GAPX,
+            "origin": [round(origin_x, 1), _Y0],
+            # 间隙按需撑开后逐条不同；此处报最大值供渲染器估画布，
+            # 组件与连接均带显式坐标，不依赖该值定位。
+            "gapX": round(max(gaps), 1) if gaps else _GAPX,
             "gapY": _GAPY,
             "cellW": _CW,
             "cellH": _CH,
@@ -324,10 +505,6 @@ def build_architecture_ir(model):
         "boundaries": boundaries,
         "connections": sorted(ir_connections, key=lambda item: item["id"]),
     }
-
-
-def _col_x(col):
-    return _X0 + col * (_CW + _GAPX)
 
 
 def _row_y(row):

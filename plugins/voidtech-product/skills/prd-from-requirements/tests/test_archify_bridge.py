@@ -247,5 +247,118 @@ class ArchifyBridgeTest(unittest.TestCase):
         self.assertNotIn("svg", result)
 
 
+TRUNCATED_RECEIPT = {
+    "ok": False,
+    "stage": "receipt",
+    "diagnostics": [{
+        "code": "delivery/receipt-invalid",
+        "message": ("Could not parse the successful artifact-check receipt: "
+                    "Unterminated string in JSON at position 64761"),
+    }],
+}
+
+
+class OversizedReceiptRecoveryTest(unittest.TestCase):
+    """deliver 内层管道截断大回执时，从调用侧用文件回执重做交付并恢复。
+
+    vendored check-render-output.mjs 在 console.log 大 JSON 后立即
+    process.exit()，管道上未排空的写会丢；一张渲染正常的图会被误判为交付失败。
+    """
+
+    def _runner(self, checker_ok, *, render_fails=False, calls=None):
+        def runner(args, **kwargs):
+            if calls is not None:
+                calls.append(list(args))
+            command = args[2] if len(args) > 2 else ""
+            if command == "deliver":
+                return SimpleNamespace(
+                    returncode=1, stdout=json.dumps(TRUNCATED_RECEIPT),
+                    stderr="")
+            if command == "render":
+                if render_fails:
+                    return SimpleNamespace(
+                        returncode=1, stdout="", stderr="render boom")
+                Path(args[5]).write_text(
+                    '<html><body><svg viewBox="0 0 640 240">'
+                    '<text>订单</text></svg></body></html>',
+                    encoding="utf-8")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if command == "check":
+                # 复刻真实行为：check 把回执写到重定向的文件，而非返回 stdout。
+                kwargs["stdout"].write(json.dumps({
+                    "ok": checker_ok,
+                    "checks": [{"name": "single_svg", "ok": True},
+                               {"name": "route_rhythm", "ok": checker_ok}],
+                    "composition": {
+                        "status": "pass" if checker_ok else "fail",
+                        "issues": []},
+                }))
+                return SimpleNamespace(
+                    returncode=0 if checker_ok else 1, stdout=None, stderr="")
+            raise AssertionError(f"unexpected archify command: {command}")
+        return runner
+
+    def _machine(self):
+        return {"machineId": "machine-t", "scopeId": "02-backend/01-order",
+                "object": "订单", "states": [], "transitions": []}
+
+    def test_truncated_receipt_recovers_when_file_receipt_passes(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = archify_bridge.render_machine(
+                self._machine(), copy.deepcopy(IR),
+                runner=self._runner(True, calls=calls),
+                runtime={"status": "ok", "major": 20},
+                temp_root=Path(temp_dir))
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["diagnostics"], [])
+        self.assertIn("<svg", result["svg"])
+        # 必须自己重新 render：deliver 在回执阶段失败时不会提升候选产物。
+        self.assertIn("render", [call[2] for call in calls])
+        self.assertIn("check", [call[2] for call in calls])
+
+    def test_truncated_receipt_degrades_when_file_receipt_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = archify_bridge.render_machine(
+                self._machine(), copy.deepcopy(IR),
+                runner=self._runner(False),
+                runtime={"status": "ok", "major": 20},
+                temp_root=Path(temp_dir))
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["diagnostics"][0]["code"], "artifact/check-failed")
+        self.assertIn("route_rhythm", result["diagnostics"][0]["message"])
+
+    def test_recovery_render_failure_keeps_original_degradation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = archify_bridge.render_machine(
+                self._machine(), copy.deepcopy(IR),
+                runner=self._runner(True, render_fails=True),
+                runtime={"status": "ok", "major": 20},
+                temp_root=Path(temp_dir))
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["diagnostics"][0]["code"],
+                         "delivery/receipt-invalid")
+
+    def test_normal_delivery_never_triggers_recovery(self):
+        calls = []
+
+        def runner(args, **kwargs):
+            calls.append(list(args))
+            Path(args[5]).write_text(
+                '<html><body><svg viewBox="0 0 640 240">'
+                '<text>订单</text></svg></body></html>', encoding="utf-8")
+            return SimpleNamespace(
+                returncode=0, stdout=json.dumps({"ok": True, "diagnostics": []}),
+                stderr="")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = archify_bridge.render_machine(
+                self._machine(), copy.deepcopy(IR), runner=runner,
+                runtime={"status": "ok", "major": 20},
+                temp_root=Path(temp_dir))
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual([call[2] for call in calls], ["deliver"])
+
+
 if __name__ == "__main__":
     unittest.main()

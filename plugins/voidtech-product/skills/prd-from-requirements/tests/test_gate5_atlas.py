@@ -78,7 +78,7 @@ class CompileTest(unittest.TestCase):
         model = atlas.compile(self.root)
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
-        self.assertEqual(model["generatorVersion"], "1.5.0")
+        self.assertEqual(model["generatorVersion"], "1.6.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -176,6 +176,93 @@ class CompileTest(unittest.TestCase):
             if gap["gapId"].endswith(":page-data-rw:客户详情页"))
         self.assertEqual(
             unmapped["context"]["pageTitle"], "客户详情页")
+
+    def _write_module_b_data(self, rows):
+        (self.root / "01-test-system/02-module-b/prd.md").write_text(
+            "# 模块乙\n\n## 7. 字段与数据规则\n\n"
+            "### 7.0 数据读写（机器可解析）\n\n"
+            "| 数据对象 | 操作 | 权威来源 | 同步方式 |\n|---|---|---|---|\n"
+            + rows, encoding="utf-8")
+
+    def test_self_owned_data_object_has_no_owns_edge(self):
+        model = atlas.compile(self.root)
+        node = next(
+            node for node in model["nodes"]
+            if node["nodeId"] == "obj:01-test-system/01-module-a:客户")
+        self.assertEqual(node["detail"]["authorityKind"], "self")
+        self.assertEqual(
+            node["detail"]["authorityScopeId"], "01-test-system/01-module-a")
+        self.assertEqual(node["detail"]["canonicalId"], "data:01-module-a:客户")
+        self.assertFalse([
+            edge for edge in model["edges"] if edge["kind"] == "owns"])
+
+    def test_authority_pointing_at_another_module_becomes_owns_edge(self):
+        self._write_module_b_data("| 订单 | 读 | 01-module-a | 实时 |\n")
+
+        model = atlas.compile(self.root)
+        node = next(
+            node for node in model["nodes"]
+            if node["nodeId"] == "obj:01-test-system/02-module-b:订单")
+        self.assertEqual(node["detail"]["authorityKind"], "module")
+        edge = next(
+            edge for edge in model["edges"] if edge["kind"] == "owns")
+        self.assertEqual(edge["from"], "01-test-system/01-module-a")
+        self.assertEqual(edge["to"], "obj:01-test-system/02-module-b:订单")
+        self.assertEqual(
+            edge["detail"]["consumerScopeId"], "01-test-system/02-module-b")
+
+    def test_authority_key_ignores_parenthetical_and_section_suffix(self):
+        self._write_module_b_data(
+            "| 客户 | 读 | 01-module-a(字段规则见 customer §2.1) | 实时 |\n")
+
+        model = atlas.compile(self.root)
+        node = next(
+            node for node in model["nodes"]
+            if node["nodeId"] == "obj:01-test-system/02-module-b:客户")
+        self.assertEqual(node["detail"]["authorityKey"], "01-module-a")
+        self.assertEqual(node["detail"]["canonicalId"], "data:01-module-a:客户")
+
+    def test_same_title_and_authority_links_copies_across_modules(self):
+        self._write_module_b_data("| 客户 | 读 | 01-module-a | 实时 |\n")
+
+        model = atlas.compile(self.root)
+        edge = next(
+            edge for edge in model["edges"] if edge["kind"] == "shares")
+        self.assertEqual(edge["from"], "obj:01-test-system/01-module-a:客户")
+        self.assertEqual(edge["to"], "obj:01-test-system/02-module-b:客户")
+        self.assertEqual(edge["detail"]["canonicalId"], "data:01-module-a:客户")
+        self.assertEqual(edge["detail"]["anchorRole"], "authoritative")
+        self.assertFalse(any(
+            "data-authority-conflict" in gap["gapId"]
+            for gap in model["gaps"]))
+
+    def test_conflicting_authority_is_gap_and_not_merged(self):
+        self._write_module_b_data("| 客户 | 读 | customer-domain | 实时 |\n")
+
+        model = atlas.compile(self.root)
+        self.assertFalse([
+            edge for edge in model["edges"] if edge["kind"] == "shares"])
+        conflicts = [
+            gap for gap in model["gaps"]
+            if "data-authority-conflict" in gap["gapId"]]
+        self.assertEqual(
+            {gap["scopeId"] for gap in conflicts},
+            {"01-test-system/01-module-a", "01-test-system/02-module-b"})
+        self.assertIn("权威来源声明不一致", conflicts[0]["detail"])
+        self.assertIn("customer-domain", conflicts[0]["detail"])
+
+    def test_domain_spec_authority_stays_spec_without_owns_edge(self):
+        self._write_module_b_data("| 订单 | 读 | payment-order §3.2 | 实时 |\n")
+
+        model = atlas.compile(self.root)
+        node = next(
+            node for node in model["nodes"]
+            if node["nodeId"] == "obj:01-test-system/02-module-b:订单")
+        self.assertEqual(node["detail"]["authorityKind"], "spec")
+        self.assertIsNone(node["detail"]["authorityScopeId"])
+        self.assertEqual(node["detail"]["authorityKey"], "payment-order")
+        self.assertFalse([
+            edge for edge in model["edges"] if edge["kind"] == "owns"])
 
     def test_extracts_behavior_flow_and_branch_graph(self):
         model = atlas.compile(self.root)

@@ -162,10 +162,22 @@ a{color:var(--accent-text)}
 .edge.writes{stroke:var(--write);stroke-width:1.5;stroke-dasharray:6 4}
 .edge.dim{opacity:.12}
 .edge.hot{stroke-width:3}
+/* 跨模块：owns 实线（主本归属，有方向），shares 长虚线（同一对象副本，无主次），
+   模块级读写用点线，和页面级读写的实/短虚线明确区分——读者一眼能分
+   「这条关系精确到页面」还是「只到模块」。 */
+.edge.owns{stroke:var(--accent);stroke-width:1.6}
+.edge.shares{stroke:var(--interact);stroke-width:1.5;stroke-dasharray:10 5}
+.edge.spec-ref{stroke:var(--faint);stroke-width:1.2;stroke-dasharray:2 4}
+.edge.module-level{stroke-dasharray:1.5 3.5;opacity:.85}
 .edge-hit{fill:none;stroke:transparent;stroke-width:14;cursor:pointer}
 .col-head{font-size:11px;font-weight:650;letter-spacing:.5px;fill:var(--faint);text-transform:uppercase}
 .module-data-gap{font-size:11px;fill:var(--warn);font-weight:600}
 .module-data-gap-sub{font-size:10px;fill:var(--muted)}
+.rail-label{font-size:9.5px;fill:var(--muted)}
+.n-focus.authority .nf-bg{fill:var(--surface-2);stroke:var(--border-strong);stroke-dasharray:4 3}
+.n-focus.authority.is-module .nf-bg{stroke:var(--accent);stroke-dasharray:none}
+.nf-sub{font-size:9px;fill:var(--faint)}
+.page-unbound{font-size:9px;fill:var(--warn)}
 
 .tooltip{position:absolute;z-index:60;max-width:320px;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:9px 11px;font-size:12px;pointer-events:none;display:none}
 .tooltip .tt-h{font-weight:600;margin-bottom:4px}
@@ -603,6 +615,47 @@ EDGES.forEach(function(edge){
   (pageDataEdgesByScope[source.scopeId]=pageDataEdgesByScope[source.scopeId]||[])
     .push(edge);
 });
+/* 模块级读写：起点是模块 scopeId 而非页面节点。原文 §7.0 已声明，此前只存在
+   于节点属性里无法成图；这里单独建索引，供模块视图画出「本模块读/写」。 */
+var moduleRwByObject={};
+EDGES.forEach(function(edge){
+  if(edge.kind!=="reads"&&edge.kind!=="writes") return;
+  if(nodeById[edge.from]) return;
+  var slot=moduleRwByObject[edge.to]=moduleRwByObject[edge.to]||{};
+  slot[edge.kind]=edge;
+});
+/* 跨模块：owns = 主本模块拥有该对象；shares = 同一逻辑对象的另一模块副本。 */
+var ownsByObject={},sharesByObject={};
+EDGES.forEach(function(edge){
+  if(edge.kind==="owns"){ ownsByObject[edge.to]=edge; return; }
+  if(edge.kind!=="shares") return;
+  (sharesByObject[edge.from]=sharesByObject[edge.from]||[]).push(edge);
+  (sharesByObject[edge.to]=sharesByObject[edge.to]||[]).push(edge);
+});
+function sharedPeers(nodeId){
+  return (sharesByObject[nodeId]||[]).map(function(edge){
+    var peerId=edge.from===nodeId?edge.to:edge.from;
+    return {edge:edge,node:nodeById[peerId],nodeId:peerId};
+  }).filter(function(item){ return !!item.node; });
+}
+/* 该对象在本模块之外的落点：主本模块 / 领域规格 / 同名副本所在模块。 */
+function dataLinksFor(node){
+  var detail=node.detail||{},links=[];
+  var owns=ownsByObject[node.nodeId];
+  if(owns){
+    links.push({kind:"owns",targetScope:owns.from,
+      label:scopeTitle(owns.from),sub:"主本模块",edge:owns});
+  }else if(detail.authorityKind==="spec"&&detail.authorityKey){
+    links.push({kind:"spec",targetScope:null,
+      label:detail.authorityKey,sub:"领域规格",edge:null});
+  }
+  sharedPeers(node.nodeId).forEach(function(peer){
+    links.push({kind:"shares",targetScope:peer.node.scopeId,
+      label:scopeTitle(peer.node.scopeId),sub:"同一对象副本",
+      edge:peer.edge,peerId:peer.nodeId});
+  });
+  return links;
+}
 var behaviorViews=["flow","state","boundary"];
 function isBehaviorView(v){ return behaviorViews.indexOf(v)>=0; }
 function behaviorNodesFor(v,scopeId){
@@ -925,7 +978,7 @@ function renderArchitectureOverview(){
 }
 function buildDefs(){
   var defs=s("defs",{});
-  [["arrow-interacts","var(--interact)"],["arrow-reads","var(--read)"],["arrow-writes","var(--write)"],["arrow-hot","var(--accent)"]].forEach(function(a){
+  [["arrow-interacts","var(--interact)"],["arrow-reads","var(--read)"],["arrow-writes","var(--write)"],["arrow-hot","var(--accent)"],["arrow-owns","var(--accent)"],["arrow-shares","var(--interact)"]].forEach(function(a){
     var m=s("marker",{id:a[0],viewBox:"0 0 10 10",refX:"8.5",refY:"5",markerWidth:"9.5",markerHeight:"9.5",orient:"auto-start-reverse"});
     m.appendChild(s("path",{d:"M0,0 L10,5 L0,10 z",fill:a[1]}));
     defs.appendChild(m);
@@ -943,6 +996,9 @@ function renderLegend(){
     lg.appendChild(h("div",{class:"lg"},semanticIcon("page"),"页面",semanticIcon("data"),"数据对象"));
     lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--read)"}),"reads 读取"));
     lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--write);border-top-style:dashed"}),"writes 写入"));
+    lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--faint);border-top-style:dotted"}),"点线 = 仅模块级，未精确到页面"));
+    lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--accent)"}),"owns 主本模块"));
+    lg.appendChild(h("div",{class:"lg"},h("span",{class:"swatch",style:"border-top-color:var(--interact);border-top-style:dashed"}),"shares 同一对象副本"));
   }
 }
 
@@ -1042,8 +1098,28 @@ function layoutModule(){
   }
   var edgesLayer=s("g",{}),nodeLayer=s("g",{});
   gRoot.appendChild(edgesLayer);gRoot.appendChild(nodeLayer);
-  var pageWidth=190,dataWidth=220,nodeHeight=36,gap=14,top=48;
-  var pageX=24,dataX=500,positions={};
+  var pageWidth=190,dataWidth=220,linkWidth=215,nodeHeight=36,gap=14,top=48;
+  var pageX=24,railX=430,dataX=500,linkX=dataX+dataWidth+90,positions={};
+  var boundPageIds={};
+  rwEdges.forEach(function(edge){ boundPageIds[edge.from]=true; });
+  function curve(sx,sy,tx,ty){
+    var mid=(sx+tx)/2;
+    return "M"+sx+","+sy+" C"+mid+","+sy+" "+mid+","+ty+" "+tx+","+ty;
+  }
+  function wireEdge(path,cls,edge,marker){
+    var group=s("g",{});
+    group.appendChild(s("path",Object.assign({class:"edge "+cls,d:path},
+      edge?{"data-edge":edge.edgeId}:{},
+      marker?{"marker-end":"url(#"+marker+")"}:{})));
+    if(edge){
+      group.appendChild(s("path",{class:"edge-hit",d:path,on:{
+        click:function(event){event.stopPropagation();openEdgeCard(edge);},
+        mouseenter:function(event){edgeTip(edge,event);},
+        mousemove:moveTip,mouseleave:hideTip
+      }}));
+    }
+    edgesLayer.appendChild(group);
+  }
   nodeLayer.appendChild(s("text",{class:"col-head",
     x:pageX+pageWidth/2,y:26,"text-anchor":"middle"},
     "页面 ("+pages.length+")"));
@@ -1055,10 +1131,17 @@ function layoutModule(){
     };
     nodeLayer.appendChild(focusNode(
       node,"page",pageX,y,pageWidth,nodeHeight));
+    // 未参与任何页面级读写的页面单独标注：区分「确实不碰数据」与「PRD 没写」。
+    if(!boundPageIds[node.nodeId]){
+      nodeLayer.appendChild(s("text",{class:"page-unbound",
+        x:pageX+pageWidth,y:y+nodeHeight+10,"text-anchor":"end"},
+        "未声明数据读写"));
+    }
   });
   nodeLayer.appendChild(s("text",{class:"col-head",
     x:dataX+dataWidth/2,y:26,"text-anchor":"middle"},
     "数据对象 ("+dataObjects.length+")"));
+  var moduleRwRows=[],linkRows=[];
   dataObjects.forEach(function(node,index){
     var y=top+index*(nodeHeight+gap);
     positions[node.nodeId]={
@@ -1067,37 +1150,88 @@ function layoutModule(){
     };
     nodeLayer.appendChild(focusNode(
       node,"data",dataX,y,dataWidth,nodeHeight));
+    var slot=moduleRwByObject[node.nodeId]||{};
+    ["reads","writes"].forEach(function(kind){
+      if(slot[kind]) moduleRwRows.push({edge:slot[kind],y:y,kind:kind});
+    });
+    dataLinksFor(node).forEach(function(link){
+      linkRows.push({link:link,y:y,nodeId:node.nodeId});
+    });
   });
+  // 模块级契约轨：§7.0 声明「本模块读/写该对象」，但未下推到具体页面。
+  if(moduleRwRows.length){
+    var railTop=moduleRwRows[0].y+nodeHeight/2;
+    var railBottom=moduleRwRows[moduleRwRows.length-1].y+nodeHeight/2;
+    nodeLayer.appendChild(s("text",{class:"rail-label",
+      x:railX,y:top-8,"text-anchor":"middle"},"本模块契约"));
+    edgesLayer.appendChild(s("path",{class:"edge module-level",
+      style:"stroke:var(--faint);cursor:default",
+      d:"M"+railX+","+railTop+" L"+railX+","+railBottom}));
+    moduleRwRows.forEach(function(row){
+      var ty=row.y+nodeHeight/2;
+      wireEdge(curve(railX,ty,dataX,ty),
+        row.kind+" module-level",row.edge,"arrow-"+row.kind);
+    });
+  }
   rwEdges.forEach(function(edge){
     var from=positions[edge.from],to=positions[edge.to];
     if(!from||!to) return;
-    var sx=from.x+from.w,sy=from.cy,tx=to.x,ty=to.cy;
-    var mid=(sx+tx)/2;
-    var path="M"+sx+","+sy+" C"+mid+","+sy+" "+mid+","+ty+" "+tx+","+ty;
-    var edgeGroup=s("g",{});
-    edgeGroup.appendChild(s("path",{class:"edge "+edge.kind,
-      "data-edge":edge.edgeId,d:path,
-      "marker-end":"url(#arrow-"+edge.kind+")"}));
-    edgeGroup.appendChild(s("path",{class:"edge-hit",d:path,on:{
-      click:function(event){event.stopPropagation();openEdgeCard(edge);},
-      mouseenter:function(event){edgeTip(edge,event);},
-      mousemove:moveTip,mouseleave:hideTip
-    }}));
-    edgesLayer.appendChild(edgeGroup);
+    wireEdge(curve(from.x+from.w,from.cy,to.x,to.cy),
+      edge.kind,edge,"arrow-"+edge.kind);
   });
-  var rows=Math.max(pages.length,dataObjects.length,1);
-  if(!rwEdges.length){
-    var messageY=top+Math.max(20,rows*(nodeHeight+gap)/2);
-    nodeLayer.appendChild(s("text",{class:"module-data-gap",x:357,y:messageY,
-      "text-anchor":"middle"},"未声明页面 ↔ 数据读写"));
-    nodeLayer.appendChild(s("text",{class:"module-data-gap-sub",x:357,y:messageY+18,
-      "text-anchor":"middle"},"模块级读写不可下推到页面"));
+  // 第三列：这份数据在本模块之外的落点（主本模块 / 领域规格 / 同名副本）。
+  var linkMaxY=0;
+  if(linkRows.length){
+    nodeLayer.appendChild(s("text",{class:"col-head",
+      x:linkX+linkWidth/2,y:26,"text-anchor":"middle"},
+      "跨模块 / 主本 ("+linkRows.length+")"));
+    var linkLane={};
+    linkRows.forEach(function(row){
+      var y=row.y;
+      while(linkLane[y]) y+=nodeHeight+gap;
+      linkLane[y]=true;
+      if(y>linkMaxY) linkMaxY=y;
+      var link=row.link;
+      var cls=link.kind==="spec"?"spec-ref":link.kind;
+      wireEdge(curve(dataX+dataWidth,row.y+nodeHeight/2,linkX,y+nodeHeight/2),
+        cls,link.edge,link.kind==="spec"?null:"arrow-"+link.kind);
+      nodeLayer.appendChild(authorityNode(link,linkX,y,linkWidth,nodeHeight));
+    });
   }
-  var totalHeight=top+rows*(nodeHeight+gap)+24;
-  contentBounds={x:0,y:0,w:dataX+dataWidth+30,h:totalHeight};
+  var rows=Math.max(pages.length,dataObjects.length,1);
+  // 第三列有避让下移，按实际最低行算画布高度，否则底部节点会被裁掉。
+  var contentBottom=Math.max(top+rows*(nodeHeight+gap),
+    linkMaxY+nodeHeight+gap);
+  if(!rwEdges.length&&dataObjects.length){
+    var messageY=top+Math.max(20,rows*(nodeHeight+gap)/2);
+    nodeLayer.appendChild(s("text",{class:"module-data-gap",x:300,y:messageY,
+      "text-anchor":"middle"},"未声明页面 ↔ 数据读写"));
+    nodeLayer.appendChild(s("text",{class:"module-data-gap-sub",x:300,y:messageY+18,
+      "text-anchor":"middle"},"仅有模块级契约，不可下推到页面"));
+  }
+  var totalHeight=contentBottom+24;
+  contentBounds={x:0,y:0,
+    w:(linkRows.length?linkX+linkWidth:dataX+dataWidth)+30,h:totalHeight};
   layout=positions;
   if(state.focusId) applyFocus();
   if(state.selKey) markSelected();
+}
+/* 第三列节点：主本模块可点击跳转，领域规格只读展示（模型里没有它的节点）。 */
+function authorityNode(link,x,y,w,hgt){
+  var isModule=!!link.targetScope;
+  var g=s("g",{class:"n-focus authority"+(isModule?" is-module":""),
+    tabindex:isModule?"0":"-1",role:isModule?"button":"img",
+    "aria-label":link.sub+" "+link.label,
+    on:isModule?{
+      click:function(ev){ ev.stopPropagation(); openModule(link.targetScope); },
+      keydown:function(ev){
+        if(ev.key==="Enter"){ev.preventDefault();openModule(link.targetScope);} }
+    }:{}});
+  g.appendChild(s("rect",{class:"nf-bg",x:x,y:y,width:w,height:hgt,rx:8,ry:8}));
+  g.appendChild(s("text",{class:"nf-label",x:x+11,y:y+hgt/2},
+    clip(link.label,18)));
+  g.appendChild(s("text",{class:"nf-sub",x:x+11,y:y+hgt/2+12},link.sub));
+  return g;
 }
 function focusNode(n,cls,x,y,w,hgt){
   var g=s("g",{class:"n-focus "+cls,tabindex:"0",role:"button","aria-label":(cls==="page"?"页面 ":"数据 ")+(n.title||n.nodeId),
@@ -1132,7 +1266,14 @@ function applyFocus(){
   var edges=svg.querySelectorAll(".edge");
   if(!fid){ nodes.forEach(function(n){n.classList.remove("dim");}); edges.forEach(function(e){e.classList.remove("dim","hot");}); return; }
   var neighbors={};neighbors[fid]=true;
-  var rw=pageDataEdgesByScope[state.moduleId]||[];
+  // 邻接高亮要覆盖模块视图画出的全部四类边，否则点中一个数据对象时
+  // 它的模块级契约和跨模块落点会被误暗掉。
+  var rw=(pageDataEdgesByScope[state.moduleId]||[])
+    .concat(EDGES.filter(function(edge){
+      if(edge.kind==="owns"||edge.kind==="shares") return true;
+      if(edge.kind!=="reads"&&edge.kind!=="writes") return false;
+      return !nodeById[edge.from];
+    }));
   var incident={};
   rw.forEach(function(edge){
     if(edge.to===fid||edge.from===fid){
@@ -2139,25 +2280,48 @@ function openNodeCard(n){
     }
   }
   if(n.kind==="dataObject"){
+    var ownerKind=d.authorityKind==="self"?"本模块拥有"
+      :d.authorityKind==="module"?"其他模块拥有"
+      :d.authorityKind==="spec"?"领域规格":"未声明";
     body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"数据对象"),
-      kvList([["权威源",d.authoritativeSource]])));
+      kvList([["权威源",d.authoritativeSource],["主本归属",ownerKind],
+              ["主本标识",d.authorityKey]])));
     // reads/writes touching this object within its module
     var touching=EDGES.filter(function(e){return (e.kind==="reads"||e.kind==="writes")&&e.to===n.nodeId;});
     if(touching.length){
       var rw=h("div",{class:"sec"},h("div",{class:"sec-h"},"读写关系"));
       touching.forEach(function(e){
+        var viaPage=nodeById[e.from];
         rw.appendChild(h("div",{class:"muted-text",style:"margin:2px 0"},
           h("b",{style:"color:var(--"+(e.kind==="reads"?"read":"write")+")"}, e.kind==="reads"?"读取":"写入"),
-          " · "+scopeTitle(e.from)));
+          " · "+(viaPage?("页面「"+(viaPage.title||e.from)+"」")
+                        :(scopeTitle(e.from)+"（仅模块级）"))));
       });
       body.appendChild(rw);
+    }
+    var links=dataLinksFor(n);
+    if(links.length){
+      var cross=h("div",{class:"sec"},h("div",{class:"sec-h"},"跨模块 / 主本"));
+      links.forEach(function(link){
+        var row=h("div",{class:"muted-text",style:"margin:3px 0"},
+          h("b",{},link.sub)," · ");
+        if(link.targetScope){
+          row.appendChild(h("a",{href:"#",style:"cursor:pointer",
+            onclick:function(ev){ev.preventDefault();openModule(link.targetScope);}},
+            link.label));
+        }else{ row.appendChild(h("span",{},link.label)); }
+        cross.appendChild(row);
+      });
+      cross.appendChild(h("div",{class:"muted-text",style:"margin-top:6px"},
+        "归并只认「标题 + 权威来源」字面相等，不按语义猜测同名对象。"));
+      body.appendChild(cross);
     }
   }
   sourcesSection(n.sources).forEach(function(x){ body.appendChild(x); });
 }
 function openEdgeCard(e){
   state.selKey="edge:"+e.edgeId;
-  var kindLabel=e.kind==="interacts"?"模块交互 INTERACTS":e.kind==="reads"?"数据读取 READS":e.kind==="writes"?"数据写入 WRITES":e.kind;
+  var kindLabel=e.kind==="interacts"?"模块交互 INTERACTS":e.kind==="reads"?"数据读取 READS":e.kind==="writes"?"数据写入 WRITES":e.kind==="owns"?"主本归属 OWNS":e.kind==="shares"?"同一对象副本 SHARES":e.kind;
   var body=drawerShell(kindLabel,edgeTitle(e),e.edgeId);
   var d=e.detail||{};
   if(e.kind==="interacts"){
@@ -2165,10 +2329,31 @@ function openEdgeCard(e){
       kvList([["来源模块",scopeTitle(e.from)],["目标模块",scopeTitle(e.to)],["方向",d.direction]])));
     if(d.trigger) body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"触发条件"),h("div",{},d.trigger)));
     if(d.failurePropagation) body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"失败传播"),h("div",{},d.failurePropagation)));
+  }else if(e.kind==="owns"){
+    var owned=nodeById[e.to];
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"主本归属"),
+      kvList([["主本模块",scopeTitle(e.from)],
+              ["数据对象",owned?(owned.title||e.to):e.to],
+              ["声明方",scopeTitle(d.consumerScopeId)],
+              ["原文权威源",d.authoritativeSource]])));
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"muted-text"},
+      "由声明方 §7.0「权威来源」列机械解析得到；主本模块自身是否已结构化不影响这条归属。")));
+  }else if(e.kind==="shares"){
+    var a=nodeById[e.from],b=nodeById[e.to];
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"同一逻辑对象"),
+      kvList([["模块 A",scopeTitle(a&&a.scopeId)],["模块 B",scopeTitle(b&&b.scopeId)],
+              ["归并键",d.canonicalId],["锚点",
+                d.anchorRole==="authoritative"?"主本模块副本":"字典序首个副本"]])));
+    body.appendChild(h("div",{class:"sec"},h("div",{class:"muted-text"},
+      "两侧标题与权威来源字面相同才归并；名称不同的对象一律不合并。")));
   }else{
     var t=nodeById[e.to];
+    var origin=nodeById[e.from];
     body.appendChild(h("div",{class:"sec"},h("div",{class:"sec-h"},"读写契约"),
-      kvList([["来源模块",scopeTitle(e.from)],["数据对象",t?(t.title||e.to):e.to],["权威源",d.authoritativeSource],["同步方式",d.syncMethod]])));
+      kvList([[origin?"来源页面":"来源模块",
+               origin?(origin.title||e.from):scopeTitle(e.from)],
+              ["精度",origin?"页面级":"仅模块级（未下推到页面）"],
+              ["数据对象",t?(t.title||e.to):e.to],["权威源",d.authoritativeSource],["同步方式",d.syncMethod]])));
   }
   sourcesSection(e.sources).forEach(function(x){ body.appendChild(x); });
 }

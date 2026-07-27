@@ -61,7 +61,7 @@
         "required": ["edgeId", "kind", "from", "to", "status", "sources"],
         "properties": {
           "edgeId": { "type": "string", "minLength": 1 },
-          "kind": { "enum": ["navigates", "reads", "writes", "interacts", "transition", "traces"] },
+          "kind": { "enum": ["navigates", "reads", "writes", "interacts", "transition", "traces", "owns", "shares"] },
           "from": { "type": "string", "minLength": 1 },
           "to": { "type": "string", "minLength": 1 },
           "status": { "enum": ["original", "adjudicated", "inferred", "recommended-default", "missing"] },
