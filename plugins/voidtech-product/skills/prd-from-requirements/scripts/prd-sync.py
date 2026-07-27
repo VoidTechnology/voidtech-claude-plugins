@@ -430,7 +430,8 @@ def cmd_atlas(root, args):
         manifest = read_json(manifest_path)
         manifest["capabilities"]["logicAtlas"] = True
         manifest["logicAtlasStage"] = args.enable
-        manifest["schemaVersions"]["logicModel"] = 1
+        manifest["schemaVersions"]["logicModel"] = (
+            atlas.LOGIC_MODEL_SCHEMA_VERSION)
         atomic_write_bytes(manifest_path, canonical_json_bytes(manifest))
         lines = [f"Logic Atlas 能力已置位：stage={args.enable}。",
                  "生成/更新生成物请运行 atlas --publish。"]

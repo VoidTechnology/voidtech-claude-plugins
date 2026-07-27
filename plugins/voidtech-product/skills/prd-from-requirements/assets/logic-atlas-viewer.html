@@ -178,6 +178,7 @@ a{color:var(--accent-text)}
 .n-focus.authority.is-module .nf-bg{stroke:var(--accent);stroke-dasharray:none}
 .nf-sub{font-size:9px;fill:var(--faint)}
 .page-unbound{font-size:9px;fill:var(--warn)}
+.page-none{font-size:9px;fill:var(--muted)}
 
 .tooltip{position:absolute;z-index:60;max-width:320px;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:9px 11px;font-size:12px;pointer-events:none;display:none}
 .tooltip .tt-h{font-weight:600;margin-bottom:4px}
@@ -279,6 +280,7 @@ a{color:var(--accent-text)}
 .behavior-panel{overflow:auto;flex:1;min-height:0;padding:18px;background:var(--bg)}
 .behavior-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .behavior-group{border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow)}
+.result-empty{padding:14px;color:var(--muted);font-size:12px;text-align:center}
 .behavior-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
 .behavior-head h3{font-size:14px;margin:0;flex:1}.behavior-head .meta{font:11px var(--mono);color:var(--muted)}
 .flow-node,.state-node{border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);text-align:left}
@@ -323,6 +325,11 @@ a{color:var(--accent-text)}
 .scenario-details-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;margin-top:8px}
 .step-summary{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
 .step-summary span,.interaction-badge{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:3px 7px;background:var(--panel);color:var(--muted);font-size:10.5px}
+.step-branches{margin-top:7px;border-left:2px solid var(--border);padding-left:8px}.step-branches summary{cursor:pointer;color:var(--muted);font-size:10.5px;padding:3px 0}
+.step-branch-list{display:grid;gap:5px;padding-top:5px}
+.branch-node{display:block;width:100%;border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:6px 7px;text-align:left;color:var(--text);font-size:10.5px;cursor:pointer}
+.branch-node b{display:block;margin-bottom:2px;font-size:10px}.branch-node small{display:block;color:var(--muted);line-height:1.35}
+.branch-node.failureBranch,.branch-node.failureRecovery{border-color:var(--danger)}.branch-node.pageState{border-color:var(--warn)}.branch-node.stateImpact{border-color:var(--read)}
 .step-source{margin-top:6px;border:0;background:none;color:var(--accent-text);padding:2px;text-align:left;font-size:11px}
 .interaction-panel{margin:10px 14px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);overflow:hidden}
 .interaction-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface)}
@@ -382,6 +389,33 @@ a{color:var(--accent-text)}
 .boundary-card{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);padding:10px 11px;text-align:left;color:var(--text)}
 .boundary-card h4{margin:0 0 7px;font-size:13px}.boundary-card dl{grid-template-columns:72px 1fr;font-size:12px}
 .behavior-empty{padding:36px;text-align:center;color:var(--muted)}
+/* ==== Reader workflows v9 ==== */
+.explore-panel,.knowledge-panel{height:100%;overflow:auto;background:var(--bg)}
+.explore-hero{padding:24px 26px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+.explore-hero h2{margin:0 0 7px;font-size:22px}.explore-hero p{margin:0;color:var(--muted);max-width:720px;line-height:1.6}
+.explore-tasks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:18px 26px}
+.explore-task{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:16px;text-align:left;color:var(--text);cursor:pointer}
+.explore-task:hover{border-color:var(--accent);background:var(--surface-2)}.explore-task b{display:block;margin-bottom:6px;font-size:14px}.explore-task span{color:var(--muted);font-size:12px;line-height:1.5}
+.explore-statuses{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:0 26px 18px}
+.explore-status{border-left:3px solid var(--accent);background:var(--surface);padding:11px 13px}.explore-status b{display:block;font-size:16px}.explore-status small{color:var(--muted)}
+.explore-journey-empty{margin:0 26px 22px;padding:12px 14px;border:1px dashed var(--border);color:var(--muted);background:var(--surface)}
+.audit-dimensions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.audit-dimension{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.audit-dimension b{display:block;font-size:17px}.audit-dimension small{color:var(--muted)}
+.knowledge-head{padding:18px 22px 12px;border-bottom:1px solid var(--border);background:var(--surface)}.knowledge-head h2{margin:0 0 5px;font-size:18px}.knowledge-head p{margin:0;color:var(--muted)}
+.knowledge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;padding:16px 22px}
+.page-primary{background:var(--surface)}.page-primary .sec-h{color:var(--text)}
+.page-context-section{margin-top:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden}
+.page-context-section summary{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;font-weight:650}
+.page-context-section summary small{color:var(--muted);font-weight:500}.page-context-body{padding:0 12px 12px}
+.page-context-list{display:grid;gap:6px}.page-context-link{width:100%;border:1px solid var(--border);border-radius:6px;background:var(--panel);padding:7px 8px;text-align:left;color:var(--text);cursor:pointer}
+.page-context-link small{display:block;margin-top:2px;color:var(--muted)}
+.declaration-state{margin-bottom:8px;padding:7px 8px;border-radius:6px;background:var(--muted-bg);color:var(--muted);font-size:11px}
+.declaration-state[data-state="mapped"]{background:var(--read-bg);color:var(--read)}.declaration-state[data-state="missing"],.declaration-state[data-state="unparsed"]{background:var(--warn-bg);color:var(--warn)}
+.field-card,.access-rule{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);padding:12px;text-align:left;color:var(--text)}
+.knowledge-title{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px}.knowledge-title b{font-size:13px}.knowledge-object{font:10.5px var(--mono);color:var(--muted)}
+.decision{font:10px var(--mono);padding:2px 7px;border-radius:999px}.decision.allow{color:var(--read);background:var(--read-bg)}.decision.deny{color:var(--danger);background:var(--danger-bg)}.decision.conditional{color:var(--warn);background:var(--warn-bg)}.decision.not-applicable{color:var(--muted);background:var(--muted-bg)}
+@media(max-width:900px){.explore-tasks,.explore-statuses,.audit-dimensions{grid-template-columns:1fr}.explore-hero,.explore-tasks,.explore-statuses{padding-left:16px;padding-right:16px}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 </style>
 </head>
@@ -403,16 +437,20 @@ a{color:var(--accent-text)}
     <main class="main">
       <div class="main-head">
         <div class="tabs" role="tablist">
-          <button class="tab active" id="tab-audit" role="tab" aria-selected="true">审计总览</button>
+          <button class="tab active" id="tab-explore" role="tab" aria-selected="true">探索</button>
+          <button class="tab" id="tab-audit" role="tab" aria-selected="false">质量与来源</button>
           <button class="tab" id="tab-graph" role="tab" aria-selected="false">系统关系</button>
           <button class="tab" id="tab-flow" role="tab" aria-selected="false">场景流程</button>
           <button class="tab" id="tab-state" role="tab" aria-selected="false">状态机</button>
-          <button class="tab" id="tab-boundary" role="tab" aria-selected="false">边界与异常</button>
+          <button class="tab" id="tab-boundary" role="tab" aria-selected="false">状态与异常</button>
+          <button class="tab" id="tab-field" role="tab" aria-selected="false">数据与字段</button>
+          <button class="tab" id="tab-access" role="tab" aria-selected="false">访问与可见性</button>
           <button class="tab" id="tab-req" role="tab" aria-selected="false">需求索引</button>
           <button class="tab" id="tab-gap" role="tab" aria-selected="false">缺口</button>
         </div>
         <div class="crumbs" id="crumbs"></div>
       </div>
+      <div id="view-explore" class="explore-panel" role="tabpanel" aria-label="探索首页"></div>
       <div id="view-audit" class="audit-panel" role="tabpanel" aria-label="审计总览"></div>
       <div id="view-graph" class="viewport" role="tabpanel" aria-label="系统关系" hidden>
         <div class="hint" id="hint"></div>
@@ -428,6 +466,8 @@ a{color:var(--accent-text)}
       <div id="view-flow" class="behavior-panel" role="tabpanel" aria-label="场景流程" hidden></div>
       <div id="view-state" class="behavior-panel" role="tabpanel" aria-label="业务状态机" hidden></div>
       <div id="view-boundary" class="behavior-panel" role="tabpanel" aria-label="边界与异常" hidden></div>
+      <div id="view-field" class="knowledge-panel" role="tabpanel" aria-label="数据与字段" hidden></div>
+      <div id="view-access" class="knowledge-panel" role="tabpanel" aria-label="访问与可见性" hidden></div>
       <div id="view-req" class="panel" role="tabpanel" aria-label="需求索引" hidden></div>
       <div id="view-gap" class="panel" role="tabpanel" aria-label="缺口面板" hidden></div>
     </main>
@@ -559,13 +599,16 @@ var modules=SCOPES.filter(function(x){return x.kind==="module";}).sort(byPath);
 function byPath(a,b){ var pa=(a.path||a.scopeId||""),pb=(b.path||b.scopeId||""); return pa<pb?-1:pa>pb?1:0; }
 
 var nodeById={}; NODES.forEach(function(n){ nodeById[n.nodeId]=n; });
-var pagesByScope={}, dataByScope={}, flowsByScope={}, flowPartsByScope={},
-    interactionStepsByScope={}, stateImpactsByScope={}, businessStatesByScope={},
+var pagesByScope={}, dataByScope={}, fieldsByScope={}, accessByScope={},
+    flowsByScope={}, flowPartsByScope={}, interactionStepsByScope={},
+    stateImpactsByScope={}, businessStatesByScope={},
     pageStatesByScope={}, boundariesByScope={}, gapsByScope={};
 NODES.forEach(function(n){
   var d=n.detail||{};
   if(n.kind==="page"){ (pagesByScope[n.scopeId]=pagesByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="dataObject"){ (dataByScope[n.scopeId]=dataByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="field"){ (fieldsByScope[n.scopeId]=fieldsByScope[n.scopeId]||[]).push(n); }
+  else if(n.kind==="permission"){ (accessByScope[n.scopeId]=accessByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="flow"&&d.category==="userFlow"){ (flowsByScope[n.scopeId]=flowsByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="flow"&&(d.category==="flowStep"||d.category==="terminal"||d.category==="failureBranch")){ (flowPartsByScope[n.scopeId]=flowPartsByScope[n.scopeId]||[]).push(n); }
   else if(n.kind==="flow"&&d.category==="interactionStep"){ (interactionStepsByScope[n.scopeId]=interactionStepsByScope[n.scopeId]||[]).push(n); }
@@ -595,9 +638,17 @@ NODES.forEach(function(node){
     });
   });
 });
+function requirementReferencePriority(node){
+  var category=(node.detail||{}).category;
+  var priorities={flowStep:0,interactionStep:1,stateImpact:2,failureBranch:3,
+    pageState:4,userFlow:5,businessState:6,boundary:7,field:10,accessRule:11};
+  if(Object.prototype.hasOwnProperty.call(priorities,category)) return priorities[category];
+  return node.kind==="page"?8:node.kind==="dataObject"?9:12;
+}
 Object.keys(requirementRefs).forEach(function(requirementId){
   requirementRefs[requirementId].sort(function(a,b){
-    return String(a.nodeId).localeCompare(String(b.nodeId),undefined,{numeric:true});
+    var delta=requirementReferencePriority(a)-requirementReferencePriority(b);
+    return delta||String(a.nodeId).localeCompare(String(b.nodeId),undefined,{numeric:true});
   });
 });
 
@@ -673,11 +724,13 @@ function modMeta(m){
   var sid=m.scopeId;
   var pg=(pagesByScope[sid]||[]).length;
   var dt=(dataByScope[sid]||[]).length;
+  var fd=(fieldsByScope[sid]||[]).length;
+  var ac=(accessByScope[sid]||[]).length;
   var fl=(flowsByScope[sid]||[]).length;
   var st=(businessStatesByScope[sid]||[]).length;
   var gp=(gapsByScope[sid]||[]).length;
-  return {pages:pg,data:dt,flows:fl,states:st,gaps:gp,
-    structured:(pg+dt+fl+st)>0};
+  return {pages:pg,data:dt,fields:fd,access:ac,flows:fl,states:st,gaps:gp,
+    structured:(pg+dt+fd+ac+fl+st)>0};
 }
 function isTemplateGap(g){
   var meta=modMeta(scopeById[g.scopeId]||{scopeId:g.scopeId});
@@ -686,15 +739,28 @@ function isTemplateGap(g){
 function contentGaps(scopeId){
   return (gapsByScope[scopeId]||[]).filter(function(g){return !isTemplateGap(g);});
 }
-function healthyCount(){
-  return modules.filter(function(m){
-    return modMeta(m).structured&&contentGaps(m.scopeId).length===0;
-  }).length;
+function moduleDepth(scopeId){
+  var roots=flowsByScope[scopeId]||[],parts=flowPartsByScope[scopeId]||[];
+  var interactions=interactionStepsByScope[scopeId]||[],deep=0;
+  roots.forEach(function(root){
+    var steps=parts.filter(function(node){
+      var d=node.detail||{};
+      return d.category==="flowStep"&&d.flowId===root.nodeId;
+    });
+    if(steps.length&&steps.every(function(step){
+      return interactions.some(function(node){
+        var d=node.detail||{};
+        return d.flowId===root.nodeId&&
+          (d.stepNodeId===step.nodeId||d.stepId===(step.detail||{}).stepId);
+      });
+    })) deep+=1;
+  });
+  return {flows:roots.length,interactionFlows:deep};
 }
 function scopeTitle(id){ return (scopeById[id]&&scopeById[id].title)||id||"—"; }
 
 /* ---------- state ---------- */
-var state={ view:"audit", level:"overview", moduleId:null, scenarioId:null, stepId:null, selKey:null, focusId:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
+var state={ view:"explore", level:"overview", moduleId:null, scenarioId:null, stepId:null, selKey:null, focusId:null, fieldScope:null, accessScope:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
 /* ---------- theme ---------- */
 function effTheme(){
   var t=document.documentElement.getAttribute("data-theme");
@@ -724,45 +790,86 @@ function shortHash(){
     "Lifecycle 呈现风险 "+META.presentationRisk));
   t.appendChild(h("span",{class:"self-note"},"确定性生成快照,不代表当前最新"));
 })();
-/* ---------- audit cockpit ---------- */
+/* ---------- explore & quality ---------- */
+function renderExplore(){
+  var view=$("view-explore");view.textContent="";
+  var structured=modules.filter(function(m){return modMeta(m).structured;}).length;
+  var realGaps=GAPS.filter(function(g){return !isTemplateGap(g);}).length;
+  view.appendChild(h("section",{class:"explore-hero"},
+    h("h2",{},"从你的问题开始"),
+    h("p",{},"按场景理解因果，按页面定位行为，或直接查字段与访问规则。所有结论都保留来源；尚未声明的内容不会被补齐。")));
+  var tasks=h("section",{class:"explore-tasks","aria-label":"阅读任务入口"});
+  [
+    ["按场景理解","查看角色、步骤、成功路径、失败恢复和状态影响","flow"],
+    ["按页面定位","查看入口、动作、明确去向与相关上下文","graph"],
+    ["查字段与规则","理解数据定义、敏感性与访问边界","field"]
+  ].forEach(function(item){
+    tasks.appendChild(h("button",{class:"explore-task",onclick:function(){setView(item[2]);}},
+      h("b",{},item[0]),h("span",{},item[1])));
+  });
+  view.appendChild(tasks);
+  var statuses=h("section",{class:"explore-statuses","aria-label":"当前快照可信度"});
+  [
+    ["coverage",structured+" / "+modules.length,"已结构化模块"],
+    ["gaps",String(realGaps),"未解决内容缺口"],
+    ["freshness","⌗ "+shortHash(),"生成快照；不声明当前最新"]
+  ].forEach(function(item){
+    statuses.appendChild(h("div",{class:"explore-status",dataset:{status:item[0]}},
+      h("b",{},item[1]),h("small",{},item[2])));
+  });
+  view.appendChild(statuses);
+  view.appendChild(h("div",{class:"explore-journey-empty"},
+    "尚未声明可证明的端到端旅程；可继续浏览模块流程或页面。"));
+}
 function renderAudit(){
   var view=$("view-audit");view.textContent="";
-  var healthy=healthyCount(),total=modules.length||1;
+  var total=modules.length||1;
+  var structured=modules.filter(function(m){return modMeta(m).structured;}).length;
   var unstructured=modules.filter(function(m){return !modMeta(m).structured;});
   var realGaps=GAPS.filter(function(g){return !isTemplateGap(g);});
+  var totalFlows=0,deepFlows=0;
+  modules.forEach(function(m){
+    var depth=moduleDepth(m.scopeId);
+    totalFlows+=depth.flows;deepFlows+=depth.interactionFlows;
+  });
   var hero=h("section",{class:"audit-hero"},
-    h("div",{},h("h2",{},"审计驾驶舱"),
-      h("p",{},"先看覆盖率和真实问题，再进入场景、状态、需求或来源验证。")),
-    h("div",{class:"audit-coverage"},
-      h("b",{},healthy+" / "+total),
-      h("small",{},"无审计缺口模块 · "+Math.round(healthy/total*100)+"%")));
-  view.appendChild(hero);
+    h("div",{},h("h2",{},"质量与来源"),
+      h("p",{},"分别查看结构覆盖、内容深度、未解决缺口与生成快照；这些信号不代表业务正确。")));
+  var dimensions=h("div",{class:"audit-dimensions"});
+  [
+    ["coverage",structured+" / "+total,"结构覆盖"],
+    ["depth",deepFlows+" / "+totalFlows,"交互级流程"],
+    ["gaps",String(realGaps.length),"未解决缺口"],
+    ["freshness","⌗ "+shortHash(),"快照标识"]
+  ].forEach(function(item){
+    dimensions.appendChild(h("div",{class:"audit-dimension",dataset:{dimension:item[0]}},
+      h("b",{},item[1]),h("small",{},item[2])));
+  });
+  hero.appendChild(dimensions);view.appendChild(hero);
   var grid=h("div",{class:"audit-grid"});
-  var health=h("section",{class:"audit-section"},
-    h("div",{class:"audit-section-head"},h("h3",{},"模块健康度"),
+  var modulesSection=h("section",{class:"audit-section"},
+    h("div",{class:"audit-section-head"},h("h3",{},"模块覆盖与深度"),
       h("span",{},modules.length+" 个模块")));
-  modules.slice().sort(function(a,b){
-    var am=modMeta(a),bm=modMeta(b);
-    var ar=contentGaps(a.scopeId).length,br=contentGaps(b.scopeId).length;
-    var ao=ar?0:am.structured?1:2,bo=br?0:bm.structured?1:2;
-    return ao-bo||byPath(a,b);
-  }).forEach(function(m){
-    var meta=modMeta(m),issues=contentGaps(m.scopeId).length;
-    var healthClass=issues?"issue":meta.structured?"good":"pending";
-    var healthLabel=issues?issues+" 个问题":meta.structured?"已深化":"未结构化";
-    health.appendChild(h("button",{class:"audit-module",onclick:function(){
+  modules.slice().sort(byPath).forEach(function(m){
+    var meta=modMeta(m),gaps=contentGaps(m.scopeId).length;
+    var depth=moduleDepth(m.scopeId);
+    var depthLabel=!meta.structured?"结构化覆盖 0":
+      depth.flows?(depth.interactionFlows+" / "+depth.flows+" 条流程到交互级"):
+      "已声明结构，尚无机器流程";
+    modulesSection.appendChild(h("button",{class:"audit-module",onclick:function(){
         if(meta.structured) openModule(m.scopeId); else openScopeCard(m.scopeId);
       }},
       h("span",{class:"audit-module-name"},semanticIcon(meta.structured?"module":"dependency"),
         h("span",{},m.title||m.scopeId)),
       h("span",{class:"audit-module-meta"},
-        meta.pages+"P · "+meta.flows+"F · "+meta.states+"S · "+meta.data+"D"),
-      h("span",{class:"audit-health "+healthClass},healthLabel)));
+        meta.pages+"P · "+meta.flows+"F · "+meta.fields+" 字段 · "+meta.access+" 规则"),
+      h("span",{class:"audit-health "+(gaps?"issue":meta.structured?"good":"pending")},
+        depthLabel+" · 缺口 "+gaps)));
   });
-  grid.appendChild(health);
+  grid.appendChild(modulesSection);
   var issuesSection=h("section",{class:"audit-section"},
-    h("div",{class:"audit-section-head"},h("h3",{},"需要审计"),
-      h("span",{},realGaps.length+" 个真实问题")));
+    h("div",{class:"audit-section-head"},h("h3",{},"未解决缺口"),
+      h("span",{},realGaps.length+" 项")));
   if(!realGaps.length){
     issuesSection.appendChild(h("div",{class:"muted-text",style:"padding:14px"},
       "当前结构化内容未发现可机械识别的断链或歧义。"));
@@ -770,7 +877,7 @@ function renderAudit(){
     realGaps.forEach(function(g){
       issuesSection.appendChild(h("div",{class:"audit-gap"},
         h("span",{class:"audit-gap-kind"},g.kind||"gap"),
-        h("button",{onclick:function(){openScopeCard(g.scopeId);}},
+        h("button",{onclick:function(){openGapCard(g);}},
           scopeTitle(g.scopeId)+" · "+(g.detail||g.gapId))));
     });
   }
@@ -836,42 +943,53 @@ function setView(v){
   if(state.view!==v&&drawer&&drawer.classList.contains("open")) closeDrawer();
   state.view=v;
   if(isBehaviorView(v)) ensureBehaviorModule(v);
-  ["audit","graph","flow","state","boundary","req","gap"].forEach(function(name){
-    var active=v===name;
-    $("tab-"+name).classList.toggle("active",active);
-    $("tab-"+name).setAttribute("aria-selected",String(active));
-    $("view-"+name).hidden=!active;
-  });
+  ["explore","audit","graph","flow","state","boundary","field","access","req","gap"]
+    .forEach(function(name){
+      var active=v===name;
+      $("tab-"+name).classList.toggle("active",active);
+      $("tab-"+name).setAttribute("aria-selected",String(active));
+      $("view-"+name).hidden=!active;
+    });
   renderSidebar();
   renderCrumbs();
-  if(v==="audit") renderAudit();
+  if(v==="explore") renderExplore();
+  else if(v==="audit") renderAudit();
   else if(v==="graph") renderGraph();
   else if(v==="flow") renderFlows();
   else if(v==="state") renderStateMachines();
   else if(v==="boundary") renderBoundaries();
+  else if(v==="field") renderFields();
+  else if(v==="access") renderAccess();
   else if(v==="req") renderRequirements();
   else renderGaps();
 }
+$("tab-explore").addEventListener("click",function(){ setView("explore"); });
 $("tab-audit").addEventListener("click",function(){ setView("audit"); });
 $("tab-graph").addEventListener("click",function(){ setView("graph"); });
 $("tab-flow").addEventListener("click",function(){ setView("flow"); });
 $("tab-state").addEventListener("click",function(){ setView("state"); });
 $("tab-boundary").addEventListener("click",function(){ setView("boundary"); });
+$("tab-field").addEventListener("click",function(){ setView("field"); });
+$("tab-access").addEventListener("click",function(){ setView("access"); });
 $("tab-req").addEventListener("click",function(){ setView("req"); });
 $("tab-gap").addEventListener("click",function(){ setView("gap"); });
 
 /* ---------- breadcrumbs ---------- */
 function renderCrumbs(){
   var c=$("crumbs"); c.textContent="";
-  if(state.view==="audit"){
-    c.appendChild(h("span",{class:"cur"},"审计总览"));return;
+  if(state.view==="explore"||state.view==="audit"){
+    c.appendChild(h("span",{class:"cur"},
+      state.view==="explore"?"探索":"质量与来源"));return;
   }
-  if(state.view==="req"||state.view==="gap"){
-    c.appendChild(h("span",{class:"cur"}, state.view==="req"?"需求索引":"缺口面板"));
+  if(state.view==="field"||state.view==="access"||
+      state.view==="req"||state.view==="gap"){
+    var labels={field:"数据与字段",access:"访问与可见性",
+      req:"需求索引",gap:"缺口面板"};
+    c.appendChild(h("span",{class:"cur"},labels[state.view]));
     return;
   }
   if(isBehaviorView(state.view)){
-    var labels={flow:"场景流程",state:"业务状态机",boundary:"边界与异常"};
+    var labels={flow:"场景流程",state:"业务状态机",boundary:"状态与异常"};
     var bm=scopeById[state.moduleId];
     if(bm){
       var bsys=scopeById[bm.parentScopeId];
@@ -1131,11 +1249,14 @@ function layoutModule(){
     };
     nodeLayer.appendChild(focusNode(
       node,"page",pageX,y,pageWidth,nodeHeight));
-    // 未参与任何页面级读写的页面单独标注：区分「确实不碰数据」与「PRD 没写」。
+    // 页面级声明状态来自模型：明确无、尚未声明、不可解析不能共用一个空值。
     if(!boundPageIds[node.nodeId]){
-      nodeLayer.appendChild(s("text",{class:"page-unbound",
-        x:pageX+pageWidth,y:y+nodeHeight+10,"text-anchor":"end"},
-        "未声明数据读写"));
+      var declaration=(node.detail||{}).dataDeclaration||"missing";
+      var explicitNone=declaration==="none";
+      var label=explicitNone?"已确认无数据读写":
+        declaration==="unparsed"?"数据声明不可解析":"尚未声明数据读写";
+      nodeLayer.appendChild(s("text",{class:explicitNone?"page-none":"page-unbound",
+        x:pageX+pageWidth,y:y+nodeHeight+10,"text-anchor":"end"},label));
     }
   });
   nodeLayer.appendChild(s("text",{class:"col-head",
@@ -1202,12 +1323,16 @@ function layoutModule(){
   // 第三列有避让下移，按实际最低行算画布高度，否则底部节点会被裁掉。
   var contentBottom=Math.max(top+rows*(nodeHeight+gap),
     linkMaxY+nodeHeight+gap);
-  if(!rwEdges.length&&dataObjects.length){
+  var undeclaredPages=pages.filter(function(page){
+    var declaration=(page.detail||{}).dataDeclaration||"missing";
+    return declaration==="missing"||declaration==="unparsed";
+  });
+  if(undeclaredPages.length&&dataObjects.length){
     var messageY=top+Math.max(20,rows*(nodeHeight+gap)/2);
     nodeLayer.appendChild(s("text",{class:"module-data-gap",x:300,y:messageY,
-      "text-anchor":"middle"},"未声明页面 ↔ 数据读写"));
+      "text-anchor":"middle"},undeclaredPages.length+" 个页面数据关系待补"));
     nodeLayer.appendChild(s("text",{class:"module-data-gap-sub",x:300,y:messageY+18,
-      "text-anchor":"middle"},"仅有模块级契约，不可下推到页面"));
+      "text-anchor":"middle"},"已声明映射照常显示；未知关系不从模块级契约下推"));
   }
   var totalHeight=contentBottom+24;
   contentBounds={x:0,y:0,
@@ -1476,28 +1601,48 @@ function drawWorkflowLinks(root){
       refX:"8.5",refY:"5",markerWidth:"8",markerHeight:"8",orient:"auto-start-reverse"});
     marker.appendChild(s("path",{d:"M0,0 L10,5 L0,10 z",fill:"var(--accent)"}));
     defs.appendChild(marker);svg.appendChild(defs);
-    var canvasRect=canvas.getBoundingClientRect();
-    var cards=canvas.querySelectorAll(".flow-node");
-    for(var i=0;i<cards.length-1;i++){
-      var from=cards[i].getBoundingClientRect(),to=cards[i+1].getBoundingClientRect();
-      var sx=from.right-canvasRect.left,sy=from.top-canvasRect.top+from.height/2;
-      var tx=to.left-canvasRect.left,ty=to.top-canvasRect.top+to.height/2;
-      var mx=(sx+tx)/2;
-      var path=s("path",{class:"workflow-link",
-        d:"M"+sx+","+sy+" H"+mx+" V"+ty+" H"+tx,
-        "marker-end":"url(#"+markerId+")"});
-      svg.appendChild(path);
-      var condition=(cards[i+1].closest(".flow-step-wrap")||{}).dataset;
-      var labelText=condition&&condition.condition?condition.condition:"";
-      /* 场景连线只在有真实条件/分支时才标注；空或「—」占位不生成标签节点。 */
-      if(labelText&&labelText!=="—"){
-        var labelY=sy===ty?sy-9:(sy+ty)/2-6;
-        svg.appendChild(s("text",{class:"workflow-link-label",x:mx+5,y:labelY},clip(labelText,18)));
-      }
-    }
+    var canvasRect=canvas.getBoundingClientRect(),wrapByNode={};
+    Array.prototype.forEach.call(canvas.querySelectorAll(".flow-step-wrap"),function(wrap){
+      if(wrap.dataset.nodeId) wrapByNode[wrap.dataset.nodeId]=wrap;
+    });
+    EDGES.filter(function(edge){
+      return edge.kind==="navigates"&&(edge.detail||{}).branch==="success"&&
+        wrapByNode[edge.from]&&wrapByNode[edge.to];
+    }).sort(function(a,b){return a.edgeId.localeCompare(b.edgeId);})
+      .forEach(function(edge){
+        var fromWrap=wrapByNode[edge.from],toWrap=wrapByNode[edge.to];
+        var fromCard=fromWrap.querySelector(".flow-node");
+        var toCard=toWrap.querySelector(".flow-node");
+        var from=fromCard.getBoundingClientRect(),to=toCard.getBoundingClientRect();
+        var sx=from.right-canvasRect.left,sy=from.top-canvasRect.top+from.height/2;
+        var tx=to.left-canvasRect.left,ty=to.top-canvasRect.top+to.height/2;
+        var mx=(sx+tx)/2;
+        var pathData=fromWrap===toWrap?
+          "M"+sx+","+sy+" C"+(sx+55)+","+(sy-52)+" "+(sx+55)+","+(sy+52)+" "+sx+","+sy:
+          "M"+sx+","+sy+" H"+mx+" V"+ty+" H"+tx;
+        var labelText=(edge.detail||{}).condition||"";
+        var path=s("path",{class:"workflow-link",d:pathData,
+          "marker-end":"url(#"+markerId+")","data-edge-id":edge.edgeId,
+          "data-from-step":fromWrap.dataset.stepId||"",
+          "data-to-step":toWrap.dataset.stepId||"",
+          "data-condition":labelText});
+        svg.appendChild(path);
+        if(labelText&&labelText!=="—"){
+          var labelY=fromWrap===toWrap?sy-48:sy===ty?sy-9:(sy+ty)/2-6;
+          svg.appendChild(s("text",{class:"workflow-link-label",
+            x:fromWrap===toWrap?sx+18:mx+5,y:labelY,
+            "data-edge-id":edge.edgeId},clip(labelText,18)));
+        }
+      });
   });
 }
 
+
+function flowBranch(kind,label,node,description){
+  return h("button",{class:"branch-node "+kind,dataset:{branchKind:kind},
+      onclick:function(){openNodeCard(node);}},
+    h("b",{},label),h("small",{},description||"未声明"));
+}
 
 function renderFlows(){
 
@@ -1510,9 +1655,14 @@ function renderFlows(){
   var allImpacts=stateImpactsByScope[scopeId]||[];
   var allPageStates=pageStatesByScope[scopeId]||[];
   var allInteractions=interactionStepsByScope[scopeId]||[];
+  var recoveryCount=allInteractions.filter(function(node){
+    var value=(node.detail||{}).failureRecovery;
+    return value&&value!=="—"&&value!=="无";
+  }).length;
   behaviorStats(view,[["业务场景",roots.length],["行为步骤",allSteps.length],
-    ["页面操作",allInteractions.length],["状态影响",allImpacts.length],
-    ["异常分支",allFailures.length+allPageStates.length]]);
+    ["页面操作",allInteractions.length],["流程失败",allFailures.length],
+    ["页面边缘",allPageStates.length],["交互恢复",recoveryCount],
+    ["状态影响",allImpacts.length]]);
   if(!roots.length){ behaviorEmpty(view,"该模块尚未声明「核心流程（机器可解析）」表。"); return; }
   var activeRoot=roots.find(function(root){return root.nodeId===state.scenarioId;});
   if(!activeRoot){
@@ -1550,8 +1700,9 @@ function renderFlows(){
       h("h3",{},root.title),
       h("button",{class:"workflow-source",onclick:function(){openNodeCard(root);}},
         "查看场景来源"),
-      h("span",{class:"meta"},flowSteps.length+" 步 · "+impacts.length+
-        " 个状态变化 · "+(failures.length+pageStates.length)+" 个异常")));
+      h("span",{class:"meta"},flowSteps.length+" 步 · "+
+        failures.length+" 个流程失败 · "+pageStates.length+
+        " 个页面边缘 · "+impacts.length+" 个状态影响")));
     var map=h("div",{class:"scenario-map"});
     var primary=h("div",{class:"scenario-lane workflow-shell"});
     var workflowScroll=h("div",{class:"workflow-scroll"});
@@ -1591,10 +1742,20 @@ function renderFlows(){
       var stepFailures=failures.filter(function(n){
         return (n.detail||{}).stepId===d.stepId;
       });
-      var stage=index===0?"起点":index===flowSteps.length-1?"终点":"过程";
-      var stageIcon=index===0?"start":index===flowSteps.length-1?"terminal":"active";
+      var isStart=EDGES.some(function(edge){
+        return edge.kind==="navigates"&&edge.from===root.nodeId&&
+          edge.to===step.nodeId&&(edge.detail||{}).branch==="entry";
+      });
+      var reachesTerminal=EDGES.some(function(edge){
+        var target=nodeById[edge.to];
+        return edge.kind==="navigates"&&edge.from===step.nodeId&&
+          (edge.detail||{}).branch==="success"&&target&&
+          (target.detail||{}).category==="terminal";
+      });
+      var stage=isStart?"起点":reachesTerminal?"终点":"过程";
+      var stageIcon=isStart?"start":reachesTerminal?"terminal":"active";
       var wrap=h("div",{class:"flow-step-wrap","data-step-id":d.stepId||"",
-        "data-condition":d.condition||"",
+        "data-node-id":step.nodeId,"data-condition":d.condition||"",
         style:"grid-row:"+roleRow+";grid-column:"+(index+2)});
       wrap.appendChild(h("button",{class:"flow-node","aria-pressed":String(state.stepId===step.nodeId),
         "aria-controls":"interaction-panel",onclick:function(){selectScenarioStep(step.nodeId,d.stepId);}},
@@ -1615,8 +1776,36 @@ function renderFlows(){
       });
       wrap.appendChild(h("div",{class:"step-summary"},
         h("span",{},stepInteractions.length+" 个页面操作"),
-        h("span",{},stepImpacts.length+" 个状态变化"),
-        h("span",{},(stepFailures.length+stepStates.length)+" 个异常")));
+        h("span",{},stepFailures.length+" 个流程失败"),
+        h("span",{},stepStates.length+" 个页面边缘"),
+        h("span",{},stepImpacts.length+" 个状态影响")));
+      var branchList=h("div",{class:"step-branch-list"});
+      stepFailures.forEach(function(node){
+        branchList.appendChild(flowBranch("failureBranch","流程失败",
+          node,(node.detail||{}).handling));
+      });
+      stepStates.forEach(function(node){
+        var x=node.detail||{};
+        branchList.appendChild(flowBranch("pageState","页面边缘 · "+node.title,
+          node,x.systemBehavior||x.acceptance));
+      });
+      stepInteractions.forEach(function(node){
+        var x=node.detail||{},recovery=x.failureRecovery;
+        if(!recovery||recovery==="—"||recovery==="无") return;
+        branchList.appendChild(flowBranch("failureRecovery",
+          "交互失败与恢复 · "+(x.interactionId||node.title),node,recovery));
+      });
+      stepImpacts.forEach(function(node){
+        var x=node.detail||{};
+        branchList.appendChild(flowBranch("stateImpact","成功后的状态影响",
+          node,(x.object||"业务对象")+"："+(x.currentState||"—")+
+          " → "+(x.nextState||"—")));
+      });
+      if(branchList.childElementCount){
+        wrap.appendChild(h("details",{class:"step-branches"},
+          h("summary",{},branchList.childElementCount+" 个分支与影响"),
+          branchList));
+      }
       wrap.appendChild(h("button",{class:"step-source",onclick:function(){openNodeCard(step);}},
         "查看步骤来源"));
       workflowGrid.appendChild(wrap);
@@ -2011,21 +2200,25 @@ function renderBoundaries(){
 
 /* ---------- navigation ---------- */
 function selectModule(scopeId){
-  state.moduleId=scopeId; state.scenarioId=null; state.stepId=null; state.focusId=null; state.selKey=null; closeDrawer();
+  state.moduleId=scopeId; state.scenarioId=null; state.stepId=null; state.focusId=null; state.selKey=null;
+  state.fieldScope=scopeId; state.accessScope=scopeId; closeDrawer();
   if(state.view==="audit"){openScopeCard(scopeId);return;}
   if(state.view==="flow") renderFlows();
   else if(state.view==="state") renderStateMachines();
   else if(state.view==="boundary") renderBoundaries();
+  else if(state.view==="field") renderFields();
+  else if(state.view==="access") renderAccess();
   else { openModule(scopeId); return; }
   renderSidebar(); renderCrumbs();
 }
 function openModule(scopeId){
   state.level="module"; state.moduleId=scopeId; state.scenarioId=null; state.stepId=null;
-  state.focusId=null; state.selKey=null; closeDrawer();
+  state.focusId=null; state.selKey=null; state.fieldScope=scopeId; state.accessScope=scopeId;
+  closeDrawer();
   setView("graph");
 }
 function backToOverview(){
-  state.level="overview"; state.moduleId=null; state.scenarioId=null; state.stepId=null; state.focusId=null; state.selKey=null;
+  state.level="overview"; state.moduleId=null; state.scenarioId=null; state.stepId=null; state.focusId=null; state.selKey=null; state.fieldScope=null; state.accessScope=null;
   closeDrawer();
   renderSidebar(); renderCrumbs();
   if(state.view!=="graph") setView("graph"); else renderGraph();
@@ -2064,6 +2257,108 @@ function edgeTitle(e){
   if(e.kind==="interacts") return scopeTitle(e.from)+" → "+scopeTitle(e.to);
   var t=nodeById[e.to];
   return (e.kind==="reads"?"读取 ":"写入 ")+(t?(t.title||e.to):e.to);
+}
+
+/* ---------- data, fields & access ---------- */
+function knowledgeScopePicker(kind,selected,render){
+  var source=kind==="field"?fieldsByScope:accessByScope;
+  var label=kind==="field"?"字段模块":"访问规则模块";
+  var select=h("select",{class:"filter-input","aria-label":label,on:{change:function(){
+    if(kind==="field") state.fieldScope=this.value||null;
+    else state.accessScope=this.value||null;
+    render();
+  }}},h("option",{value:""},"选择模块"));
+  modules.forEach(function(module){
+    var count=(source[module.scopeId]||[]).length;
+    select.appendChild(h("option",{
+      value:module.scopeId,selected:selected===module.scopeId?"selected":null
+    },scopeTitle(module.scopeId)+" · "+count+" 项"));
+  });
+  return h("div",{class:"filter-row"},h("label",{},label+"：",select));
+}
+function renderFields(){
+  var view=$("view-field");view.textContent="";
+  var allFields=NODES.filter(function(node){return node.kind==="field";});
+  var scopeId=state.fieldScope;
+  var fields=scopeId?(fieldsByScope[scopeId]||[]).slice():[];
+  fields.sort(function(a,b){
+    return ((a.detail||{}).object+" "+a.title)
+      .localeCompare((b.detail||{}).object+" "+b.title);
+  });
+  view.appendChild(h("section",{class:"knowledge-head"},
+    h("h2",{},"数据与字段"),
+    h("p",{},allFields.length+
+      " 个已声明字段。先选择模块缩小范围；也可用全局搜索按字段名定位。敏感字段不显示示例值。")));
+  if(!allFields.length){
+    view.appendChild(h("div",{class:"behavior-empty"},
+      "当前工作树尚未提供可机械解析的字段定义。"));
+    return;
+  }
+  view.appendChild(knowledgeScopePicker("field",scopeId,renderFields));
+  if(!scopeId){
+    view.appendChild(h("div",{class:"behavior-empty"},
+      "请选择一个模块查看字段；未声明字段不会自动补齐。"));
+    return;
+  }
+  if(!fields.length){
+    view.appendChild(h("div",{class:"behavior-empty"},
+      scopeTitle(scopeId)+"尚未声明可机械解析的字段。"));
+    return;
+  }
+  var grid=h("section",{class:"knowledge-grid","aria-label":"字段列表"});
+  fields.forEach(function(node){
+    var d=node.detail||{};
+    grid.appendChild(h("button",{class:"field-card",onclick:function(){openNodeCard(node);}},
+      h("div",{class:"knowledge-title"},
+        h("b",{},node.title),
+        h("span",{class:"knowledge-object"},d.object||"未声明对象")),
+      kvList([["含义",d.meaning||"未声明"],["类型",d.type||"未声明"],
+        ["必填",d.required||"未声明"],["敏感",d.sensitive||"未声明"]])));
+  });
+  view.appendChild(grid);
+}
+function accessDecisionLabel(decision){
+  return decision==="allow"?"允许":decision==="deny"?"拒绝":
+    decision==="not-applicable"?"不适用":
+    decision==="conditional"?"条件允许":"未声明";
+}
+function renderAccess(){
+  var view=$("view-access");view.textContent="";
+  var allRules=NODES.filter(function(node){return node.kind==="permission";});
+  var scopeId=state.accessScope;
+  var rules=scopeId?(accessByScope[scopeId]||[]).slice():[];
+  rules.sort(function(a,b){return a.nodeId.localeCompare(b.nodeId);});
+  view.appendChild(h("section",{class:"knowledge-head"},
+    h("h2",{},"访问与可见性"),
+    h("p",{},allRules.length+
+      " 条已声明访问规则。先选择模块缩小范围；也可用全局搜索按主体或动作定位。四类决策不会合并成单一权限状态。")));
+  if(!allRules.length){
+    view.appendChild(h("div",{class:"behavior-empty"},
+      "当前工作树尚未提供可机械解析的访问规则。"));
+    return;
+  }
+  view.appendChild(knowledgeScopePicker("access",scopeId,renderAccess));
+  if(!scopeId){
+    view.appendChild(h("div",{class:"behavior-empty"},
+      "请选择一个模块查看访问规则；未声明权限不会被视为允许。"));
+    return;
+  }
+  if(!rules.length){
+    view.appendChild(h("div",{class:"behavior-empty"},
+      scopeTitle(scopeId)+"尚未声明可机械解析的访问规则。"));
+    return;
+  }
+  var grid=h("section",{class:"knowledge-grid","aria-label":"访问规则列表"});
+  rules.forEach(function(node){
+    var d=node.detail||{},decision=d.decision||"unknown";
+    grid.appendChild(h("button",{class:"access-rule",onclick:function(){openNodeCard(node);}},
+      h("div",{class:"knowledge-title"},
+        h("b",{},d.subject||"未声明主体"),
+        h("span",{class:"decision "+decision},accessDecisionLabel(decision))),
+      kvList([["动作",d.action||"未声明"],["规则",d.rule||"未声明"],
+        ["模块",scopeTitle(node.scopeId)]])));
+  });
+  view.appendChild(grid);
 }
 
 /* ---------- detail drawer ---------- */
@@ -2143,6 +2438,8 @@ function referenceKind(node){
   if(detail.category==="pageState") return "页面异常";
   if(detail.category==="boundary") return "模块边界";
   if(detail.category==="userFlow") return "业务场景";
+  if(detail.category==="field") return "字段";
+  if(detail.category==="accessRule") return "访问规则";
   return node.kind==="page"?"页面":node.kind;
 }
 function referenceLabel(node){
@@ -2154,6 +2451,9 @@ function navigateToNode(node){
   var detail=node.detail||{};
   if(node.kind==="page"||node.kind==="dataObject"){
     openModule(node.scopeId);focusOn(node.nodeId);openNodeCard(node);applyFocus();return;
+  }
+  if(node.kind==="field"||node.kind==="permission"){
+    setView(node.kind==="field"?"field":"access");openNodeCard(node);return;
   }
   state.moduleId=node.scopeId;
   if(node.kind==="flow"){
@@ -2173,10 +2473,90 @@ function openRequirement(requirementId){
   state.reqFilter="";state.reqHl=requirementId;setView("req");openNodeCard(node);
 }
 
+function pageDisclosure(title,count,content){
+  var details=h("details",{class:"page-context-section"},
+    h("summary",{},h("span",{},title),h("small",{},count+" 项")));
+  details.appendChild(h("div",{class:"page-context-body"},content));
+  return details;
+}
+function pageNodeList(nodes,emptyText){
+  var list=h("div",{class:"page-context-list"});
+  nodes.forEach(function(node){
+    var label=referenceLabel(node);
+    list.appendChild(h("button",{class:"page-context-link",
+        onclick:function(){navigateToNode(node);}},
+      h("b",{},label.title),h("small",{},label.kind+" · "+label.context)));
+  });
+  if(!nodes.length) list.appendChild(h("div",{class:"muted-text"},emptyText));
+  return list;
+}
+function pageContext(page){
+  var detail=page.detail||{};
+  var dataEdges=EDGES.filter(function(edge){
+    return (edge.kind==="reads"||edge.kind==="writes")&&edge.from===page.nodeId;
+  });
+  var objectIds={};
+  dataEdges.forEach(function(edge){objectIds[edge.to]=true;});
+  var fields=NODES.filter(function(node){
+    if(node.kind!=="field"||node.scopeId!==page.scopeId) return false;
+    return Object.keys(objectIds).some(function(id){
+      var object=nodeById[id];
+      return object&&(node.detail||{}).object===object.title;
+    });
+  });
+  var interactions=(interactionStepsByScope[page.scopeId]||[]).filter(function(node){
+    return (node.detail||{}).pageId===page.nodeId;
+  });
+  var steps=(flowPartsByScope[page.scopeId]||[]).filter(function(node){
+    return (node.detail||{}).category==="flowStep"&&
+      (node.detail||{}).pageId===page.nodeId;
+  });
+  var relatedIds={};
+  interactions.forEach(function(node){relatedIds[node.nodeId]=true;});
+  steps.forEach(function(node){relatedIds[node.nodeId]=true;});
+  var impacts=(stateImpactsByScope[page.scopeId]||[]).filter(function(node){
+    var x=node.detail||{};
+    return relatedIds[x.interactionNodeId]||relatedIds[x.stepNodeId];
+  });
+  var states=(pageStatesByScope[page.scopeId]||[]).filter(function(node){
+    var x=node.detail||{};
+    return x.pageId===page.nodeId||arr(x.pageIds).indexOf(page.nodeId)>=0;
+  });
+  var recoveries=interactions.filter(function(node){
+    var value=(node.detail||{}).failureRecovery;
+    return value&&value!=="—"&&value!=="无";
+  });
+  var moduleRules=(accessByScope[page.scopeId]||[]).slice();
+  var destinations=[],seen={};
+  function addDestination(edge,evidence){
+    if(edge.kind!=="navigates") return;
+    var target=nodeById[edge.to];
+    var pageId=target&&target.kind==="page"?target.nodeId:
+      target&&(target.detail||{}).pageId;
+    if(!pageId||pageId===page.nodeId||seen[pageId]||!nodeById[pageId]) return;
+    seen[pageId]=true;
+    destinations.push({page:nodeById[pageId],evidence:evidence});
+  }
+  EDGES.forEach(function(edge){
+    if(edge.from===page.nodeId) addDestination(edge,"来自页面入口契约");
+  });
+  steps.concat(interactions).forEach(function(source){
+    EDGES.forEach(function(edge){
+      if(edge.from===source.nodeId){
+        addDestination(edge,"来自结构化流程成功链路");
+      }
+    });
+  });
+  return {dataEdges:dataEdges,fields:fields,interactions:interactions,steps:steps,
+    impacts:impacts,states:states,recoveries:recoveries,moduleRules:moduleRules,
+    destinations:destinations};
+}
+
 function openNodeCard(n){
   state.selKey="node:"+n.nodeId; if(state.view==="graph") markSelected();
   var labels={
     page:"页面契约 PAGE",dataObject:"数据对象 DATA OBJECT",
+    field:"字段 FIELD",permission:"访问规则 ACCESS RULE",
     requirement:"需求 REQUIREMENT",flow:"行为节点 FLOW",state:"状态 STATE"
   };
   var kindLabel=labels[n.kind]||n.kind;
@@ -2207,19 +2587,106 @@ function openNodeCard(n){
     refSection.appendChild(refList);body.appendChild(refSection);
   }
   if(n.kind==="page"){
-    var meta=h("div",{class:"sec"},h("div",{class:"sec-h"},"页面契约"),
-      kvList([["入口",d.entry],["角色",d.role],["前置",d.precondition]]));
-    body.appendChild(meta);
+    var context=pageContext(n);
+    var destinationText=context.destinations.length?
+      context.destinations.map(function(item){return item.page.title;}).join("、"):
+      "未声明可证明的页面去向";
+    var primary=h("div",{class:"sec page-primary"},
+      h("div",{class:"sec-h"},"先回答：这是什么页面，用户能做什么"),
+      kvList([["入口",d.entry||"未声明"],["适用主体",d.role||"未声明"],
+        ["前置条件",d.precondition||"未声明"],["可证明去向",destinationText]]));
     var acts=arr(d.actions);
     if(acts.length){
       var at=h("table",{class:"act-table"},
         h("thead",{},h("tr",{},h("th",{},"动作"),h("th",{},"结果"))),
         h("tbody",{}));
       var tb=at.querySelector("tbody");
-      acts.forEach(function(a){ tb.appendChild(h("tr",{},h("td",{class:"a"},a.action||"—"),h("td",{},a.result||"—"))); });
-      var asec=h("div",{class:"sec"},h("div",{class:"sec-h"},"动作 → 结果"),at);
-      body.appendChild(asec);
+      acts.forEach(function(a){
+        tb.appendChild(h("tr",{},h("td",{class:"a"},a.action||"—"),
+          h("td",{},a.result||"—")));
+      });
+      primary.appendChild(h("div",{class:"sec-h",style:"margin-top:12px"},"动作 → 结果"));
+      primary.appendChild(at);
+    }else{
+      primary.appendChild(h("div",{class:"muted-text"},"动作：未声明"));
     }
+    if(context.destinations.length){
+      var destinationList=h("div",{class:"page-context-list",style:"margin-top:8px"});
+      context.destinations.forEach(function(item){
+        destinationList.appendChild(h("button",{class:"page-context-link",
+            onclick:function(){navigateToNode(item.page);}},
+          h("b",{},"前往 "+item.page.title),h("small",{},item.evidence)));
+      });
+      primary.appendChild(destinationList);
+    }
+    body.appendChild(primary);
+    var accessBody=h("div",{},
+      h("div",{class:"muted-text"},
+        "页面契约只声明适用主体；模型没有页面到权限规则的显式关系，不能下推为页面访问结论。"));
+    if(context.moduleRules.length){
+      accessBody.appendChild(h("button",{class:"page-context-link",onclick:function(){
+        state.accessScope=n.scopeId;closeDrawer();setView("access");
+      }},h("b",{},"查看本模块访问规则"),
+      h("small",{},"模块级事实，不代表本页授权")));
+    }
+    body.appendChild(pageDisclosure("访问边界（模块级）",
+      context.moduleRules.length,accessBody));
+    var relationBody=h("div",{});
+    var declaration=d.dataDeclaration||"missing";
+    var declarationText=declaration==="mapped"?"已声明页面级读写映射":
+      declaration==="none"?"已确认本页不读写业务数据":
+      declaration==="unparsed"?"页面数据声明不可解析，不能自动建立关系":
+      "页面数据关系尚未声明";
+    relationBody.appendChild(h("div",{class:"declaration-state",dataset:{state:declaration}},
+      declarationText));
+    var dataList=h("div",{class:"page-context-list"});
+    context.dataEdges.forEach(function(edge){
+      var object=nodeById[edge.to];
+      dataList.appendChild(h("button",{class:"page-context-link",
+          onclick:function(){openEdgeCard(edge);}},
+        h("b",{},(edge.kind==="reads"?"读取 ":"写入 ")+(object?object.title:edge.to)),
+        h("small",{},"页面级显式关系")));
+    });
+    if(!context.dataEdges.length){
+      dataList.appendChild(h("div",{class:"muted-text"},
+        declaration==="none"?"本页已明确声明不读写数据。":"未生成页面级数据关系。"));
+    }
+    relationBody.appendChild(dataList);
+    relationBody.appendChild(h("div",{class:"sec-h",style:"margin-top:12px"},
+      "成功后的状态影响"));
+    relationBody.appendChild(pageNodeList(context.impacts,"未声明页面相关状态影响。"));
+    body.appendChild(pageDisclosure("读取、写入与状态",context.dataEdges.length+
+      context.impacts.length,relationBody));
+    var exceptionNodes=context.states.concat(context.recoveries);
+    body.appendChild(pageDisclosure("失败、异常与恢复",exceptionNodes.length,
+      pageNodeList(exceptionNodes,"未声明页面相关边缘状态或交互恢复。")));
+    body.appendChild(pageDisclosure("相关字段",context.fields.length,
+      pageNodeList(context.fields,
+        context.dataEdges.length?"相关数据对象尚未声明字段。":"未建立页面到数据对象的映射，不能推断字段。")));
+    var sourceBody=h("div",{});
+    var sourceSections=sourcesSection(n.sources);
+    sourceSections.forEach(function(section){sourceBody.appendChild(section);});
+    if(!sourceSections.length){
+      sourceBody.appendChild(h("div",{class:"muted-text"},"未声明需求号或来源。"));
+    }
+    body.appendChild(pageDisclosure("需求与来源",sourceSections.length,sourceBody));
+  }
+  if(n.kind==="field"){
+    body.appendChild(h("div",{class:"sec"},
+      h("div",{class:"sec-h"},"字段定义"),
+      kvList([["数据对象",d.object||"未声明"],["含义",d.meaning||"未声明"],
+        ["类型",d.type||"未声明"],["必填",d.required||"未声明"],
+        ["示例",d.exampleRedacted?"敏感字段示例已隐藏":d.example||"未声明"],
+        ["来源",d.declaredSource||"未声明"],["校验",d.validation||"未声明"],
+        ["可编辑",d.editable||"未声明"],["可导出",d.exportable||"未声明"],
+        ["敏感",d.sensitive||"未声明"]])));
+  }
+  if(n.kind==="permission"){
+    body.appendChild(h("div",{class:"sec"},
+      h("div",{class:"sec-h"},"访问规则"),
+      kvList([["主体",d.subject||"未声明"],["动作",d.action||"未声明"],
+        ["结果",accessDecisionLabel(d.decision||"unknown")],
+        ["条件 / 规则",d.rule||"未声明"],["适用模块",scopeTitle(n.scopeId)]])));
   }
   if(n.kind==="flow"){
     if(d.category==="userFlow"){
@@ -2317,7 +2784,9 @@ function openNodeCard(n){
       body.appendChild(cross);
     }
   }
-  sourcesSection(n.sources).forEach(function(x){ body.appendChild(x); });
+  if(n.kind!=="page"){
+    sourcesSection(n.sources).forEach(function(x){ body.appendChild(x); });
+  }
 }
 function openEdgeCard(e){
   state.selKey="edge:"+e.edgeId;
@@ -2546,6 +3015,12 @@ function buildSearchIndex(){
   NODES.forEach(function(n){
     if(n.kind==="page") idx.push({type:"page",label:n.title,sub:scopeTitle(n.scopeId),node:n,scope:n.scopeId});
     else if(n.kind==="dataObject") idx.push({type:"data",label:n.title,sub:scopeTitle(n.scopeId),node:n,scope:n.scopeId});
+    else if(n.kind==="field") idx.push({type:"field",label:n.title,
+      sub:scopeTitle(n.scopeId)+" · "+((n.detail||{}).object||"未声明对象"),
+      node:n,scope:n.scopeId});
+    else if(n.kind==="permission") idx.push({type:"access",label:n.title,
+      sub:scopeTitle(n.scopeId)+" · "+((n.detail||{}).rule||"未声明规则"),
+      node:n,scope:n.scopeId});
     else if(n.kind==="requirement") idx.push({type:"req",label:n.title,
       sub:(n.detail||{}).summary||"未提供摘要",node:n});
     else if(n.kind==="flow"){
@@ -2587,9 +3062,19 @@ function runSearch(q){
 var searchEl=$("search"), resultsEl=$("results"); var activeRes=-1, curResults=[];
 function renderResults(){
   resultsEl.textContent="";
-  if(!curResults.length){ resultsEl.hidden=true; searchEl.setAttribute("aria-expanded","false"); return; }
+  if(!curResults.length){
+    if((searchEl.value||"").trim()){
+      resultsEl.hidden=false;searchEl.setAttribute("aria-expanded","true");
+      resultsEl.appendChild(h("div",{class:"result-empty",role:"status"},
+        "未找到匹配内容"));
+    }else{
+      resultsEl.hidden=true;searchEl.setAttribute("aria-expanded","false");
+    }
+    return;
+  }
   resultsEl.hidden=false; searchEl.setAttribute("aria-expanded","true");
-  var kindLabel={page:"页面",data:"数据",flow:"流程",interaction:"页面操作",stateImpact:"状态影响",
+  var kindLabel={page:"页面",data:"数据",field:"字段",access:"访问规则",
+    flow:"流程",interaction:"页面操作",stateImpact:"状态影响",
     businessState:"状态",pageState:"边缘",boundary:"边界",req:"需求",oq:"OQ",module:"模块"};
   curResults.forEach(function(it,i){
     var b=h("button",{class:"result"+(i===activeRes?" active":""),role:"option",onclick:function(){ chooseResult(it); }},
@@ -2620,6 +3105,8 @@ function chooseResult(it){
     setView((it.type==="flow"||it.type==="interaction"||it.type==="stateImpact")?"flow":
       it.type==="businessState"?"state":"boundary");
     openNodeCard(it.node);
+  }else if(it.type==="field"||it.type==="access"){
+    setView(it.type);openNodeCard(it.node);
   }else if(it.type==="module"){
     openModule(it.scope);
   }else if(it.type==="req"){
@@ -2659,7 +3146,7 @@ window.addEventListener("resize",function(){
   if(state.view==="graph"&&contentBounds) fitView();
   if(state.view==="flow") drawWorkflowLinks($("view-flow"));
 });
-setView("audit");
+setView("explore");
 
 })();
 </script>

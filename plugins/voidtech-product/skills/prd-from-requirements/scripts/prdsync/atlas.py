@@ -37,8 +37,8 @@ from .canonical_store import (
     sha256_of_bytes,
 )
 
-GENERATOR_VERSION = "1.6.0"
-LOGIC_MODEL_SCHEMA_VERSION = 1
+GENERATOR_VERSION = "1.7.0"
+LOGIC_MODEL_SCHEMA_VERSION = 2
 
 WORKTREE_MANIFEST_RELPATH = "prd-worktree.json"
 MATRIX_RELPATH = base_cas.MATRIX_RELPATH
@@ -92,6 +92,10 @@ _DOMAIN_STATE_SUFFIX = ["是否可逆", "通知/日志"]
 _DATA_HEADER = ["数据对象", "操作", "权威来源", "同步方式"]
 _PAGE_DATA_HEADER = ["流程", "步骤ID", "页面", "数据对象", "操作", "需求编号"]
 _INTERACT_HEADER = ["目标模块", "方向", "触发", "失败传播"]
+_FIELD_MARKER = "字段定义（机器可解析）"
+_FIELD_HEADER = ["对象", "字段", "含义", "类型", "必填", "示例", "来源",
+                 "校验规则", "可编辑", "可导出", "敏感"]
+_PERMISSION_MARKER = "权限矩阵"
 _REQ_ID_RE = re.compile(r"\b[A-Z][A-Z0-9]*-\d+\b")
 
 # 内容门步骤（ADR-0005 §10；阻塞性见 test_gate5_atlas.py docstring）。
@@ -441,6 +445,28 @@ def _declared_items(text):
     ]
 
 
+def _access_decision(rule):
+    """把权限矩阵的受控字面值映射为访问结论，不解释任意自然语言。"""
+    value = (rule or "").strip()
+    if value in {"—", "-", "无", "不涉及"}:
+        return "not-applicable"
+    if value in {"✓", "允许", "全部"}:
+        return "allow"
+    if value in {"✗", "禁止", "不允许", "无权限"}:
+        return "deny"
+    return "conditional"
+
+
+def _sensitive_field_state(value):
+    """敏感性只接受受控字面值；未知值必须按敏感处理并进入 gap。"""
+    normalized = (value or "").strip().lower()
+    if normalized in {"是", "敏感", "true", "yes", "✓"}:
+        return "sensitive"
+    if normalized in {"否", "非敏感", "false", "no", "✗"}:
+        return "not-sensitive"
+    return "unknown"
+
+
 def _requirement_summary(text):
     """把规范化需求正文压成可扫描的一句话，不解释或补写业务含义。"""
     value = re.sub(r"[*_`]+", "", text or "")
@@ -667,6 +693,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     nodes, edges, gaps):
     """解析单模块结构化契约，向 nodes/edges/gaps 追加确定性读模型。"""
     page_titles = {}
+    page_nodes = {}
     flow_ids_by_title = {}
     flow_keys_by_exact_title = {}
     flow_steps_by_title = {}
@@ -829,7 +856,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
         source = _module_source(module_scope, _PAGE_MARKER)
         # 真实 PRD 常见「同一页面一行一个动作」——按页面标题合并成一个节点，
         # 动作聚合进 detail.actions，绝不产出重复 nodeId。
-        page_nodes = {}
+        page_nodes.clear()
         for row_index, row in enumerate(rows, 1):
             if len(row) < len(_PAGE_HEADER) or not row[0]:
                 continue
@@ -845,6 +872,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         "entry": entry, "role": row[2],
                         "precondition": row[3], "actions": [],
                         "sharedResults": [],
+                        "dataDeclaration": "missing",
                     },
                 }
                 page_nodes[title] = node
@@ -1769,9 +1797,225 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "status": "original", "sources": [source],
                     "detail": detail})
 
+    field_status, field_header, field_rows = _find_section_table(
+        text, _FIELD_MARKER)
+    field_tables = []
+    if seen_objects and field_status in {"absent", "empty"}:
+        gaps.append({
+            "gapId": f"gap:{module_scope}:fields",
+            "scopeId": module_scope, "kind": "missing-section",
+            "detail": "模块已声明数据对象但缺少机器可解析的字段定义",
+            "backlogRef": None})
+    elif field_status == "ok" and field_header != _FIELD_HEADER:
+        gaps.append({
+            "gapId": f"gap:{module_scope}:fields",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": (
+                "字段定义表头列序不符，无法机械解析: "
+                f"{field_header}"),
+            "backlogRef": None})
+    elif field_status == "ok":
+        field_tables = [field_rows]
+    field_nodes = {}
+    for field_rows in field_tables:
+        for row_index, row in enumerate(field_rows, 1):
+            if (row and row[0].startswith("{")) or (
+                    len(row) > 1 and row[1].startswith("{")):
+                continue
+            if (len(row) < len(_FIELD_HEADER)
+                    or not row[0].strip() or not row[1].strip()):
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:field-row:{row_index}"),
+                    "scopeId": module_scope, "kind": "unparsed",
+                    "detail": (
+                        "字段定义行缺少固定列、对象或字段名，"
+                        f"无法机械解析: {row}"),
+                    "backlogRef": None})
+                continue
+            obj, field_name = row[0], row[1]
+            sensitivity = _sensitive_field_state(row[10])
+            redact_example = sensitivity != "not-sensitive"
+            if sensitivity == "unknown":
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:field-sensitive:"
+                        f"{obj}:{field_name}:{row_index}"),
+                    "scopeId": module_scope, "kind": "unparsed",
+                    "detail": (
+                        f"字段「{obj}.{field_name}」敏感性必须明确填写"
+                        "是或否；示例已按敏感信息隐藏"),
+                    "backlogRef": None})
+            source = _source_with_requirements(
+                module_scope, _FIELD_MARKER, " ".join(row))
+            field_id = f"field:{module_scope}:{obj}:{field_name}"
+            detail = {
+                "category": "field", "object": obj,
+                "meaning": row[2], "type": row[3], "required": row[4],
+                "example": None if redact_example else row[5],
+                "exampleRedacted": redact_example and bool(row[5]),
+                "declaredSource": row[6], "validation": row[7],
+                "editable": row[8], "exportable": row[9],
+                "sensitive": row[10],
+            }
+            existing = field_nodes.get(field_id)
+            if existing is not None:
+                if existing["detail"] == detail:
+                    if source not in existing["sources"]:
+                        existing["sources"].append(source)
+                else:
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:field-conflict:"
+                            f"{obj}:{field_name}:{row_index}"),
+                        "scopeId": module_scope,
+                        "kind": "ambiguous-relation",
+                        "detail": (
+                            f"字段「{obj}.{field_name}」存在冲突定义，"
+                            "保留首条并等待主本裁决"),
+                        "backlogRef": None})
+                continue
+            node = {
+                "nodeId": field_id, "kind": "field",
+                "scopeId": module_scope, "title": field_name,
+                "status": "original", "sources": [source],
+                "detail": detail,
+            }
+            field_nodes[field_id] = node
+            nodes.append(node)
+            obj_id = f"obj:{module_scope}:{obj}"
+            if obj_id in seen_objects:
+                _add_edge({
+                    "edgeId": f"trace:{field_id}:data-object",
+                    "kind": "traces", "from": field_id, "to": obj_id,
+                    "status": "original", "sources": [source],
+                    "detail": {"relation": "field-data-object"}})
+            else:
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:field-object:"
+                        f"{obj}:{field_name}"),
+                    "scopeId": module_scope, "kind": "missing-relation",
+                    "detail": (
+                        f"字段「{obj}.{field_name}」引用未声明数据对象"),
+                    "backlogRef": None})
+
+    permission_status, permission_header, permission_rows = (
+        _find_section_table(text, _PERMISSION_MARKER))
+    structured_module = bool(
+        page_titles or seen_objects or flow_ids_by_title or business_state_nodes)
+    if structured_module and permission_status in {"absent", "empty"}:
+        gaps.append({
+            "gapId": f"gap:{module_scope}:permissions",
+            "scopeId": module_scope, "kind": "missing-section",
+            "detail": "模块缺少权限矩阵，访问与可见性边界待声明",
+            "backlogRef": None})
+    elif permission_status == "ok" and (
+            not permission_header or permission_header[0] != "角色"
+            or len(permission_header) < 2):
+        gaps.append({
+            "gapId": f"gap:{module_scope}:permissions",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": (
+                "权限矩阵必须以「角色」为首列并至少声明一个操作: "
+                f"{permission_header}"),
+            "backlogRef": None})
+    elif permission_status == "ok":
+        assert permission_header is not None
+        has_requirement_column = permission_header[-1] == "需求编号"
+        if not has_requirement_column:
+            gaps.append({
+                "gapId": f"gap:{module_scope}:permission-trace",
+                "scopeId": module_scope, "kind": "missing-source",
+                "detail": (
+                    "权限矩阵缺少固定末列「需求编号」；访问规则保留模块来源，"
+                    "但无法进入需求反向索引"),
+                "backlogRef": None})
+        actions = permission_header[
+            1:-1 if has_requirement_column else len(permission_header)]
+        if not actions:
+            gaps.append({
+                "gapId": f"gap:{module_scope}:permissions",
+                "scopeId": module_scope, "kind": "unparsed",
+                "detail": "权限矩阵至少需要一个操作列",
+                "backlogRef": None})
+        permission_nodes = {}
+        conflicted_permissions = set()
+        for row_index, row in enumerate(permission_rows, 1):
+            if not row or not row[0] or row[0].startswith("{"):
+                continue
+            role = row[0]
+            declared_requirement = (
+                row[-1].strip() if has_requirement_column
+                and len(row) == len(permission_header) else "")
+            permission_source = (
+                _source_with_requirements(
+                    module_scope, _PERMISSION_MARKER, declared_requirement)
+                if has_requirement_column
+                else _module_source(module_scope, _PERMISSION_MARKER))
+            if (has_requirement_column and not
+                    permission_source.get("requirementIds")
+                    and declared_requirement not in {"无", "不涉及"}):
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:permission-trace:{row_index}"),
+                    "scopeId": module_scope, "kind": "missing-source",
+                    "detail": (
+                        f"角色「{role}」的访问规则缺少有效需求编号"),
+                    "backlogRef": None})
+            for action_index, action in enumerate(actions, 1):
+                if action_index >= len(row):
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:permission:"
+                            f"{row_index}:{action_index}"),
+                        "scopeId": module_scope, "kind": "unparsed",
+                        "detail": (
+                            f"角色「{role}」缺少操作「{action}」的访问规则"),
+                        "backlogRef": None})
+                    continue
+                rule = row[action_index].strip()
+                if not action or not rule:
+                    continue
+                permission_id = (
+                    f"permission:{module_scope}:{role}:{action}")
+                detail = {
+                    "category": "accessRule", "subject": role,
+                    "action": action, "rule": rule,
+                    "decision": _access_decision(rule),
+                }
+                existing = permission_nodes.get(permission_id)
+                if existing is not None:
+                    if existing["detail"] != detail:
+                        conflicted_permissions.add(permission_id)
+                        gaps.append({
+                            "gapId": (
+                                f"gap:{module_scope}:permission-conflict:"
+                                f"{role}:{action}:{row_index}"),
+                            "scopeId": module_scope,
+                            "kind": "ambiguous-relation",
+                            "detail": (
+                                f"访问规则「{role} × {action}」存在冲突定义，"
+                                "未生成已裁决权限"),
+                            "backlogRef": None})
+                    elif permission_source not in existing["sources"]:
+                        existing["sources"].append(permission_source)
+                    continue
+                permission_nodes[permission_id] = {
+                    "nodeId": permission_id, "kind": "permission",
+                    "scopeId": module_scope,
+                    "title": f"{role} · {action}",
+                    "status": "original",
+                    "sources": [permission_source],
+                    "detail": detail,
+                }
+        nodes.extend(
+            node for permission_id, node in permission_nodes.items()
+            if permission_id not in conflicted_permissions)
+
     mapping_status, mapping_header, mapping_rows = _find_section_table(
         text, _PAGE_DATA_MARKER)
-    if page_titles and seen_objects and mapping_status == "absent":
+    if page_titles and mapping_status in {"absent", "empty"}:
         gaps.append({
             "gapId": f"gap:{module_scope}:page-data-rw",
             "scopeId": module_scope, "kind": "missing-relation",
@@ -1779,8 +2023,10 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 "页面与数据对象的读写关系未声明；现有数据表只能证明"
                 "模块级读写，不可下推到具体页面"),
             "backlogRef": None})
-    elif (page_titles and seen_objects and mapping_status == "ok"
+    elif (page_titles and mapping_status == "ok"
           and mapping_header != _PAGE_DATA_HEADER):
+        for page in page_nodes.values():
+            page["detail"]["dataDeclaration"] = "unparsed"
         gaps.append({
             "gapId": f"gap:{module_scope}:page-data-rw",
             "scopeId": module_scope, "kind": "unparsed",
@@ -1788,19 +2034,95 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 "页面数据读写表头列序不符，无法机械解析: "
                 f"{mapping_header}"),
             "backlogRef": None})
-    elif page_titles and seen_objects and mapping_status == "ok":
+    elif page_titles and mapping_status == "ok":
         parsed_mapping_count = 0
         mapped_page_ids = set()
+        none_page_ids = set()
+        unparsed_page_ids = set()
         assert mapping_header is not None
         for row_index, row in enumerate(mapping_rows, 1):
-            if len(row) < len(_PAGE_DATA_HEADER) or not row[0]:
+            page_title = row[2].strip() if len(row) > 2 else ""
+            page_id = page_titles.get(page_title)
+            if (len(row) < len(_PAGE_DATA_HEADER)
+                    or any(not cell.strip() for cell in row[:5])):
+                if page_id is not None:
+                    page_nodes[page_title]["detail"][
+                        "dataDeclaration"] = "unparsed"
+                    unparsed_page_ids.add(page_id)
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:page-data-rw:{row_index}"),
+                    "scopeId": module_scope, "kind": "unparsed",
+                    "detail": (
+                        "页面数据读写行缺少必填列，无法机械解析: "
+                        f"{row}"),
+                    "backlogRef": None,
+                    "context": {
+                        "pageTitle": page_title or None,
+                        "flowTitle": row[0].strip() if row else None,
+                        "stepId": row[1].strip() if len(row) > 1 else None}})
                 continue
             flow_title, step_id, page_title, obj, op = row[:5]
+            page_id = page_titles.get(page_title)
+            explicit_none = (
+                obj.strip() in {"不涉及", "无"}
+                and op.strip() in {"不涉及", "无"})
+            none_scope = (
+                flow_title.strip() in {"不涉及", "无"}
+                and step_id.strip() in {"不涉及", "无"})
+            if explicit_none:
+                if not none_scope:
+                    if page_id is not None:
+                        page_nodes[page_title]["detail"][
+                            "dataDeclaration"] = "unparsed"
+                        unparsed_page_ids.add(page_id)
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:page-data-rw:{row_index}"),
+                        "scopeId": module_scope, "kind": "unparsed",
+                        "detail": (
+                            "页面级「不涉及」必须同时使用"
+                            "流程=不涉及、步骤ID=不涉及"),
+                        "backlogRef": None})
+                    continue
+                if page_id is None:
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:page-data-rw:{row_index}"),
+                        "scopeId": module_scope, "kind": "unparsed",
+                        "detail": (
+                            "页面数据读写「不涉及」声明引用不存在页面: "
+                            f"{page_title}"),
+                        "backlogRef": None})
+                    continue
+                if page_id in mapped_page_ids:
+                    page_nodes[page_title]["detail"][
+                        "dataDeclaration"] = "unparsed"
+                    unparsed_page_ids.add(page_id)
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:page-data-rw:{row_index}"),
+                        "scopeId": module_scope,
+                        "kind": "ambiguous-relation",
+                        "detail": (
+                            f"页面「{page_title}」同时声明数据读写和"
+                            "「不涉及」，无法确定"),
+                        "backlogRef": None})
+                    continue
+                declaration_source = _source_with_requirements(
+                    module_scope, _PAGE_DATA_MARKER, " ".join(row))
+                if declaration_source not in page_nodes[page_title]["sources"]:
+                    page_nodes[page_title]["sources"].append(declaration_source)
+                if page_id not in unparsed_page_ids:
+                    page_nodes[page_title]["detail"]["dataDeclaration"] = "none"
+                none_page_ids.add(page_id)
+                parsed_mapping_count += 1
+                continue
+
             flow_key = _flow_title_key(flow_title)
             flow_id = flow_ids_by_title.get(flow_key)
             step_node_id = (
                 flow_steps_by_title.get(flow_key, {}).get(step_id))
-            page_id = page_titles.get(page_title)
             obj_id = f"obj:{module_scope}:{obj}"
             reasons = []
             if flow_id is None:
@@ -1821,7 +2143,14 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     reasons.append(
                         f"模块级数据契约未声明{kind == 'reads' and '读' or '写'}: "
                         f"{obj}")
+            if page_id in none_page_ids:
+                reasons.append(
+                    f"页面「{page_title}」已声明数据读写不涉及")
             if reasons:
+                if page_id is not None:
+                    page_nodes[page_title]["detail"][
+                        "dataDeclaration"] = "unparsed"
+                    unparsed_page_ids.add(page_id)
                 gaps.append({
                     "gapId": (
                         f"gap:{module_scope}:page-data-rw:{row_index}"),
@@ -1842,30 +2171,37 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         **contract, "relation": "page-data",
                         "flowTitle": flow_title, "flowId": flow_id,
                         "stepId": step_id, "stepNodeId": step_node_id}})
+            if page_id not in unparsed_page_ids:
+                page_nodes[page_title]["detail"]["dataDeclaration"] = "mapped"
             mapped_page_ids.add(page_id)
             parsed_mapping_count += 1
         if not parsed_mapping_count:
+            has_invalid_rows = bool(mapping_rows)
             gaps.append({
                 "gapId": f"gap:{module_scope}:page-data-rw",
-                "scopeId": module_scope, "kind": "missing-relation",
-                "detail": "页面数据读写表没有可验证的数据行",
+                "scopeId": module_scope,
+                "kind": "unparsed" if has_invalid_rows else "missing-relation",
+                "detail": (
+                    "页面数据读写表没有可解析的数据行"
+                    if has_invalid_rows else
+                    "页面数据读写表没有声明数据行"),
                 "backlogRef": None})
-        else:
-            for page_title, page_id in sorted(page_titles.items()):
-                if page_id in mapped_page_ids:
-                    continue
-                gaps.append({
-                    "gapId": (
-                        f"gap:{module_scope}:page-data-rw:{page_title}"),
-                    "scopeId": module_scope,
-                    "kind": "missing-relation",
-                    "detail": (
-                        f"页面「{page_title}」尚未声明任何数据读写关系；"
-                        "模块级数据契约不可直接下推"),
-                    "backlogRef": None,
-                    "context": {
-                        "pageTitle": page_title,
-                        "flowTitle": None}})
+        for page_title, page_id in sorted(page_titles.items()):
+            if (page_id in mapped_page_ids or page_id in none_page_ids
+                    or page_id in unparsed_page_ids):
+                continue
+            gaps.append({
+                "gapId": (
+                    f"gap:{module_scope}:page-data-rw:{page_title}"),
+                "scopeId": module_scope,
+                "kind": "missing-relation",
+                "detail": (
+                    f"页面「{page_title}」尚未声明任何数据读写关系；"
+                    "模块级数据契约不可直接下推"),
+                "backlogRef": None,
+                "context": {
+                    "pageTitle": page_title,
+                    "flowTitle": None}})
 
     status, header, rows = _find_section_table(text, _INTERACT_MARKER)
     if status == "absent":
@@ -2013,6 +2349,9 @@ def _compile_model(root):
     coverage = {
         "moduleCount": len(module_scopes),
         "pageCount": len([n for n in nodes if n["kind"] == "page"]),
+        "fieldCount": len([n for n in nodes if n["kind"] == "field"]),
+        "permissionCount": len([
+            n for n in nodes if n["kind"] == "permission"]),
         "flowCount": len([
             n for n in nodes
             if n["kind"] == "flow"
@@ -2377,7 +2716,7 @@ def gate_requirements(root):
 # ---------------------------------------------------------------- 证明继承
 
 def proof_inherits(previous_proof, current_env):
-    """七个继承键全部**存在、非空且相等**才继承（纯函数、不读文件；ADR-0005 §8）。
+    """八个继承键全部**存在、非空且相等**才继承（纯函数、不读文件；ADR-0005 §8）。
 
     缺键不允许按 None == None 空洞通过——空证明对空环境不构成任何验证证据。
     """
@@ -2391,7 +2730,7 @@ def proof_inherits(previous_proof, current_env):
 
 # ---------------------------------------------------------------- 渲染器验证环境
 
-# 渲染器验证证明的继承环境（ADR-0005 §8）：七个继承键任一变化都使已提交的
+# 渲染器验证证明的继承环境（ADR-0005 §8）：八个继承键任一变化都使已提交的
 # 浏览器验证证明失效。版本常量只在对应事实变化时手工递增：
 # - RENDERER_VERSION：HTML/Markdown 渲染语义变化（viewer 模板即资产本体，
 #   assetDigest 已覆盖模板字节 + 渲染源码，这里表达「有意的行为版本」）。
@@ -2399,9 +2738,9 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "8.4.0"
+RENDERER_VERSION = "9.0.0"
 BROWSER_MATRIX_VERSION = "2026-07"
-VALIDATION_HARNESS_VERSION = "8.3.0"
+VALIDATION_HARNESS_VERSION = "9.0.0"
 
 _FIXTURE_MODULE = "01-portal/01-module"
 _FIXTURE_MODULE_B = "01-portal/02-module"
@@ -2435,6 +2774,10 @@ def _fixture_model():
     boundary_src = _fixture_source(f"{_FIXTURE_MODULE}/prd.md", _BOUNDARY_MARKER)
     impact_src = _fixture_source(f"{_FIXTURE_MODULE}/prd.md", _IMPACT_MARKER)
     impact_src["requirementIds"] = ["REQ-100"]
+    field_src = _fixture_source(f"{_FIXTURE_MODULE}/prd.md", _FIELD_MARKER)
+    field_src["requirementIds"] = ["REQ-100"]
+    permission_src = _fixture_source(
+        f"{_FIXTURE_MODULE}/prd.md", _PERMISSION_MARKER)
     home_id = f"page:{_FIXTURE_MODULE}:{_FIXTURE_HOME_TITLE}"
     probe_id = f"page:{_FIXTURE_MODULE}:{_FIXTURE_PROBE_TITLE}"
     object_id = f"obj:{_FIXTURE_MODULE}:{_FIXTURE_OBJECT_TITLE}"
@@ -2455,6 +2798,9 @@ def _fixture_model():
     active_state_id = f"state:{_FIXTURE_MODULE}:订单:处理中"
     done_state_id = f"state:{_FIXTURE_MODULE}:订单:已完成"
     impact_id = f"stateimpact:{_FIXTURE_MODULE}:查看订单详情:S2:订单"
+    field_id = f"field:{_FIXTURE_MODULE}:订单:订单编号"
+    allow_permission_id = f"permission:{_FIXTURE_MODULE}:会员:查看"
+    deny_permission_id = f"permission:{_FIXTURE_MODULE}:访客:查看"
 
     scopes = [
         {"scopeId": WORKTREE_SCOPE_ID, "kind": "worktree",
@@ -2470,16 +2816,35 @@ def _fixture_model():
         {"nodeId": object_id, "kind": "dataObject", "scopeId": _FIXTURE_MODULE,
          "title": _FIXTURE_OBJECT_TITLE, "status": "original",
          "sources": [data_src], "detail": {"authoritativeSource": "领域规格"}},
+        {"nodeId": field_id, "kind": "field", "scopeId": _FIXTURE_MODULE,
+         "title": "订单编号", "status": "original", "sources": [field_src],
+         "detail": {
+             "category": "field", "object": "订单", "meaning": "订单唯一标识",
+             "type": "文本", "required": "是", "example": "ORDER-100",
+             "exampleRedacted": False, "declaredSource": "订单系统",
+             "validation": "不可重复", "editable": "否", "exportable": "是",
+             "sensitive": "否"}},
+        {"nodeId": allow_permission_id, "kind": "permission",
+         "scopeId": _FIXTURE_MODULE, "title": "会员 · 查看",
+         "status": "original", "sources": [permission_src],
+         "detail": {"category": "accessRule", "subject": "会员",
+                    "action": "查看", "rule": "✓", "decision": "allow"}},
+        {"nodeId": deny_permission_id, "kind": "permission",
+         "scopeId": _FIXTURE_MODULE, "title": "访客 · 查看",
+         "status": "original", "sources": [permission_src],
+         "detail": {"category": "accessRule", "subject": "访客",
+                    "action": "查看", "rule": "✗", "decision": "deny"}},
         {"nodeId": home_id, "kind": "page", "scopeId": _FIXTURE_MODULE,
          "title": _FIXTURE_HOME_TITLE, "status": "original",
          "sources": [page_src],
          "detail": {"entry": "-", "role": "会员", "precondition": "已登录",
+                    "dataDeclaration": "mapped",
                     "actions": [{"action": "打开详情", "result": "跳转详情页"}]}},
         {"nodeId": probe_id, "kind": "page", "scopeId": _FIXTURE_MODULE,
          "title": _FIXTURE_PROBE_TITLE, "status": "original",
          "sources": [page_src],
          "detail": {"entry": _FIXTURE_HOME_TITLE, "role": "会员",
-                    "precondition": "已登录",
+                    "precondition": "已登录", "dataDeclaration": "missing",
                     "actions": [{"action": "查看", "result": "展示订单"}]}},
         {"nodeId": flow_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
          "title": "查看订单详情", "status": "original", "sources": [flow_src],
@@ -2615,6 +2980,13 @@ def _fixture_model():
          "kind": "reads", "from": _FIXTURE_MODULE, "to": object_id,
          "status": "original", "sources": [data_src],
          "detail": {"authoritativeSource": "领域规格", "syncMethod": "实时"}},
+        {"edgeId": f"reads:{home_id}:订单:查看订单详情:S1",
+         "kind": "reads", "from": home_id, "to": object_id,
+         "status": "original", "sources": [data_src],
+         "detail": {"authoritativeSource": "领域规格", "syncMethod": "实时",
+                    "relation": "page-data", "flowTitle": "查看订单详情",
+                    "flowId": flow_id, "stepId": "S1",
+                    "stepNodeId": step1_id}},
         {"edgeId": f"writes:{_FIXTURE_MODULE}:{_FIXTURE_OBJECT_TITLE}",
          "kind": "writes", "from": _FIXTURE_MODULE, "to": object_id,
          "status": "original", "sources": [data_src],
@@ -2682,6 +3054,10 @@ def _fixture_model():
         {"edgeId": f"trace:{page_state_id}:interaction", "kind": "traces",
          "from": page_state_id, "to": interaction1_id, "status": "original",
          "sources": [flow_src], "detail": {"relation": "page-state-interaction"}},
+        {"edgeId": f"trace:{field_id}:data-object",
+         "kind": "traces", "from": field_id, "to": object_id,
+         "status": "original", "sources": [field_src],
+         "detail": {"relation": "field-data-object"}},
         {"edgeId": f"transition:{_FIXTURE_MODULE}:订单:处理中->已完成",
          "kind": "transition", "from": active_state_id, "to": done_state_id,
          "status": "original", "sources": [state_src],
@@ -2732,7 +3108,8 @@ def _fixture_model():
         "edges": edges,
         "gaps": gaps,
         "coverage": {
-            "moduleCount": 2, "pageCount": 2, "flowCount": 1,
+            "moduleCount": 2, "pageCount": 2, "fieldCount": 1,
+            "permissionCount": 2, "flowCount": 1,
             "pageStateCount": 1, "businessStateCount": 2, "boundaryCount": 1,
             "stateImpactCount": 1,
             "interactionCount": 4,

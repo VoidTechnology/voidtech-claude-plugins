@@ -78,7 +78,7 @@ class CompileTest(unittest.TestCase):
         model = atlas.compile(self.root)
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
-        self.assertEqual(model["generatorVersion"], "1.6.0")
+        self.assertEqual(model["generatorVersion"], "1.7.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -88,6 +88,193 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(len(requirements), 6)
         edge_kinds = {e["kind"] for e in model["edges"]}
         self.assertTrue({"reads", "writes", "interacts"} <= edge_kinds)
+
+    def test_compiles_fields_and_access_rules_without_exposing_sensitive_examples(self):
+        contracts = """
+
+### 7.0.2 字段定义（机器可解析）
+
+| 对象 | 字段 | 含义 | 类型 | 必填 | 示例 | 来源 | 校验规则 | 可编辑 | 可导出 | 敏感 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 客户 | 客户名称 | 对外展示名称 | 文本 | 是 | 示例客户 | TST-001 | 非空 | 是 | 是 | 否 |
+| 客户 | 联系电话 | 联系号码 | 文本 | 是 | 13800000000 | TST-002 | 手机号格式 | 是 | 否 | 是 |
+
+## 8. 权限矩阵
+
+| 角色 | 查看 | 编辑 | 查看敏感信息 | 导出 | 需求编号 |
+|---|---|---|---|---|---|
+| 管理员 | ✓ | 按负责客户 | ✗ | 无 | TST-003 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        fields = [node for node in model["nodes"] if node["kind"] == "field"]
+        self.assertEqual({node["title"] for node in fields},
+                         {"客户名称", "联系电话"})
+        phone = next(node for node in fields if node["title"] == "联系电话")
+        self.assertIsNone(phone["detail"]["example"])
+        self.assertTrue(phone["detail"]["exampleRedacted"])
+        self.assertEqual(phone["sources"][0]["requirementIds"], ["TST-002"])
+        self.assertTrue(any(
+            edge["kind"] == "traces"
+            and edge["from"] == phone["nodeId"]
+            and edge["to"] == "obj:01-test-system/01-module-a:客户"
+            for edge in model["edges"]))
+
+        rules = [
+            node for node in model["nodes"] if node["kind"] == "permission"]
+        self.assertEqual(
+            {(node["detail"]["action"], node["detail"]["decision"])
+             for node in rules},
+            {("查看", "allow"), ("编辑", "conditional"),
+             ("查看敏感信息", "deny"), ("导出", "not-applicable")})
+        self.assertTrue(all(
+            node["sources"][0]["requirementIds"] == ["TST-003"]
+            for node in rules))
+        self.assertEqual(model["coverage"]["fieldCount"], 2)
+        self.assertEqual(model["coverage"]["permissionCount"], 4)
+
+    def test_sensitive_field_unknown_value_is_redacted_and_reported(self):
+        contracts = """
+
+### 7.0.2 字段定义（机器可解析）
+
+| 对象 | 字段 | 含义 | 类型 | 必填 | 示例 | 来源 | 校验规则 | 可编辑 | 可导出 | 敏感 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 客户 | 联系电话 | 联系号码 | 文本 | 是 | 13800000000 | TST-002 | 手机号格式 | 是 | 否 | 是（手机号） |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        phone = next(
+            node for node in model["nodes"]
+            if node["kind"] == "field" and node["title"] == "联系电话")
+        self.assertIsNone(phone["detail"]["example"])
+        self.assertTrue(phone["detail"]["exampleRedacted"])
+        self.assertTrue(any(
+            gap["kind"] == "unparsed"
+            and "敏感性必须明确填写" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_field_table_outside_declared_section_is_not_compiled(self):
+        appendix = """
+
+## 99. 附录（非机器契约）
+
+| 对象 | 字段 | 含义 | 类型 | 必填 | 示例 | 来源 | 校验规则 | 可编辑 | 可导出 | 敏感 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 客户 | 附录字段 | 不是正式声明 | 文本 | 否 | 示例 | TST-001 | 无 | 否 | 否 | 否 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + appendix)
+
+        model = atlas.compile(self.root)
+        self.assertFalse(any(
+            node["kind"] == "field" and node["title"] == "附录字段"
+            for node in model["nodes"]))
+        self.assertTrue(any(
+            gap["gapId"].endswith(":fields")
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_malformed_field_row_is_an_explicit_gap(self):
+        contracts = """
+
+### 7.0.2 字段定义（机器可解析）
+
+| 对象 | 字段 | 含义 | 类型 | 必填 | 示例 | 来源 | 校验规则 | 可编辑 | 可导出 | 敏感 |
+|---|---|---|---|---|---|---|---|---|---|---|
+|  | 联系电话 | 联系号码 | 文本 | 是 | 13800000000 | TST-002 | 手机号格式 | 是 | 否 | 是 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        self.assertFalse(any(
+            node["kind"] == "field" for node in model["nodes"]))
+        self.assertTrue(any(
+            gap["kind"] == "unparsed"
+            and "字段定义行缺少" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_permission_conditions_and_conflicts_fail_closed(self):
+        contracts = """
+
+## 8. 权限矩阵
+
+| 角色 | 查看 | 编辑 | 需求编号 |
+|---|---|---|---|
+| 管理员 | 允许（仅本机构） | ✓ | TST-003 |
+| 管理员 | 拒绝 |  | TST-004 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        rules = {
+            node["detail"]["action"]: node
+            for node in model["nodes"] if node["kind"] == "permission"
+        }
+        self.assertNotIn("查看", rules)
+        self.assertEqual(rules["编辑"]["detail"]["decision"], "allow")
+        self.assertTrue(any(
+            gap["kind"] == "ambiguous-relation"
+            and "管理员 × 查看" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_legacy_permission_matrix_reports_missing_requirement_trace(self):
+        contracts = """
+
+## 8. 权限矩阵
+
+| 角色 | 查看 |
+|---|---|
+| 管理员 | ✓ |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        rule = next(
+            node for node in model["nodes"]
+            if node["kind"] == "permission")
+        self.assertEqual(rule["sources"][0]["requirementIds"], [])
+        self.assertTrue(any(
+            gap["gapId"].endswith(":permission-trace")
+            and gap["kind"] == "missing-source"
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_permission_requirement_ids_only_come_from_fixed_last_column(self):
+        contracts = """
+
+## 8. 权限矩阵
+
+| 角色 | 查看 | 需求编号 |
+|---|---|---|
+| 管理员 | 仅 TST-003 对象 |  |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        rule = next(
+            node for node in model["nodes"]
+            if node["kind"] == "permission")
+        self.assertEqual(rule["sources"][0]["requirementIds"], [])
+        self.assertTrue(any(
+            gap["gapId"].endswith(":permission-trace:1")
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_schema_rejects_field_or_permission_without_detail(self):
+        model = atlas.compile(self.root)
+        source = model["nodes"][0]["sources"]
+        model["nodes"].append({
+            "nodeId": "permission:broken",
+            "kind": "permission",
+            "scopeId": "01-test-system/01-module-a",
+            "title": "损坏规则",
+            "status": "original",
+            "sources": source,
+            "detail": None,
+        })
+
+        errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
+        self.assertTrue(any("oneOf matched 0" in error for error in errors), errors)
+
     def test_requirement_nodes_include_deterministic_human_summary(self):
         model = atlas.compile(self.root)
         requirement = next(
@@ -103,6 +290,103 @@ class CompileTest(unittest.TestCase):
         self.assertTrue(any(
             gap["kind"] == "missing-relation"
             and "页面与数据对象的读写关系未声明" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+        page = next(
+            node for node in model["nodes"]
+            if node["nodeId"] ==
+            "page:01-test-system/01-module-a:客户列表页")
+        self.assertEqual(page["detail"]["dataDeclaration"], "missing")
+
+    def test_page_data_explicit_none_is_distinct_from_missing(self):
+        mapping = """
+
+### 7.0.1 页面数据读写（机器可解析）
+
+| 流程 | 步骤ID | 页面 | 数据对象 | 操作 | 需求编号 |
+|---|---|---|---|---|---|
+| 不涉及 | 不涉及 | 客户列表页 | 不涉及 | 无 | TST-001 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + mapping)
+
+        model = atlas.compile(self.root)
+        page = next(
+            node for node in model["nodes"]
+            if node["nodeId"] ==
+            "page:01-test-system/01-module-a:客户列表页")
+        self.assertEqual(page["detail"]["dataDeclaration"], "none")
+        declaration_source = next(
+            source for source in page["sources"]
+            if source.get("anchor") == "页面数据读写（机器可解析）")
+        self.assertEqual(declaration_source["requirementIds"], ["TST-001"])
+        self.assertFalse(any(
+            gap["gapId"].endswith(":page-data-rw:客户列表页")
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_page_data_none_requires_page_level_scope_sentinel(self):
+        mapping = """
+
+### 7.0.1 页面数据读写（机器可解析）
+
+| 流程 | 步骤ID | 页面 | 数据对象 | 操作 | 需求编号 |
+|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 不涉及 | 无 | TST-001 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + mapping)
+
+        model = atlas.compile(self.root)
+        page = next(
+            node for node in model["nodes"]
+            if node["nodeId"] ==
+            "page:01-test-system/01-module-a:客户列表页")
+        self.assertEqual(page["detail"]["dataDeclaration"], "unparsed")
+        self.assertTrue(any(
+            gap["kind"] == "unparsed"
+            and "流程=不涉及" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
+
+    def test_invalid_page_data_row_is_distinct_from_missing(self):
+        mapping = """
+
+### 7.0.1 页面数据读写（机器可解析）
+
+| 流程 | 步骤ID | 页面 | 数据对象 | 操作 | 需求编号 |
+|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 未声明对象 | 读 | TST-001 |
+| 查看客户详情 | S1 | 客户列表页 | 客户 | 读 | TST-001 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + mapping)
+
+        model = atlas.compile(self.root)
+        page = next(
+            node for node in model["nodes"]
+            if node["nodeId"] ==
+            "page:01-test-system/01-module-a:客户列表页")
+        self.assertEqual(page["detail"]["dataDeclaration"], "unparsed")
+        self.assertTrue(any(
+            edge["kind"] == "reads"
+            and edge["from"] == page["nodeId"]
+            for edge in model["edges"]))
+
+    def test_incomplete_page_data_row_marks_known_page_unparsed(self):
+        mapping = """
+
+### 7.0.1 页面数据读写（机器可解析）
+
+| 流程 | 步骤ID | 页面 | 数据对象 | 操作 | 需求编号 |
+|---|---|---|---|---|---|
+|  | S1 | 客户列表页 | 客户 | 读 | TST-001 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + mapping)
+
+        model = atlas.compile(self.root)
+        page = next(
+            node for node in model["nodes"]
+            if node["nodeId"] ==
+            "page:01-test-system/01-module-a:客户列表页")
+        self.assertEqual(page["detail"]["dataDeclaration"], "unparsed")
+        self.assertTrue(any(
+            gap["kind"] == "unparsed"
+            and "缺少必填列" in gap["detail"]
             for gap in model["gaps"]), model["gaps"])
 
     def test_multi_action_page_row_preserves_shared_result_without_guessing(self):
