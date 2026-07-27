@@ -120,7 +120,18 @@ prd/
 
 校验失败时不产出「最新可用」的成功状态，也不以旧版 Atlas 冒充当前结果。operation 校验失败时旧 Atlas 仍对应上一次有效视图，不算过期；HTML 永远自述生成快照摘要，不静态宣称「当前最新」。带外修改导致摘要过期时，只读检查器返回失败并报告 stale；替换入口的失败/过期页由显式写入 operation 产生，检查器不写任何文件。
 
-机械覆盖与内容成熟度分开展示。存在一张表只说明结构可解析，不代表逻辑正确；Atlas 顶部同时展示覆盖数、缺失数、未解析引用、关联 OQ、当前深度和机械信号，避免可疑绿灯。fail closed 挡住的是编造的引用，挡不住主本本身的内容缺陷——后者依赖 PRD 侧的独立核验流程。
+机械覆盖与内容成熟度分开展示。存在一张表只说明结构可解析，不代表逻辑正确；「质量与来源」分别展示机械覆盖、内容深度、未解决缺口和快照标识，模块行另列结构化程度、流程深化比例与缺口数，避免可疑绿灯。fail closed 挡住的是编造的引用，挡不住主本本身的内容缺陷——后者依赖 PRD 侧的独立核验流程。
+
+### 7.1 人类阅读入口与渐进披露
+
+Atlas 的模型必须完整，但默认界面不能把全部模型密度直接交给读者。阅读入口按任务组织：
+
+1. 默认「探索」页回答从哪里开始、可以查什么、当前哪些信息仍缺失。
+2. 场景流程把流程失败、页面边缘状态、交互失败恢复和成功后的状态影响分成四类事实；状态影响不得伪装成异常。
+3. 页面首屏只展示入口、适用主体、前置条件、动作结果与可证明去向；数据、状态、异常、字段和来源渐进展开。权限没有页面级显式关系时，只允许跳到标明「模块级事实，不代表本页授权」的规则列表，不按角色同名下推。
+4. 字段与访问规则进入 Logic Model schema v2 的 `field` / `permission` 节点，继续服从来源、缺失与不猜测约束。
+5. 端到端旅程只有在现有 `shares` / `owns` / `canonicalId` 或显式跨模块页面引用足以证明完整链路时才生成；证据不足显示空状态，不以标题相似度缝合。
+6. 审计页分别展示机械覆盖、内容深度、缺口和新鲜度，不聚合成单一健康分数。
 
 ### 8. 渲染、静态检查与渲染器验证证明
 
@@ -289,7 +300,7 @@ Atlas 状态不压成一个布尔值，分维度报告：
 - 单条 OQ 定案的收尾在分钟内完成；Atlas 编译与渲染秒级；超预算才引入模块级增量编译。
 - 自然化后编号、术语、数值、来源集合与处理前一致，不满足时自动回退原文；自然化不可用时维护正常完成，仅提示文案未润色。
 - PRD 内容变化不触发浏览器验证；渲染器、schema 或前端资产变化且无对应验证证明时，插件不能发布、新渲染器不能投入使用。
-- Atlas 状态按六个维度分别展示，不以单一绿灯呈现。
+- Atlas 质量按机械覆盖、内容深度、缺口和新鲜度分别展示，不以单一绿灯呈现。
 
 ## 明确不做
 
@@ -305,10 +316,10 @@ Atlas 状态不压成一个布尔值，分维度报告：
 - `docs/decisions/0004-prd-source-sync-and-requirement-identity.md`（需求身份、ledger 与同步流程；本 ADR 由其初版拆分而来）
 - `docs/decisions/0002-rename-core-skills.md`（公共命令与公共契约的命名登记）
 - `docs/decisions/0007-voidtech-suite-plugin-architecture.md`（Logic Atlas 升级为 Core Suite Atlas、Product 输出领域 Fragment 的上位决策）
-- `plugins/voidtech-core/skills/prd-from-requirements/SKILL.md`
-- `plugins/voidtech-core/skills/prd-maintain/SKILL.md`
+- `plugins/voidtech-product/skills/prd-from-requirements/SKILL.md`
+- `plugins/voidtech-product/skills/prd-maintain/SKILL.md`
 - `plugins/voidtech-core/skills/text-naturalizer/SKILL.md`
-- `plugins/voidtech-core/skills/prd-from-requirements/templates/module-prd.md`
+- `plugins/voidtech-product/skills/prd-from-requirements/templates/module-prd.md`
 
 ## 变更记录
 
@@ -324,3 +335,4 @@ Atlas 状态不压成一个布尔值，分维度报告：
 | 2026-07-22 | 终审修正：无浏览器场景的 Atlas 标记从「内容最新、使用已验证渲染器生成」改为「生成快照摘要及渲染器验证状态」 | 终审要求 Atlas 一律自述快照，不出现「最新」类静态断言 |
 | 2026-07-24 | Lifecycle 呈现层允许调用 vendored Archify（Node >= 18），失败时按单状态机降级；证明继承增加 `archifyDigest` | 状态机需要经 fail-closed 校验的确定性 SVG，同时必须保持用户机器缺 Node 时内容维护可完成 |
 | 2026-07-24 | 接受 ADR-0007 上位归属：当前 PRD Logic Model 后续拆为 Product Atlas Fragment；Atlas Engine、Viewer、coverage/gaps/freshness/change impact、Archify Runtime 与 Atlas→Archify Adapter 迁入 Core。现有 Product View 的来源、fail-closed、内容门/呈现门和单图降级不变 | Product、Design、Engineering、QA 都需要同一套关系、追溯与影响分析能力；不能各建一套 Atlas，也不能把当前写死 Product 枚举的 Schema 原样声明为 Core 公共契约 |
+| 2026-07-27 | schema v2 新增字段与访问规则读模型；默认入口改为任务型探索，页面关系渐进披露，四类分支与四维质量信号分开呈现；旅程证据不足时保持空状态 | 大图与单一健康数字增加读者认知负担，并把「未声明」误读成「没有问题」；新增界面必须继续服从来源与不猜测边界 |

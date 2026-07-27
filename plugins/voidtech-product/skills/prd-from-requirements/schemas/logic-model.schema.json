@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["logicModelSchemaVersion", "generatorVersion", "scopes", "nodes", "edges", "gaps", "coverage"],
   "properties": {
-    "logicModelSchemaVersion": { "const": 1 },
+    "logicModelSchemaVersion": { "const": 2 },
     "generatorVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "scopes": {
       "type": "array",
@@ -30,7 +30,7 @@
         "required": ["nodeId", "kind", "scopeId", "title", "status", "sources"],
         "properties": {
           "nodeId": { "type": "string", "minLength": 1 },
-          "kind": { "enum": ["page", "dataObject", "requirement", "flow", "state", "permission"] },
+          "kind": { "enum": ["page", "dataObject", "field", "requirement", "flow", "state", "permission"] },
           "scopeId": { "type": "string", "minLength": 1 },
           "title": { "type": "string", "minLength": 1 },
           "status": { "enum": ["original", "adjudicated", "inferred", "recommended-default", "missing"] },
@@ -50,7 +50,55 @@
             }
           },
           "detail": { "type": ["object", "null"] }
-        }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "kind": { "enum": ["page", "dataObject", "requirement", "flow", "state"] }
+            }
+          },
+          {
+            "required": ["detail"],
+            "properties": {
+              "kind": { "const": "field" },
+              "detail": {
+                "type": "object",
+                "required": ["category", "object", "meaning", "type", "required", "example", "exampleRedacted", "declaredSource", "validation", "editable", "exportable", "sensitive"],
+                "properties": {
+                  "category": { "const": "field" },
+                  "object": { "type": "string", "minLength": 1 },
+                  "meaning": { "type": "string" },
+                  "type": { "type": "string" },
+                  "required": { "type": "string" },
+                  "example": { "type": ["string", "null"] },
+                  "exampleRedacted": { "type": "boolean" },
+                  "declaredSource": { "type": "string" },
+                  "validation": { "type": "string" },
+                  "editable": { "type": "string" },
+                  "exportable": { "type": "string" },
+                  "sensitive": { "type": "string" }
+                }
+              }
+            }
+          },
+          {
+            "required": ["detail"],
+            "properties": {
+              "kind": { "const": "permission" },
+              "detail": {
+                "type": "object",
+                "required": ["category", "subject", "action", "rule", "decision"],
+                "properties": {
+                  "category": { "const": "accessRule" },
+                  "subject": { "type": "string", "minLength": 1 },
+                  "action": { "type": "string", "minLength": 1 },
+                  "rule": { "type": "string", "minLength": 1 },
+                  "decision": { "enum": ["allow", "deny", "conditional", "not-applicable"] }
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "edges": {
@@ -112,10 +160,12 @@
     "coverage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["moduleCount", "pageCount", "edgeCount", "requirementCount", "gapCount"],
+      "required": ["moduleCount", "pageCount", "fieldCount", "permissionCount", "edgeCount", "requirementCount", "gapCount"],
       "properties": {
         "moduleCount": { "type": "integer", "minimum": 0 },
         "pageCount": { "type": "integer", "minimum": 0 },
+        "fieldCount": { "type": "integer", "minimum": 0 },
+        "permissionCount": { "type": "integer", "minimum": 0 },
         "flowCount": { "type": "integer", "minimum": 0 },
         "pageStateCount": { "type": "integer", "minimum": 0 },
         "businessStateCount": { "type": "integer", "minimum": 0 },

@@ -43,6 +43,7 @@ function loadRendererFixture() {
     "print(json.dumps({",
     "    'env': atlas.renderer_env(),",
     "    'html': atlas.render_fixture_html(),",
+    "    'model': atlas._fixture_model(),",
     "    'fallbackHtml': atlas.render_fallback_fixture_html(),",
     "    'markers': {'home': atlas._FIXTURE_HOME_TITLE,",
     "                'probe': atlas._FIXTURE_PROBE_TITLE},",
@@ -220,6 +221,35 @@ async function runBrowserAssertions(fixture) {
     await loaded;
 
     const probe = JSON.stringify(fixture.markers.probe);
+    const expectedBranchKinds = {
+      failureBranch: fixture.model.nodes.filter((node) =>
+        node.kind === "flow" && node.detail?.category === "failureBranch").length,
+      pageState: fixture.model.nodes.filter((node) =>
+        node.kind === "state" && node.detail?.category === "pageState").length,
+      failureRecovery: fixture.model.nodes.filter((node) =>
+        node.kind === "flow" && node.detail?.category === "interactionStep"
+        && node.detail.failureRecovery
+        && !["—", "无"].includes(node.detail.failureRecovery)).length,
+      stateImpact: fixture.model.nodes.filter((node) =>
+        node.kind === "flow" && node.detail?.category === "stateImpact").length
+    };
+    const fixtureNodesById = Object.fromEntries(
+      fixture.model.nodes.map((node) => [node.nodeId, node]));
+    const expectedWorkflowFacts = fixture.model.edges
+      .filter((edge) => {
+        const from = fixtureNodesById[edge.from];
+        const to = fixtureNodesById[edge.to];
+        return edge.kind === "navigates" && edge.detail?.branch === "success"
+          && from?.detail?.category === "flowStep"
+          && to?.detail?.category === "flowStep";
+      })
+      .sort((a, b) => a.edgeId.localeCompare(b.edgeId))
+      .map((edge) => ({
+        edgeId: edge.edgeId,
+        from: fixtureNodesById[edge.from].detail.stepId,
+        to: fixtureNodesById[edge.to].detail.stepId,
+        condition: edge.detail.condition || ""
+      }));
     // 交互探针：在搜索框输入 XSS 探针标题，viewer 应把它作为纯文本结果呈现
     // （既证明搜索框可输入，又证明 <script> 未被当作 HTML 解析/执行）。
     const expression = `(function(){
@@ -239,14 +269,30 @@ async function runBrowserAssertions(fixture) {
         body: getComputedStyle(document.body).overflowX,
         bodyClipped: document.body.scrollWidth > document.body.clientWidth
       };
+      var explorePanel = document.getElementById("view-explore");
+      out.explore = {
+        defaultVisible: !!explorePanel && !explorePanel.hidden,
+        taskEntries: explorePanel ? explorePanel.querySelectorAll(".explore-task").length : 0,
+        statusDimensions: explorePanel ?
+          explorePanel.querySelectorAll(".explore-status[data-status]").length : 0,
+        emptyJourneyCopy: explorePanel ?
+          explorePanel.textContent.includes("尚未声明可证明的端到端旅程") : false
+      };
+      var auditTab = document.getElementById("tab-audit");
+      if (auditTab) auditTab.click();
       var auditPanel = document.getElementById("view-audit");
       out.audit = {
-        defaultVisible: !!auditPanel && !auditPanel.hidden,
-        coverage: auditPanel ? (auditPanel.querySelector(".audit-coverage") || {}).textContent || "" : "",
-        moduleHealth: auditPanel ? auditPanel.querySelectorAll(".audit-module").length : 0,
-        healthyModules: auditPanel ? auditPanel.querySelectorAll(".audit-health.good").length : 0,
+        visible: !!auditPanel && !auditPanel.hidden,
+        dimensions: auditPanel ? Array.prototype.map.call(
+          auditPanel.querySelectorAll(".audit-dimension[data-dimension]"),
+          function(node){return node.getAttribute("data-dimension");}) : [],
+        moduleRows: auditPanel ? auditPanel.querySelectorAll(".audit-module").length : 0,
         realGaps: auditPanel ? auditPanel.querySelectorAll(".audit-gap").length : 0,
-        unstructuredSummary: auditPanel ? auditPanel.querySelectorAll(".unstructured-summary").length : 0
+        unstructuredSummary: auditPanel ?
+          auditPanel.querySelectorAll(".unstructured-summary").length : 0,
+        misleadingHealthLabels: auditPanel ?
+          Array.prototype.filter.call(auditPanel.querySelectorAll("*"),
+            function(node){return /已深化|个问题/.test(node.textContent||"");}).length : 0
       };
       var gapTab = document.getElementById("tab-gap");
       if (gapTab) gapTab.click();
@@ -291,10 +337,28 @@ async function runBrowserAssertions(fixture) {
         workflowLinkLabels: flowPanel ? Array.prototype.map.call(
           flowPanel.querySelectorAll(".workflow-link-label"),
           function(node){return node.textContent.trim();}) : [],
+        workflowLinkFacts: flowPanel ? Array.prototype.map.call(
+          flowPanel.querySelectorAll(".workflow-link"),
+          function(node){return {
+            edgeId: node.getAttribute("data-edge-id"),
+            from: node.getAttribute("data-from-step"),
+            to: node.getAttribute("data-to-step"),
+            condition: node.getAttribute("data-condition")
+          };}) : [],
         semanticIcons: flowPanel ? flowPanel.querySelectorAll(".semantic-icon").length : 0,
         interactionLegend: !!(flowPanel && flowPanel.querySelector(".interaction-legend")),
-        interactionFieldIcons: flowPanel ? flowPanel.querySelectorAll(".interaction-card dt .semantic-icon").length : 0
+        interactionFieldIcons: flowPanel ? flowPanel.querySelectorAll(".interaction-card dt .semantic-icon").length : 0,
+        branchDisclosures: flowPanel ?
+          flowPanel.querySelectorAll("details.step-branches").length : 0,
+        openBranchDisclosures: flowPanel ?
+          flowPanel.querySelectorAll("details.step-branches[open]").length : 0,
       };
+      out.scenarioFlow.branchKinds = {};
+      ["failureBranch","pageState","failureRecovery","stateImpact"].forEach(function(kind){
+        out.scenarioFlow.branchKinds[kind] = flowPanel ?
+          flowPanel.querySelectorAll(
+            '.branch-node[data-branch-kind="' + kind + '"]').length : 0;
+      });
       var stepButtons = flowPanel ? flowPanel.querySelectorAll(".flow-node") : [];
       var beforeStep = flowPanel && flowPanel.querySelector(".interaction-head") ?
         flowPanel.querySelector(".interaction-head").textContent : "";
@@ -368,6 +432,29 @@ async function runBrowserAssertions(fixture) {
           };
         }
       });
+      out.knowledgeViews = {};
+      ["field","access"].forEach(function(name){
+        var tab = document.getElementById("tab-" + name);
+        var panel = document.getElementById("view-" + name);
+        if (tab) tab.click();
+        var selector = panel && panel.querySelector("select");
+        var targetOption = selector && Array.prototype.find.call(
+          selector.options,function(option){
+            return option.value && !/· 0 项$/.test(option.textContent);
+          });
+        if (selector && targetOption) {
+          selector.value = targetOption.value;
+          selector.dispatchEvent(new Event("change",{bubbles:true}));
+        }
+        out.knowledgeViews[name] = {
+          tab: !!tab,
+          visible: !!panel && !panel.hidden,
+          scoped: !!selector && !!targetOption,
+          cards: panel ? panel.querySelectorAll(
+            name === "field" ? ".field-card" : ".access-rule").length : 0,
+          text: panel ? panel.innerText : ""
+        };
+      });
       var graphTab = document.getElementById("tab-graph");
       if (graphTab) graphTab.click();
       var archEmbed = document.getElementById("archEmbed");
@@ -399,22 +486,19 @@ async function runBrowserAssertions(fixture) {
         document.querySelectorAll("#view-graph .n-focus").length > 0;
       var pageNode = document.querySelector("#view-graph .n-focus.page");
       if (pageNode) pageNode.dispatchEvent(new MouseEvent("click",{bubbles:true}));
-      // fixture 模块声明了 §7.0 模块级读写但没有 §7.0.1 页面映射。
-      // 读者必须看得出「这条关系只到模块」：页面列不得长出任何读写边，
-      // 模块级读写只能从独立契约轨引出并带 .module-level 区分样式。
+      // fixture 同时覆盖一条合法页面级读取与一个尚未声明关系的页面。
+      // 页面级事实必须画出；模块级契约仍在独立轨；missing 页面保留显式标记。
       out.pageDataAudit = {
         explicitGap: !!document.querySelector("#view-graph .module-data-gap"),
-        misleadingModuleEdges: document.querySelectorAll(
+        pageLevelEdges: document.querySelectorAll(
           "#view-graph .edge.reads:not(.module-level)," +
           "#view-graph .edge.writes:not(.module-level)").length,
         moduleLevelEdges: document.querySelectorAll(
           "#view-graph .edge.module-level").length,
-        moduleLevelRail: document.querySelectorAll(
-          "#view-graph .rail-label").length,
+        focusedPageEdges: document.querySelectorAll(
+          "#view-graph .edge.hot:not(.module-level)").length,
         unboundPageMarkers: document.querySelectorAll(
           "#view-graph .page-unbound").length,
-        dimmedAfterUnmappedPageFocus: document.querySelectorAll(
-          "#view-graph .n-focus.dim").length
       };
       if (reqDrawer && reqDrawer.classList.contains("open")) {
         document.querySelector(".drawer-close").click();
@@ -453,6 +537,60 @@ async function runBrowserAssertions(fixture) {
         !!reqDrawer && reqDrawer.classList.contains("open")
         && reqDrawer.textContent.includes("会员可查看订单详情并完成订单");
       if (stateTabForDrawer) stateTabForDrawer.click();
+      if (reqDrawer && reqDrawer.classList.contains("open")) {
+        reqDrawer.querySelector(".drawer-close").click();
+      }
+      var home = ${JSON.stringify(fixture.markers.home)};
+      var pageSearch = document.getElementById("search");
+      if (pageSearch) {
+        pageSearch.value = home;
+        pageSearch.dispatchEvent(new Event("input", { bubbles: true }));
+        var homeResult = document.querySelector("#results .result");
+        if (homeResult) homeResult.click();
+      }
+      var pageDrawer = document.getElementById("drawer");
+      out.pageContext = {
+        primary: pageDrawer ?
+          ((pageDrawer.querySelector(".page-primary") || {}).innerText || "") : "",
+        progressiveSections: pageDrawer ?
+          pageDrawer.querySelectorAll("details.page-context-section").length : 0,
+        mappedData: pageDrawer ? pageDrawer.innerText.includes("读取") : false,
+        provenDestination: pageDrawer ?
+          pageDrawer.innerText.includes(${probe}) : false,
+        moduleOnlyAccess: pageDrawer ?
+          Array.prototype.some.call(
+            pageDrawer.querySelectorAll("details.page-context-section summary"),
+            function(summary){return summary.textContent.includes("访问边界（模块级）");})
+          && !pageDrawer.querySelector(".access-rule") : false
+      };
+      if (pageDrawer && pageDrawer.classList.contains("open")) {
+        pageDrawer.querySelector(".drawer-close").click();
+      }
+      if (pageSearch) {
+        pageSearch.value = ${probe};
+        pageSearch.dispatchEvent(new Event("input", { bubbles: true }));
+        var missingPageResult = document.querySelector("#results .result");
+        if (missingPageResult) missingPageResult.click();
+      }
+      out.pageContext.missingState = pageDrawer ?
+        !!pageDrawer.querySelector('.declaration-state[data-state="missing"]') : false;
+      if (pageDrawer && pageDrawer.classList.contains("open")) {
+        pageDrawer.querySelector(".drawer-close").click();
+      }
+      out.searchCoverage = {};
+      [["field","订单编号"],["access","会员 · 查看"]].forEach(function(entry){
+        if (!pageSearch) return;
+        pageSearch.value = entry[1];
+        pageSearch.dispatchEvent(new Event("input", { bubbles: true }));
+        out.searchCoverage[entry[0]] =
+          !!document.querySelector("#results .result");
+      });
+      if (pageSearch) {
+        pageSearch.value = "atlas-no-such-entry-7f4a";
+        pageSearch.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      out.searchNoResults =
+        ((document.querySelector("#results .result-empty") || {}).textContent || "");
       var probe = ${probe};
       var search = document.getElementById("search");
       out.searchTypable = false;
@@ -528,11 +666,18 @@ async function runBrowserAssertions(fixture) {
     if (Object.keys(dom.behaviorViews ?? {}).length !== 3) {
       failures.push("行为视图断言未覆盖 flow/state/boundary 三个 tab");
     }
-    const scenario = dom.scenarioFlow ?? {};
-    if (!dom.audit?.defaultVisible || !dom.audit.coverage.includes("0 / 2")
-        || dom.audit.moduleHealth !== 2 || dom.audit.healthyModules !== 0
+    if (!dom.explore?.defaultVisible || dom.explore.taskEntries < 3
+        || dom.explore.statusDimensions < 3
+        || !dom.explore.emptyJourneyCopy) {
+      failures.push(`探索首页未成为诚实的默认任务入口: ${JSON.stringify(dom.explore)}`);
+    }
+    const auditDimensions = new Set(dom.audit?.dimensions ?? []);
+    if (!dom.audit?.visible || dom.audit.moduleRows !== 2
+        || !["coverage","depth","gaps","freshness"].every(
+          (name) => auditDimensions.has(name))
+        || dom.audit.misleadingHealthLabels !== 0
         || dom.audit.unstructuredSummary !== 1) {
-      failures.push(`审计驾驶舱未成为默认入口或健康度口径不一致: ${JSON.stringify(dom.audit)}`);
+      failures.push(`质量与来源未拆分四维或仍使用误导健康标签: ${JSON.stringify(dom.audit)}`);
     }
     if (dom.gapNoise?.visibleItems !== 1
         || dom.gapNoise.unstructuredSummary !== 1
@@ -544,6 +689,7 @@ async function runBrowserAssertions(fixture) {
         || !dom.gapContext.includes("功能 / 流程\n查看订单详情")) {
       failures.push(`缺口详情缺少页面/功能/流程定位上下文: ${JSON.stringify(dom.gapContext)}`);
     }
+    const scenario = dom.scenarioFlow ?? {};
     if (scenario.groups < 1 || scenario.steps < 2) {
       failures.push(`场景流程主干未渲染完整: ${JSON.stringify(scenario)}`);
     }
@@ -551,12 +697,9 @@ async function runBrowserAssertions(fixture) {
     if (scenario.selectedSteps !== 1 || scenario.interactionPanels !== 1 || scenario.interactions < 1) {
       failures.push(`场景步骤未展开唯一页面交互轨迹: ${JSON.stringify(scenario)}`);
     }
-    if (scenario.roleLanes < 2 || scenario.workflowLinks < scenario.steps - 1) {
-      failures.push(`场景流程未按角色泳道和正交主路径渲染: ${JSON.stringify(scenario)}`);
-    }
-    if (scenario.roleSources !== scenario.roleLanes
-        || !scenario.attributedRoles) {
-      failures.push(`角色泳道缺少逐角色来源归因: ${JSON.stringify(scenario)}`);
+    if (scenario.roleLanes < 2
+        || scenario.workflowLinks !== expectedWorkflowFacts.length) {
+      failures.push(`场景流程未按角色泳道和模型主路径渲染: ${JSON.stringify(scenario)}`);
     }
     if (scenario.semanticIcons < scenario.steps || !scenario.interactionLegend
         || scenario.interactionFieldIcons < scenario.interactions * 5) {
@@ -570,6 +713,20 @@ async function runBrowserAssertions(fixture) {
         || !scenario.stepSwitch?.secondHasOnlyState) {
       failures.push(`场景步骤切换或精确附件挂载失败: ${JSON.stringify(scenario.stepSwitch)}`);
     }
+    const branchKinds = scenario.branchKinds ?? {};
+    if (branchKinds.failureBranch < 1 || branchKinds.pageState < 1
+        || branchKinds.failureRecovery < 1 || branchKinds.stateImpact < 1) {
+      failures.push(`流程未按四类事实绘制可对账分支: ${JSON.stringify(branchKinds)}`);
+    }
+    for (const kind of ["failureBranch","pageState","failureRecovery","stateImpact"]) {
+      if (branchKinds[kind] !== expectedBranchKinds[kind]) {
+        failures.push(
+          `流程分支 ${kind} 与模型数量不一致: DOM=${branchKinds[kind]} model=${expectedBranchKinds[kind]}`);
+      }
+    }
+    if (scenario.branchDisclosures < 1 || scenario.openBranchDisclosures !== 0) {
+      failures.push(`异常分支默认未折叠: ${JSON.stringify(scenario)}`);
+    }
     if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
     // ⑤ 场景连线：condition 为空/「—」占位不得渲染标签节点（fixture S2 条件为「—」）。
     var placeholderLinkLabels = (scenario.workflowLinkLabels || []).filter(
@@ -577,17 +734,42 @@ async function runBrowserAssertions(fixture) {
     if (placeholderLinkLabels.length > 0) {
       failures.push(`场景连线渲染了空/「—」占位标签: ${JSON.stringify(scenario.workflowLinkLabels)}`);
     }
-    if (!dom.pageDataAudit?.explicitGap
-        || dom.pageDataAudit.misleadingModuleEdges !== 0
-        || dom.pageDataAudit.dimmedAfterUnmappedPageFocus !== 0) {
-      failures.push(`页面↔数据关系缺失未显式呈现或仍绘制模块扇形边: ${JSON.stringify(dom.pageDataAudit)}`);
+    const provenCondition = (scenario.workflowLinkFacts || []).some(
+      function(link){
+        return link.from === "S1" && link.to === "S2"
+          && link.condition === "订单存在";
+      });
+    if (!provenCondition) {
+      failures.push(`场景连线未逐边保留真实条件: ${JSON.stringify(scenario.workflowLinkFacts)}`);
     }
-    // 模块级读写必须真的画出来（否则原文已声明的数据流仍然看不见），
-    // 且必须挂在带标注的独立契约轨上、每个未绑定页面都要有缺失标记。
-    if (dom.pageDataAudit?.moduleLevelEdges < 1
-        || dom.pageDataAudit?.moduleLevelRail < 1
-        || dom.pageDataAudit?.unboundPageMarkers < 1) {
-      failures.push(`模块级读写未成图或缺少「仅模块级」区分: ${JSON.stringify(dom.pageDataAudit)}`);
+    for (const [name, result] of Object.entries(dom.knowledgeViews ?? {})) {
+      if (!result.tab || !result.visible || !result.scoped || result.cards < 1) {
+        failures.push(`知识视图 ${name} 未完成可见渲染: ${JSON.stringify(result)}`);
+      }
+    }
+    if (!dom.knowledgeViews?.field?.text.includes("订单编号")
+        || !dom.knowledgeViews?.access?.text.includes("会员")
+        || !dom.knowledgeViews?.access?.text.includes("访客")) {
+      failures.push(`字段或访问规则内容不完整: ${JSON.stringify(dom.knowledgeViews)}`);
+    }
+    if (JSON.stringify(scenario.workflowLinkFacts || [])
+        !== JSON.stringify(expectedWorkflowFacts)) {
+      failures.push(
+        `场景连线未与模型逐边对账: DOM=${JSON.stringify(scenario.workflowLinkFacts)} model=${JSON.stringify(expectedWorkflowFacts)}`);
+    }
+    if (!dom.pageContext?.primary.includes("入口")
+        || !dom.pageContext.primary.includes("去向")
+        || !dom.pageContext.provenDestination
+        || !dom.pageContext.moduleOnlyAccess
+        || dom.pageContext.progressiveSections < 4
+        || !dom.pageContext.mappedData || !dom.pageContext.missingState) {
+      failures.push(`页面详情未渐进披露或缺失语义不诚实: ${JSON.stringify(dom.pageContext)}`);
+    }
+    if (!dom.searchCoverage?.field || !dom.searchCoverage?.access) {
+      failures.push(`全局搜索未覆盖字段与访问规则: ${JSON.stringify(dom.searchCoverage)}`);
+    }
+    if (!dom.searchNoResults?.includes("未找到匹配内容")) {
+      failures.push(`全局搜索无结果状态不明确: ${JSON.stringify(dom.searchNoResults)}`);
     }
     if (!dom.lifecycle?.legend || !dom.lifecycle.archifySvg
         || dom.lifecycle.archifyMarker !== "lifecycle"
@@ -695,7 +877,7 @@ function checkProofInherits(env) {
     console.error("请本地运行 node scripts/validate-renderer.mjs --write 后提交证明。");
     return false;
   }
-  console.log("渲染器验证证明继承成立（七个继承键全部一致），无需重新打开浏览器。");
+  console.log("渲染器验证证明继承成立（八个继承键全部一致），无需重新打开浏览器。");
   return true;
 }
 

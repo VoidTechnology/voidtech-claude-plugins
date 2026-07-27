@@ -216,7 +216,7 @@ class AtlasEnableTest(CliCase):
             encoding="utf-8"))
         self.assertTrue(manifest["capabilities"]["logicAtlas"])
         self.assertEqual(manifest["logicAtlasStage"], "markdown")
-        self.assertEqual(manifest["schemaVersions"]["logicModel"], 1)
+        self.assertEqual(manifest["schemaVersions"]["logicModel"], 2)
         gate = run_json("atlas", self.root, "--gate")
         self.assertEqual(gate["stage"], "markdown")
         self.assertTrue(gate["steps"])

@@ -150,7 +150,7 @@ def enable_logic_atlas(root, stage="markdown"):
     manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["capabilities"]["logicAtlas"] = True
     manifest["logicAtlasStage"] = stage
-    manifest["schemaVersions"]["logicModel"] = 1
+    manifest["schemaVersions"]["logicModel"] = 2
     manifest_path.write_text(
         _json.dumps(manifest, ensure_ascii=False, sort_keys=True,
                     separators=(",", ":")) + "\n", encoding="utf-8")

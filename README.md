@@ -2,7 +2,7 @@
 
 > 开源 Claude Code 插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
 
-`voidtech-core v0.19.0` · `voidtech-product v0.2.0` · `voidtech-design/engineering v0.1.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · Apache-2.0
+`voidtech-core v0.19.0` · `voidtech-product v0.3.0` · `voidtech-design/engineering v0.1.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · Apache-2.0
 
 VoidTech 维护的开源 Claude Code Marketplace。公共约定与跨领域能力在 `voidtech-core`，Product、Design、Engineering 各自发布独立工作流，`voidtech-loop` 负责有机器验收条件的无人值守工程循环；高权限 MCP 仍按需启用。
 
@@ -107,7 +107,7 @@ voidtech-loop 提供 goal 与 goal-spec：只用于完成条件可由命令退�
 | 插件 | 版本 | 默认 | 内容 |
 |---|---|---|---|
 | [`voidtech-core`](plugins/voidtech-core) | 0.19.0 | ✅ 启用 | 中文约定 + 8 个公共技能 + 共享 Archify Runtime |
-| [`voidtech-product`](plugins/voidtech-product) | 0.2.0 | ✅ 启用 | 模块化 PRD、需求同步、产品验收 + Product Manager subagent |
+| [`voidtech-product`](plugins/voidtech-product) | 0.3.0 | ✅ 启用 | 模块化 PRD、需求同步、Logic Atlas 阅读与产品验收 + Product Manager subagent |
 | [`voidtech-design`](plugins/voidtech-design) | 0.1.0 | ✅ 启用 | 设计 brief + 一次性 UI 原型 |
 | [`voidtech-engineering`](plugins/voidtech-engineering) | 0.1.0 | ✅ 启用 | 14 个工程技能 + Architect subagent |
 | [`voidtech-loop`](plugins/voidtech-loop) | 0.3.0 | ✅ 启用 | Goal Spec + 确定性控制器 + 隔离 worktree + 指定 commit 验收（一期试点版） |
