@@ -54,7 +54,45 @@
         "oneOf": [
           {
             "properties": {
-              "kind": { "enum": ["page", "dataObject", "requirement", "flow", "state"] }
+              "kind": { "enum": ["page", "dataObject", "requirement", "state"] }
+            }
+          },
+          {
+            "required": ["detail"],
+            "properties": {
+              "kind": { "const": "flow" },
+              "detail": {
+                "type": ["object", "null"],
+                "properties": {
+                  "requiredActions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["purpose", "subject", "action", "permissionRefs", "unauthorizedBehavior"],
+                      "properties": {
+                        "purpose": { "enum": ["operation", "read", "recovery"] },
+                        "subject": { "type": "string", "minLength": 1 },
+                        "action": { "type": "string", "minLength": 1 },
+                        "permissionRefs": {
+                          "type": "array",
+                          "items": { "type": "string", "minLength": 1 }
+                        },
+                        "unauthorizedBehavior": { "type": "string", "minLength": 1 },
+                        "handoffRole": { "type": "string", "minLength": 1 }
+                      }
+                    }
+                  },
+                  "permissionRefs": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                  },
+                  "recoveryRequesterRole": { "type": "string", "minLength": 1 },
+                  "recoveryRole": { "type": "string", "minLength": 1 },
+                  "handoffRole": { "type": "string", "minLength": 1 },
+                  "unauthorizedBehavior": { "type": "string", "minLength": 1 }
+                }
+              }
             }
           },
           {
@@ -93,7 +131,10 @@
                   "subject": { "type": "string", "minLength": 1 },
                   "action": { "type": "string", "minLength": 1 },
                   "rule": { "type": "string", "minLength": 1 },
-                  "decision": { "enum": ["allow", "deny", "conditional", "not-applicable"] }
+                  "decision": { "enum": ["allow", "deny", "conditional", "not-applicable"] },
+                  "dataScope": { "type": "string", "minLength": 1 },
+                  "fieldVisibility": { "type": "string", "minLength": 1 },
+                  "denialBehavior": { "type": "string", "minLength": 1 }
                 }
               }
             }

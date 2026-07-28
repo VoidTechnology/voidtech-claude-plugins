@@ -2,7 +2,7 @@
 
 > 同时兼容 Claude Code 与 Oh My Pi（OMP）的开源插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
 
-`voidtech-core v0.20.0` · `voidtech-product v0.3.0` · `voidtech-design/engineering v0.2.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · OMP ≥ 17.1.5 · Apache-2.0
+`voidtech-core v0.20.0` · `voidtech-product v0.4.0` · `voidtech-design/engineering v0.2.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · OMP ≥ 17.1.5 · Apache-2.0
 
 VoidTech 维护的双宿主插件 Marketplace。Core、Product、Design、Engineering 与两组 MCP 同时支持 Claude Code 和 OMP；`voidtech-loop` 仍仅支持 Claude Code，不进入 OMP catalog。
 
@@ -128,7 +128,7 @@ voidtech-loop 提供 goal 与 goal-spec：只用于完成条件可由命令退�
 | 插件 | 版本 | 默认 | 内容 |
 |---|---|---|---|
 | [`voidtech-core`](plugins/voidtech-core) | 0.20.0 | ✅ 启用 | 中文约定 + 8 个公共技能 + 共享 Archify Runtime |
-| [`voidtech-product`](plugins/voidtech-product) | 0.3.0 | ✅ 启用 | 模块化 PRD、需求同步、Logic Atlas 阅读与产品验收 + Product Manager subagent |
+| [`voidtech-product`](plugins/voidtech-product) | 0.4.0 | ✅ 启用 | 模块化 PRD、需求同步、Logic Atlas 阅读与产品验收 + Product Manager subagent |
 | [`voidtech-design`](plugins/voidtech-design) | 0.2.0 | ✅ 启用 | 设计 brief + 一次性 UI 原型 |
 | [`voidtech-engineering`](plugins/voidtech-engineering) | 0.2.0 | ✅ 启用 | 14 个工程技能 + Architect subagent |
 | [`voidtech-loop`](plugins/voidtech-loop) | 0.3.0 | ✅ 启用 | Goal Spec + 确定性控制器 + 隔离 worktree + 指定 commit 验收（一期试点版） |
