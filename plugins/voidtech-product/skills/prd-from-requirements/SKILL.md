@@ -9,6 +9,8 @@ argument-hint: "原始需求路径/正文与输出目录"
 
 本技能用于从原始需求生成高质量 PRD 工作树。
 
+执行任何随插件分发的脚本前，先读 [HOST-RUNTIME.md](../_shared/HOST-RUNTIME.md)（插件内路径：`skills/_shared/HOST-RUNTIME.md`），按当前宿主选择唯一入口。下文保留的 `${CLAUDE_PLUGIN_ROOT}` 命令是 Claude Code 形式；OMP 必须映射为 `voidtech_product_runtime` 调用，不得把未展开变量交给 shell。
+
 ## 与 to-prd 的分工
 
 本技能适用于“从原始需求文档生成模块化 PRD 工作树”，主要服务专业产品经理、业务分析、研发评审和测试验收。

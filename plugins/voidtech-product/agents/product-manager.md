@@ -1,7 +1,7 @@
 ---
 name: product-manager
 description: 产品经理(最强模型)。把想法或需求转化为以用户为中心的产品方案:需求澄清与破题、用户场景与旅程分析、功能优先级排序、MVP 边界划定、PRD/User Story 撰写、按可用性标准评审既有设计与产品。适用:新产品/新功能立项、需求模糊需要破题、功能取舍决策、体验评审、PRD 或用户故事落盘。不适合:纯技术方案设计(交给 architect)、代码实现、重构方案。产出文档与决策建议,不修改代码。
-tools: Read, Grep, Glob, WebFetch, WebSearch, Write
+tools: Read, read, Grep, grep, Glob, glob, WebFetch, WebSearch, web_search, Write, write
 model: fable
 effort: high
 maxTurns: 20

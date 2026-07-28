@@ -1,10 +1,10 @@
 ---
 name: to-design-brief
-description: 把设计语言文档（design tokens 分析）与 PRD 合成为一份可直接粘贴进 claude.ai/design 的自包含设计 brief。
+description: 把设计语言文档（design tokens 分析）与 PRD 合成为一份可用于 Claude Design 或 OMP 设计工作流的自包含 design brief。
 disable-model-invocation: true
 ---
 
-本技能读取两份输入——**设计语言文档**（含 colors / typography / rounded / spacing / components token 的分析文档，如 `DESIGN-linear.md`）与 **PRD**——合成一份设计 brief。brief 的读者是 claude.ai/design：它看不到任何本地文件，因此 brief 必须自包含，粘贴一次即可作为后续逐页生成的风格锚点。
+本技能读取两份输入——**设计语言文档**（含 colors / typography / rounded / spacing / components token 的分析文档，如 `DESIGN-linear.md`）与 **PRD**——合成一份 design brief。brief 的读者是 Claude Design 或 OMP 中的设计 agent：它们不应依赖未显式提供的本地上下文，因此 brief 必须自包含，单独交付即可作为后续逐页生成的风格锚点。
 
 输出格式与逐节写法见 [BRIEF-FORMAT.md](BRIEF-FORMAT.md)，写作前先完整读取。
 
@@ -13,7 +13,7 @@ disable-model-invocation: true
 1. **定位输入文件。** 用户未给路径时先在对话上下文中找；找不到再问。设计语言文档通常带 token frontmatter；PRD 通常带需求编号（如 `REQ-xx`）。两份都要完整读取，不要只读开头。
 2. **确认设计语言。** 同目录存在多份设计语言文档（如 `DESIGN-linear.md` / `DESIGN-stripe.md`）且用户未指定时，列出各自气质摘要请用户选择。风格是产品决策，不要代替用户选。
 3. **确认主题明暗。** 设计语言文档多来自营销站分析，其主题（常为深色）不一定适合目标产品。优先级：用户指定 > PRD 约定 > 沿用设计文档原主题并在 brief 顶部标注「沿用原主题，如需反转请告知」。需要反转明暗时，保留色相与气质（强调色、圆角、边框哲学不变），重新推导中性色阶与语义映射。
-4. **确认输出路径。** 用户未指定时写到 PRD 同目录的 `claude-design-brief.md`；目标文件已存在时先读取，向用户确认覆盖或另存。
+4. **确认输出路径。** 用户未指定时写到 PRD 同目录的 `design-brief.md`；目标文件已存在时先读取，向用户确认覆盖或另存。
 
 ## 合成流程
 

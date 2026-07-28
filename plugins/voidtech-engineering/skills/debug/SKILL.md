@@ -27,7 +27,7 @@ description: 系统诊断疑难缺陷和性能退化，先建立稳定复现，�
 7. **随机输入测试。** 如果缺陷表现为“偶尔输出错误”，运行大量随机输入并记录失败样本。
 8. **二分定位脚本。** 如果缺陷出现在两个已知状态（commit、数据集、版本）之间，自动执行“在指定状态启动、检查、重复”，以便使用 `git bisect run`。
 9. **版本对比测试。** 用同一输入分别运行旧版与新版（或两套配置），然后比较输出。
-10. **HITL bash 脚本。** 最后手段。如果必须有人点击，从 `${CLAUDE_PLUGIN_ROOT}/skills/debug/scripts/hitl-loop.template.sh` 复制一份到操作系统临时目录，在副本中填写步骤后运行。不要修改插件安装目录中的模板。捕获的输出回流给你。
+10. **HITL bash 脚本。** 最后手段。如果必须有人点击，Claude Code 从 `${CLAUDE_PLUGIN_ROOT}/skills/debug/scripts/hitl-loop.template.sh` 读取模板；OMP 从 `skill://debug/scripts/hitl-loop.template.sh` 读取同一模板。把内容复制到操作系统临时目录，在副本中填写步骤后运行；不要修改插件安装目录中的模板。捕获的输出回流给你。
 
 正确的反馈循环会显著降低后续定位和验证的成本。
 
