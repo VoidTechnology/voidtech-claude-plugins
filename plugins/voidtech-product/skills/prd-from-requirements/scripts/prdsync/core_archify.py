@@ -12,18 +12,7 @@ _PACKAGE_NAME = "_voidtech_archify_runtime"
 _RUNTIME_RELPATH = Path("runtime/archify/voidtech_archify")
 
 
-def _candidate_core_roots():
-    configured = os.environ.get("VOIDTECH_CORE_ROOT")
-    if configured:
-        yield Path(configured).expanduser()
-
-    product_root = Path(__file__).resolve().parents[4]
-    yield product_root.parent / "voidtech-core"
-
-    config_root = Path(
-        os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")
-    ).expanduser()
-    registry = config_root / "plugins" / "installed_plugins.json"
+def _registry_core_roots(registry):
     try:
         payload = json.loads(registry.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -37,6 +26,35 @@ def _candidate_core_roots():
         install_path = record.get("installPath")
         if install_path:
             yield Path(install_path)
+
+
+def _candidate_core_roots():
+    configured = os.environ.get("VOIDTECH_CORE_ROOT")
+    if configured:
+        yield Path(configured).expanduser()
+
+    product_root = Path(__file__).resolve().parents[4]
+    yield product_root.parent / "voidtech-core"
+
+    claude_root = Path(
+        os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")
+    ).expanduser()
+    yield from _registry_core_roots(
+        claude_root / "plugins" / "installed_plugins.json"
+    )
+
+    omp_registries = [Path.home() / ".omp" / "plugins" / "installed_plugins.json"]
+    cwd = Path.cwd().resolve()
+    omp_registries.extend(
+        parent / ".omp" / "plugins" / "installed_plugins.json"
+        for parent in (cwd, *cwd.parents)
+    )
+    seen = set()
+    for registry in omp_registries:
+        if registry in seen:
+            continue
+        seen.add(registry)
+        yield from _registry_core_roots(registry)
 
 
 def locate_runtime_package():

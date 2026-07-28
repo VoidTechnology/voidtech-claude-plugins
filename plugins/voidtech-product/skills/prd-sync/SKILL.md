@@ -13,6 +13,8 @@ argument-hint: "PRD 工作树路径与同步意图（如：导入新版 Excel / 
 - `prd-sync`（本技能）：导入某数据源的新版本，计算差异，与需求账本三方归并，形成可审阅的变更集与候选项，用户裁决后落 journal。
 - `prd-maintain`：按已确认变更集修改模块主本与全局主本，执行统一收尾不变式。
 
+执行任何随插件分发的脚本前，先读 [HOST-RUNTIME.md](../_shared/HOST-RUNTIME.md)（插件内路径：`skills/_shared/HOST-RUNTIME.md`），按当前宿主选择唯一入口。下文保留的 `${CLAUDE_PLUGIN_ROOT}` 命令是 Claude Code 形式；OMP 必须映射为 `voidtech_product_runtime` 调用，不得把未展开变量交给 shell。
+
 全部操作通过同一个 CLI 执行：
 
 ```

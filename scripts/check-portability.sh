@@ -4,6 +4,7 @@ set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-design\nvoidtech-engineering\nvoidtech-loop\nvoidtech-mcp-apple\nvoidtech-mcp-common\nvoidtech-product'
+EXPECTED_OMP_PLUGINS=$'voidtech-core\nvoidtech-design\nvoidtech-engineering\nvoidtech-mcp-apple\nvoidtech-mcp-common\nvoidtech-product'
 EXPECTED_CORE_SKILLS=$'handoff\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nresearch\ntext-naturalizer\nwrite-skills'
 EXPECTED_PRODUCT_SKILLS=$'prd-from-requirements\nprd-maintain\nprd-sync'
 EXPECTED_DESIGN_SKILLS=$'to-design-brief\nui-prototype'
@@ -53,6 +54,19 @@ if [[ "$actual_plugins" == "$EXPECTED_PLUGINS" ]]; then
   pass "Marketplace 仅发布目标插件"
 else
   fail "Marketplace 插件集合不符合目标架构"
+fi
+
+actual_omp_plugins=$(jq -r '.plugins[].name' .omp-plugin/marketplace.json 2>/dev/null | sort)
+if [[ "$actual_omp_plugins" == "$EXPECTED_OMP_PLUGINS" ]]; then
+  pass "OMP Marketplace 仅发布第一、第二阶段兼容插件"
+else
+  fail "OMP Marketplace 插件集合不符合双宿主范围"
+fi
+if jq -e '[.plugins[].name] | index("voidtech-loop") == null' \
+    .omp-plugin/marketplace.json >/dev/null 2>&1; then
+  pass "OMP Marketplace 不误发 Claude-only voidtech-loop"
+else
+  fail "OMP Marketplace 不得发布 voidtech-loop"
 fi
 
 if jq -e 'has("//") | not' templates/project-settings.json >/dev/null; then
@@ -118,6 +132,23 @@ if [[ -d plugins/voidtech-core ]]; then
     pass "更新检查脚本行为测试"
   else
     fail "更新检查脚本行为测试未通过"
+  fi
+
+  if [[ -f plugins/voidtech-core/hooks/pre/voidtech-session.mjs ]] && \
+      rg -F "pi.on('session_start'" plugins/voidtech-core/hooks/pre/voidtech-session.mjs >/dev/null && \
+      rg -F -- "--host', 'omp" plugins/voidtech-core/hooks/pre/voidtech-session.mjs >/dev/null; then
+    pass "Core 随附 OMP Session Hook"
+  else
+    fail "Core 缺少 OMP Session Hook"
+  fi
+
+  if [[ -f plugins/voidtech-product/tools/product-runtime.mjs ]] && \
+      rg -F "name: 'voidtech_product_runtime'" plugins/voidtech-product/tools/product-runtime.mjs >/dev/null && \
+      rg -F "skill://git-safety/scripts/block-dangerous-git-omp.mjs" \
+        plugins/voidtech-engineering/skills/git-safety/SKILL.md >/dev/null; then
+    pass "Product Runtime 与 Engineering Git Safety 随附 OMP 适配器"
+  else
+    fail "双宿主运行适配器不完整"
   fi
 
   for domain in core product design engineering; do
@@ -440,6 +471,7 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
     installed_resources=(
       "voidtech-core|hooks/check-update.sh"
       "voidtech-core|hooks/zh-locale.sh"
+      "voidtech-core|hooks/pre/voidtech-session.mjs"
       "voidtech-core|skills/research/SKILL.md"
       "voidtech-core|skills/text-naturalizer/LICENSE"
       "voidtech-core|runtime/archify/voidtech_archify/archify_bridge.py"
@@ -447,6 +479,8 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       "voidtech-core|runtime/archify/voidtech_archify/lifecycle_ir.py"
       "voidtech-core|vendor/archify/bin/archify.mjs"
       "voidtech-product|agents/product-manager.md"
+      "voidtech-product|tools/product-runtime.mjs"
+      "voidtech-product|skills/_shared/HOST-RUNTIME.md"
       "voidtech-product|skills/prd-from-requirements/SKILL.md"
       "voidtech-product|skills/prd-from-requirements/scripts/xlsx-to-markdown.py"
       "voidtech-product|skills/prd-from-requirements/scripts/check-prd-tree.py"
@@ -467,6 +501,7 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       "voidtech-engineering|skills/architecture-review/HTML-REPORT.md"
       "voidtech-engineering|skills/debug/scripts/hitl-loop.template.sh"
       "voidtech-engineering|skills/git-safety/scripts/block-dangerous-git.sh"
+      "voidtech-engineering|skills/git-safety/scripts/block-dangerous-git-omp.mjs"
       "voidtech-engineering|skills/logic-spike/SKILL.md"
       "voidtech-engineering|skills/ship/SKILL.md"
     )
@@ -523,6 +558,74 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
     fail "隔离安装失败"
   fi
   rm -r -- "$audit_dir"
+fi
+
+if [[ "${1:-}" == "--install-smoke" ]]; then
+  if command -v omp >/dev/null 2>&1; then
+    omp_audit_dir=$(mktemp -d "${TMPDIR:-/tmp}/voidtech-omp-plugin-audit.XXXXXX")
+    if HOME="$omp_audit_dir" omp plugin marketplace add ./ >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin install voidtech-core@voidtech >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin install voidtech-product@voidtech >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin install voidtech-design@voidtech >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin install voidtech-engineering@voidtech >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin install voidtech-mcp-common@voidtech >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin install voidtech-mcp-apple@voidtech >/dev/null && \
+      HOME="$omp_audit_dir" omp plugin list >/dev/null; then
+      omp_registry="$omp_audit_dir/.omp/plugins/installed_plugins.json"
+      if jq -e '.version == 2 and (.plugins | keys | length) == 6 and
+        (.plugins | has("voidtech-loop@voidtech") | not)' "$omp_registry" >/dev/null; then
+        pass "OMP 隔离安装六个兼容插件且排除 voidtech-loop"
+      else
+        fail "OMP 隔离安装注册表不符合双宿主范围"
+      fi
+
+      omp_installed_resources=(
+        "voidtech-core|hooks/pre/voidtech-session.mjs"
+        "voidtech-product|tools/product-runtime.mjs"
+        "voidtech-product|skills/_shared/HOST-RUNTIME.md"
+        "voidtech-product|agents/product-manager.md"
+        "voidtech-design|skills/to-design-brief/SKILL.md"
+        "voidtech-engineering|agents/architect.md"
+        "voidtech-engineering|skills/git-safety/scripts/block-dangerous-git-omp.mjs"
+        "voidtech-mcp-common|.mcp.json"
+        "voidtech-mcp-apple|.mcp.json"
+      )
+      omp_missing_resource=0
+      for installed_resource in "${omp_installed_resources[@]}"; do
+        resource_plugin=${installed_resource%%|*}
+        relative_path=${installed_resource#*|}
+        install_path=$(
+          jq -r --arg id "$resource_plugin@voidtech" \
+            '.plugins[$id][0].installPath // empty' "$omp_registry"
+        )
+        if [[ -f "$install_path/$relative_path" ]]; then
+          pass "OMP 隔离安装包含 $resource_plugin/$relative_path"
+        else
+          fail "OMP 隔离安装缺少 $resource_plugin/$relative_path"
+          omp_missing_resource=1
+        fi
+      done
+
+      omp_product_path=$(
+        jq -r '.plugins["voidtech-product@voidtech"][0].installPath' "$omp_registry"
+      )
+      if ((omp_missing_resource == 0)) && \
+        HOME="$omp_audit_dir" node \
+          -e "import('${omp_product_path}/tools/product-runtime.mjs')" >/dev/null 2>&1 && \
+        HOME="$omp_audit_dir" python3 \
+          "$omp_product_path/skills/prd-from-requirements/scripts/prd-sync.py" \
+          --help >/dev/null 2>&1; then
+        pass "OMP 隔离安装后的 Product Tool 与 PRD CLI 可真实加载"
+      else
+        fail "OMP 隔离安装后的 Product Runtime 加载失败"
+      fi
+    else
+      fail "OMP 隔离安装失败"
+    fi
+    rm -r -- "$omp_audit_dir"
+  else
+    fail "install smoke 需要 omp 命令"
+  fi
 fi
 
 if ((failures > 0)); then

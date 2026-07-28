@@ -28,11 +28,12 @@ make_remote_manifest() {
 
 run_check() {
   local plugin_root="$1" remote_manifest="$2" cache_dir="$3"
+  shift 3
   CLAUDE_PLUGIN_ROOT="$plugin_root" \
     VOIDTECH_UPDATE_MANIFEST_URL="file://$remote_manifest" \
     VOIDTECH_UPDATE_CACHE_DIR="$cache_dir" \
     VOIDTECH_UPDATE_CHECK_TTL_SECONDS=86400 \
-    "$SCRIPT"
+    "$SCRIPT" "$@"
 }
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/voidtech-update-check-test.XXXXXX")
@@ -67,6 +68,16 @@ if [[ "$new_output" == *"0.5.0 -> 0.5.1"* && "$new_output" == *"claude plugin ma
   pass "发现新版本时输出更新提示"
 else
   fail "发现新版本时缺少可执行更新提示"
+fi
+
+omp_cache="$tmp_dir/new/omp-cache"
+omp_output=$(run_check "$new_root" "$new_remote" "$omp_cache" --host omp)
+if [[ "$omp_output" == *"omp plugin marketplace update voidtech"* && \
+      "$omp_output" == *"omp plugin upgrade voidtech-core@voidtech"* && \
+      "$omp_output" != *"claude plugin update"* ]]; then
+  pass "OMP 宿主输出 OMP 更新提示"
+else
+  fail "OMP 宿主缺少正确的更新提示"
 fi
 
 ttl_root="$tmp_dir/ttl/plugin"

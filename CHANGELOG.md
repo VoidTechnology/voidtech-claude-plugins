@@ -1,8 +1,10 @@
 # Changelog
 
-## voidtech-product 0.3.0 - 2026-07-27
+## voidtech-core 0.20.0 / voidtech-product 0.3.0 / voidtech-design 0.2.0 / voidtech-engineering 0.2.0 - 2026-07-27
 
 Logic Atlas 从「展示所有结构」改成「帮助读者完成具体判断」。默认入口先回答从哪里开始、可以查什么和哪些信息仍缺失；高密度审计与关系图退到按需入口，避免把机器可读性直接当成人类可读性。
+
+同一套 Core、Product、Design、Engineering 工作流现可安装到 Claude Code 或 Oh My Pi（OMP）。双宿主共享业务内容，但把 Hook、脚本执行和资源定位收敛到各自原生适配层；`voidtech-loop` 不做低保证降级，仍只支持 Claude Code。
 
 ### Added
 
@@ -10,16 +12,24 @@ Logic Atlas 从「展示所有结构」改成「帮助读者完成具体判断�
 - Logic Model schema v2 新增 `field` 与 `permission` 节点。固定字段表保留对象、含义、类型、必填、来源、校验、可编辑、可导出和敏感标记；只有明确非敏感的字段才保留示例。新版权限模板新增固定的末列需求编号，编译器仍兼容旧矩阵；条件原文和冲突定义不被提升成无条件权限结论。
 - 新增独立「数据与字段」「访问与可见性」视图，并将字段和访问规则纳入全局搜索；搜索无匹配时显示明确空结果。
 
+- 新增 OMP marketplace catalog，发布 Core、Product、Design、Engineering 与两组独立 MCP；明确排除依赖 Claude Code worker、权限和 Hook 语义的 `voidtech-loop`。
+- Core 新增 OMP Session Hook，在会话启动时注入中文协作约定与 OMP 对应的更新命令；更新检查仍只提示、不自动升级。
+- Product 新增 OMP 原生 `voidtech_product_runtime` Tool：不经过 shell，统一启动 PRD 转换、机械检查、Dashboard、PRD Sync 与 Logic Atlas 脚本，并保留退出码、stdout 和 stderr。跨插件 Archify Runtime 同时支持 Claude Code 与 OMP 安装注册表。
+- Engineering 的 Git Safety 新增 OMP `tool_call` 防护 Hook，与 Claude Code 版共享同一危险 Git 行为矩阵；Design brief 与公开 agents 改为双宿主工具语义。
+
 ### Changed
 
 - 流程失败、页面边缘状态、交互失败恢复和成功后的状态影响改为四类可点击分支，不再压成一个「异常」计数。
 - 页面详情采用渐进披露：首屏只回答入口、主体、前置条件、动作结果和可证明去向；数据与状态、异常与恢复、字段、访问规则、需求与来源按需展开。`mapped`、`none`、`missing`、`unparsed` 四种页面数据声明不再混成空白。
 - 审计页改名为「质量与来源」，机械覆盖、内容深度、缺口和新鲜度分别展示；不再用单一健康数字暗示 PRD 内容正确。
+- Product 三个工作流共用一份宿主运行说明，不再要求 OMP 解释 `${CLAUDE_PLUGIN_ROOT}`；MCP 插件继续使用独立、固定版本的 `.mcp.json`，不并入 Core。
 
 ### Compatibility
 
 - `logicModelSchemaVersion` 1 → 2，`generatorVersion` 1.6.0 → 1.7.0。现有 PRD 主本无需强制迁移即可重新生成；未采用固定字段表的模块只会缺少字段视图，不会由编译器猜测补齐。
 - 新生成的 Atlas 使用新版阅读界面；旧 HTML 仍可独立阅读，但不会获得字段、访问规则和新的缺失状态语义。重新运行 `atlas --publish` 完成升级。
+- OMP 最低验证版本为 17.1.5；Core、Product、Design、Engineering 和两组 MCP 完成隔离安装冒烟，Claude Code 原入口与命名空间保持不变。
+- OMP 通过 `omp plugin marketplace add VoidTechnology/voidtech-claude-plugins` 添加市场。`voidtech-loop` 不在 OMP catalog 中，不能在 OMP 安装；需要工程内循环时继续使用符合其试点条件的 Claude Code。
 
 
 ## voidtech-product 0.2.0 / voidtech-core 0.19.0 - 2026-07-27

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "voidtech",
+  "description": "VoidTech OMP 插件市场：双宿主工作流与按需 MCP（voidtech-loop 仍仅支持 Claude Code）",
+  "owner": { "name": "VoidTech" },
+  "plugins": [
+    {
+      "name": "voidtech-core",
+      "source": "./plugins/voidtech-core",
+      "description": "公共能力：中文约定、跨领域工作流与共享 Archify Runtime",
+      "defaultEnabled": true
+    },
+    {
+      "name": "voidtech-product",
+      "source": "./plugins/voidtech-product",
+      "description": "产品工作流：模块化 PRD、需求同步与产品验收",
+      "defaultEnabled": true
+    },
+    {
+      "name": "voidtech-design",
+      "source": "./plugins/voidtech-design",
+      "description": "设计工作流：设计 brief 与一次性 UI 原型验证",
+      "defaultEnabled": true
+    },
+    {
+      "name": "voidtech-engineering",
+      "source": "./plugins/voidtech-engineering",
+      "description": "工程工作流：架构、实现、调试、测试、Issue 与发布",
+      "defaultEnabled": true
+    },
+    {
+      "name": "voidtech-mcp-common",
+      "source": "./plugins/voidtech-mcp-common",
+      "description": "可选通用 MCP：Context7 与 Chrome DevTools",
+      "defaultEnabled": false
+    },
+    {
+      "name": "voidtech-mcp-apple",
+      "source": "./plugins/voidtech-mcp-apple",
+      "description": "可选 Apple MCP：Apple Docs 与 XcodeBuildMCP",
+      "defaultEnabled": false
+    }
+  ]
+}

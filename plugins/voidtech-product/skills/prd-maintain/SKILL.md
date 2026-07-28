@@ -9,6 +9,8 @@ argument-hint: "PRD 工作树路径与维护意图"
 
 对既有 PRD 工作树做局部维护。心智是「外科手术改主本」，不是「重新产出一棵树」：不重走破题、模块划分确认和 PM 协同生成流程。要从原始需求生成新工作树，用 `voidtech-product:prd-from-requirements`。
 
+执行任何随插件分发的脚本前，先读 [HOST-RUNTIME.md](../_shared/HOST-RUNTIME.md)（插件内路径：`skills/_shared/HOST-RUNTIME.md`），按当前宿主选择唯一入口。下文保留的 `${CLAUDE_PLUGIN_ROOT}` 命令是 Claude Code 形式；OMP 必须映射为 `voidtech_product_runtime` 调用，不得把未展开变量交给 shell。
+
 ## 规则单源
 
 质量红线、推断标记规范、期次权威、深度分级定义、汇总生成物与链接重写规则，全部以 `prd-from-requirements` 为准，本技能不复制、不另立。执行前按需读取：

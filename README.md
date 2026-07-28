@@ -1,10 +1,10 @@
 # voidtech-claude-plugins
 
-> 开源 Claude Code 插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
+> 同时兼容 Claude Code 与 Oh My Pi（OMP）的开源插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
 
-`voidtech-core v0.19.0` · `voidtech-product v0.3.0` · `voidtech-design/engineering v0.1.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · Apache-2.0
+`voidtech-core v0.20.0` · `voidtech-product v0.3.0` · `voidtech-design/engineering v0.2.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · OMP ≥ 17.1.5 · Apache-2.0
 
-VoidTech 维护的开源 Claude Code Marketplace。公共约定与跨领域能力在 `voidtech-core`，Product、Design、Engineering 各自发布独立工作流，`voidtech-loop` 负责有机器验收条件的无人值守工程循环；高权限 MCP 仍按需启用。
+VoidTech 维护的双宿主插件 Marketplace。Core、Product、Design、Engineering 与两组 MCP 同时支持 Claude Code 和 OMP；`voidtech-loop` 仍仅支持 Claude Code，不进入 OMP catalog。
 
 ## 亮点
 
@@ -24,6 +24,8 @@ VoidTech 维护的开源 Claude Code Marketplace。公共约定与跨领域能�
 
 ## 快速开始
 
+### Claude Code
+
 ```bash
 # 1. 添加 Marketplace
 claude plugin marketplace add VoidTechnology/voidtech-claude-plugins
@@ -39,6 +41,25 @@ claude plugin install voidtech-loop@voidtech
 ```
 
 `voidtech-loop` 一期工程内循环已经完成，当前试点环境仅支持 macOS arm64；不满足试点环境时可以只安装 Core、Product、Design 与 Engineering。
+
+### Oh My Pi（OMP）
+
+```bash
+# 添加同一仓库；OMP 优先读取 .omp-plugin/marketplace.json
+omp plugin marketplace add VoidTechnology/voidtech-claude-plugins
+
+# 安装双宿主工作流
+omp plugin install voidtech-core@voidtech
+omp plugin install voidtech-product@voidtech
+omp plugin install voidtech-design@voidtech
+omp plugin install voidtech-engineering@voidtech
+
+# MCP 按需安装
+omp plugin install voidtech-mcp-common@voidtech
+omp plugin install voidtech-mcp-apple@voidtech
+```
+
+OMP 17.1.5 已完成隔离安装冒烟。`voidtech-loop` 依赖 Claude Code 专属 worker、权限和 Hook 语义，OMP 中不会展示或安装。
 
 进入 Claude Code 后即可调用技能，例如：
 
@@ -106,15 +127,23 @@ voidtech-loop 提供 goal 与 goal-spec：只用于完成条件可由命令退�
 
 | 插件 | 版本 | 默认 | 内容 |
 |---|---|---|---|
-| [`voidtech-core`](plugins/voidtech-core) | 0.19.0 | ✅ 启用 | 中文约定 + 8 个公共技能 + 共享 Archify Runtime |
+| [`voidtech-core`](plugins/voidtech-core) | 0.20.0 | ✅ 启用 | 中文约定 + 8 个公共技能 + 共享 Archify Runtime |
 | [`voidtech-product`](plugins/voidtech-product) | 0.3.0 | ✅ 启用 | 模块化 PRD、需求同步、Logic Atlas 阅读与产品验收 + Product Manager subagent |
-| [`voidtech-design`](plugins/voidtech-design) | 0.1.0 | ✅ 启用 | 设计 brief + 一次性 UI 原型 |
-| [`voidtech-engineering`](plugins/voidtech-engineering) | 0.1.0 | ✅ 启用 | 14 个工程技能 + Architect subagent |
+| [`voidtech-design`](plugins/voidtech-design) | 0.2.0 | ✅ 启用 | 设计 brief + 一次性 UI 原型 |
+| [`voidtech-engineering`](plugins/voidtech-engineering) | 0.2.0 | ✅ 启用 | 14 个工程技能 + Architect subagent |
 | [`voidtech-loop`](plugins/voidtech-loop) | 0.3.0 | ✅ 启用 | Goal Spec + 确定性控制器 + 隔离 worktree + 指定 commit 验收（一期试点版） |
 | [`voidtech-mcp-common`](plugins/voidtech-mcp-common) | 0.1.0 | ⛔ 禁用 | Context7（库文档）、Chrome DevTools（无头浏览器验证） |
 | [`voidtech-mcp-apple`](plugins/voidtech-mcp-apple) | 0.1.0 | ⛔ 禁用 | Apple Docs、XcodeBuildMCP（iOS/macOS 开发） |
 
-MCP 插件安装后需 `claude plugin enable <plugin>@voidtech` 启用，并在首次连接时审查权限。
+Claude Code 安装 MCP 后需执行 `claude plugin enable <plugin>@voidtech`，并在首次连接时审查权限；OMP 通过独立 `.mcp.json` 读取同一组固定版本配置。
+
+### 宿主兼容边界
+
+| 插件 | Claude Code | OMP | 说明 |
+|---|---|---|---|
+| Core / Product / Design / Engineering | ✅ | ✅ | Skills、Agents 与宿主适配 Hook/Tool 已覆盖 |
+| Common MCP / Apple MCP | ✅ | ✅ | 保留独立、固定版本的 `.mcp.json`；仍受 API Key、Node、浏览器或 Xcode 环境约束 |
+| `voidtech-loop` | ✅ | ❌ | OMP catalog 明确排除；不以降级版模拟安全边界 |
 
 ## 官方插件搭配
 

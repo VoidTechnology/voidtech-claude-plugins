@@ -1,6 +1,6 @@
 # VoidTech 插件使用指南
 
-本指南覆盖 Core、Product、Design、Engineering 的 27 个现有技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前四者服务日常回合式协作，后者只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南覆盖 Core、Product、Design、Engineering 的 27 个现有技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前四者同时支持 Claude Code 与 OMP，后者只支持 Claude Code，并只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -22,6 +22,8 @@
 - **重任务隔离**：复杂架构设计交给 `voidtech-engineering:architect`，产品破题交给 `voidtech-product:product-manager`，让主会话只接收结论、风险和可执行下一步。
 
 ## 2. 如何调用
+
+以下命名空间与 `@` 示例是 Claude Code 调用语法。OMP 会按 frontmatter `name` 发现同一批技能与 agents：可直接用自然语言触发技能，或在启用 Skill Commands 时使用 `/skill:<name>`；Product 的脚本调用由 `voidtech_product_runtime` Tool 完成。
 
 技能按责任使用四个命名空间：
 
@@ -55,7 +57,7 @@
 @voidtech-product:product-manager 把这个想法整理成 MVP PRD
 ```
 
-下面的可见性表统计四个工作流插件。这里说的是 Claude 能不能看到并调用技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。`voidtech-loop` 的 `goal`、`goal-spec` 和 `review` 都只能由用户显式调用。
+下面的可见性表统计四个双宿主工作流插件。这里说的是当前宿主能不能看到并调用技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。`voidtech-loop` 仅支持 Claude Code，其 `goal`、`goal-spec` 和 `review` 都只能由用户显式调用。
 
 | 可见性 | 含义 | 技能 |
 |---|---|---|

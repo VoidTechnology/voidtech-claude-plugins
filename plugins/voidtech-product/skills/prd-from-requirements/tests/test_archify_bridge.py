@@ -6,9 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from worktree_fixture import SKILL_ROOT  # noqa: F401
 
+from prdsync import core_archify
 from prdsync.core_archify import archify_bridge
 
 
@@ -28,6 +30,31 @@ IR = {
 
 
 class ArchifyBridgeTest(unittest.TestCase):
+    def test_discovers_core_runtime_from_omp_marketplace_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            install_root = home / ".omp/plugins/cache/plugins/voidtech-core"
+            registry = home / ".omp/plugins/installed_plugins.json"
+            registry.parent.mkdir(parents=True)
+            registry.write_text(json.dumps({
+                "version": 2,
+                "plugins": {
+                    "voidtech-core@voidtech": [{
+                        "scope": "user",
+                        "installPath": str(install_root),
+                        "lastUpdated": "2026-07-27T10:00:00Z",
+                    }],
+                },
+            }), encoding="utf-8")
+
+            with mock.patch.dict(
+                "os.environ",
+                {"HOME": str(home), "CLAUDE_CONFIG_DIR": str(home / "missing-claude")},
+            ):
+                candidates = list(core_archify._candidate_core_roots())
+
+            self.assertIn(install_root, candidates)
+
     def test_extracts_exactly_one_svg(self):
         html = "<html><body><svg viewBox=\"0 0 10 10\"><text>状态</text></svg></body></html>"
         self.assertEqual(

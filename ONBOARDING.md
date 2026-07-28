@@ -1,18 +1,22 @@
-# VoidTech · Claude Code 团队工具上手
+# VoidTech · Claude Code / OMP 团队工具上手
 
 ## 1. 前置条件
 
-- `voidtech-core`、`voidtech-product`、`voidtech-design`、`voidtech-engineering`：Claude Code 2.1.154 或更高版本；Product 的 Logic Atlas 复用 Core 的共享 Runtime，因此 Product 与 Core 配套安装
+- `voidtech-core`、`voidtech-product`、`voidtech-design`、`voidtech-engineering`：Claude Code 2.1.154 或更高版本，或 OMP 17.1.5 或更高版本；Product 的 Logic Atlas 复用 Core 的共享 Runtime，因此 Product 与 Core 配套安装
 - `voidtech-loop`：Claude Code 2.1.210 或更高版本；当前 F3 阶段仅支持 macOS arm64，并依赖 Node.js 18+、Git 与 `jq`
 - 使用 MCP 插件时需要 Node.js 20.19 或更高版本
 - Apple MCP 仅支持安装了 Xcode 的 macOS
 
 ```bash
 claude --version
+# 使用 OMP 时
+omp --version
 node --version
 ```
 
 ## 2. 安装工作流插件与工程内循环
+
+### 2.1 Claude Code
 
 项目的 `.claude/settings.json` 应合入 `templates/project-settings.json`（其中已为 `voidtech` marketplace 声明 `"autoUpdate": true`）。手动安装时执行：
 
@@ -32,7 +36,21 @@ claude plugin install voidtech-loop@voidtech
 
 不满足试点条件时跳过该插件，不影响 Core、Product、Design 与 Engineering。loop 不自动 push、merge、创建 PR/MR 或改写用户分支；机器 eval 通过后仍需人工复核。
 
-### 2.1 开启 marketplace 自动更新（必做）
+### 2.2 Oh My Pi（OMP）
+
+OMP 从同一仓库的 `.omp-plugin/marketplace.json` 安装双宿主插件：
+
+```bash
+omp plugin marketplace add VoidTechnology/voidtech-claude-plugins
+omp plugin install voidtech-core@voidtech
+omp plugin install voidtech-product@voidtech
+omp plugin install voidtech-design@voidtech
+omp plugin install voidtech-engineering@voidtech
+```
+
+需要 MCP 时再安装 `voidtech-mcp-common` 或 `voidtech-mcp-apple`。`voidtech-loop` 不在 OMP catalog 中；不要尝试用普通 Skill 绕过它在 Claude Code 中依赖的 worker、权限和 Hook 安全边界。
+
+### 2.3 开启 Claude Code marketplace 自动更新（必做）
 
 第三方 marketplace 的自动更新默认关闭。不开启的话，插件发版后不会出现 "Plugin updated: … Run /reload-plugins to apply" 提示，只能手动 `claude plugin marketplace update voidtech`。
 
@@ -153,6 +171,13 @@ claude plugin install youdotcom-agent-skills@claude-plugins-official
 claude plugin list
 ```
 
+OMP：
+
+```bash
+omp plugin list
+omp plugin discover voidtech
+```
+
 进入 Claude Code 后检查：
 
 ```text
@@ -163,3 +188,5 @@ claude plugin list
 ```
 
 预期结果：Core、Product、Design、Engineering 均已启用；`/skills` 中迁移技能只出现在各自新命名空间，旧 `/voidtech-core:*` 入口不再出现。试点环境中 `voidtech-loop` 已启用，并可看到 `voidtech-loop:goal`、`voidtech-loop:goal-spec` 与 `voidtech-loop:review`；中文约定由 Core 的 `SessionStart` hook 注入一次；只有主动安装并启用的 MCP 才出现在 `/mcp`；`/plugin` → **Marketplaces** 中 `voidtech` 的 auto-update 为已启用。
+
+OMP 预期结果：Core、Product、Design、Engineering 已安装，按需安装的 MCP 在清单中；`voidtech-loop` 不出现。Product 调用脚本时由 `voidtech_product_runtime` Tool 解析安装目录，不依赖 `${CLAUDE_PLUGIN_ROOT}`；Core 的 Session Hook 只注入上下文和宿主对应的更新命令，不执行升级。

@@ -1,7 +1,7 @@
 ---
 name: architect
 description: 系统架构师(最强模型)。在动手写代码前,把模糊需求或复杂改动转化为可直接执行的技术方案:架构设计、重构策略、模块边界与接口设计、技术选型对比、任务拆解。适用:新功能立项、跨模块系统设计、重大重构评估、性能/并发架构决策、公共 API 设计、数据模型或公共契约变更。不适合:纯实现、小修小补、单文件改动、只需要产品范围判断的任务。只读侦察并产出方案,不修改文件。
-tools: Read, Grep, Glob, WebFetch, WebSearch
+tools: Read, read, Grep, grep, Glob, glob, WebFetch, WebSearch, web_search
 model: fable
 effort: high
 maxTurns: 20

@@ -9,6 +9,18 @@ PLUGIN_NAME="voidtech-core"
 MARKETPLACE_NAME="voidtech"
 DEFAULT_MANIFEST_URL="https://raw.githubusercontent.com/VoidTechnology/voidtech-claude-plugins/main/plugins/voidtech-core/.claude-plugin/plugin.json"
 
+host="claude"
+if [[ "${1:-}" == "--host" && -n "${2:-}" && -z "${3:-}" ]]; then
+  host="$2"
+elif [[ $# -gt 0 ]]; then
+  printf 'usage: %s [--host claude|omp]\n' "$0" >&2
+  exit 2
+fi
+if [[ "$host" != "claude" && "$host" != "omp" ]]; then
+  printf 'unsupported host: %s\n' "$host" >&2
+  exit 2
+fi
+
 if [[ "${VOIDTECH_DISABLE_UPDATE_CHECK:-}" == "1" ]]; then
   exit 0
 fi
@@ -100,10 +112,17 @@ if ! semver_gt "$latest_version" "$current_version"; then
   exit 0
 fi
 
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"【VoidTech update】检测到 %s 可升级：%s -> %s。请先用一句话询问用户是否现在升级，不要直接执行。用户同意后依次运行：claude plugin marketplace update %s && claude plugin update %s@%s，并提醒升级后需重新打开会话才能加载新版；用户表示先不升级则本次会话不再提及此事。"}}\n' \
+if [[ "$host" == "omp" ]]; then
+  marketplace_update="omp plugin marketplace update $MARKETPLACE_NAME"
+  plugin_update="omp plugin upgrade $PLUGIN_NAME@$MARKETPLACE_NAME"
+else
+  marketplace_update="claude plugin marketplace update $MARKETPLACE_NAME"
+  plugin_update="claude plugin update $PLUGIN_NAME@$MARKETPLACE_NAME"
+fi
+
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"【VoidTech update】检测到 %s 可升级：%s -> %s。请先用一句话询问用户是否现在升级，不要直接执行。用户同意后依次运行：%s && %s，并提醒升级后需重新打开会话才能加载新版；用户表示先不升级则本次会话不再提及此事。"}}\n' \
   "$PLUGIN_NAME" \
   "$current_version" \
   "$latest_version" \
-  "$MARKETPLACE_NAME" \
-  "$PLUGIN_NAME" \
-  "$MARKETPLACE_NAME"
+  "$marketplace_update" \
+  "$plugin_update"
