@@ -208,6 +208,12 @@ async function runBrowserAssertions(fixture) {
     await cdp.send("Runtime.enable");
     await cdp.send("Log.enable");
     await cdp.send("Network.enable");
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+      width: 1440,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
     // alert 探针：任何未转义脚本触发的对话框都会被计数而不是阻塞 headless。
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       source: "window.__alertCount = 0;" +
@@ -221,18 +227,52 @@ async function runBrowserAssertions(fixture) {
     await loaded;
 
     const probe = JSON.stringify(fixture.markers.probe);
-    const expectedBranchKinds = {
-      failureBranch: fixture.model.nodes.filter((node) =>
-        node.kind === "flow" && node.detail?.category === "failureBranch").length,
-      pageState: fixture.model.nodes.filter((node) =>
-        node.kind === "state" && node.detail?.category === "pageState").length,
-      failureRecovery: fixture.model.nodes.filter((node) =>
-        node.kind === "flow" && node.detail?.category === "interactionStep"
-        && node.detail.failureRecovery
-        && !["—", "无"].includes(node.detail.failureRecovery)).length,
-      stateImpact: fixture.model.nodes.filter((node) =>
-        node.kind === "flow" && node.detail?.category === "stateImpact").length
+    const fixtureFlowRoot = fixture.model.nodes
+      .filter((node) => node.kind === "flow"
+        && node.detail?.category === "userFlow")
+      .sort((a, b) => a.nodeId.localeCompare(b.nodeId))[0];
+    const fixtureFlowSteps = fixture.model.nodes
+      .filter((node) => node.kind === "flow"
+        && node.detail?.category === "flowStep"
+        && node.detail?.flowId === fixtureFlowRoot?.nodeId)
+      .sort((a, b) => String(a.detail.stepId).localeCompare(
+        String(b.detail.stepId), undefined, { numeric: true }));
+    const fixtureFirstStep = fixtureFlowSteps[0];
+    const fixtureSecondStep = fixtureFlowSteps[1];
+    const belongsToFirstStep = (node) =>
+      node.detail?.stepNodeId === fixtureFirstStep?.nodeId
+      || node.detail?.stepId === fixtureFirstStep?.detail?.stepId;
+    const fixtureFirstInteractions = fixture.model.nodes.filter((node) =>
+      node.kind === "flow" && node.detail?.category === "interactionStep"
+      && node.detail?.flowId === fixtureFlowRoot?.nodeId
+      && belongsToFirstStep(node));
+    const fixtureRecovery = fixtureFirstInteractions.find((node) =>
+      node.detail?.failureRecovery
+      && !["—", "无"].includes(node.detail.failureRecovery));
+    const fixtureFailure = fixture.model.nodes.find((node) =>
+      node.kind === "flow" && node.detail?.category === "failureBranch"
+      && belongsToFirstStep(node));
+    const expectedFirstStepFacts = {
+      interactions: fixtureFirstInteractions.length,
+      failures: fixture.model.nodes.filter((node) =>
+        node.kind === "flow" && node.detail?.category === "failureBranch"
+        && belongsToFirstStep(node)).length,
+      pageStates: fixture.model.nodes.filter((node) =>
+        node.kind === "state" && node.detail?.category === "pageState"
+        && belongsToFirstStep(node)).length,
+      impacts: fixture.model.nodes.filter((node) =>
+        node.kind === "flow" && node.detail?.category === "stateImpact"
+        && belongsToFirstStep(node)).length,
     };
+    const expectedFailureEvidence = fixtureFailure ? {
+      nodeId: fixtureFailure.nodeId,
+      handling: fixtureFailure.detail?.handling
+        || fixtureFailure.detail?.recovery || "",
+    } : null;
+    const expectedRecoveryEvidence = fixtureRecovery ? {
+      nodeId: fixtureRecovery.nodeId,
+      recovery: fixtureRecovery.detail.failureRecovery,
+    } : null;
     const fixtureNodesById = Object.fromEntries(
       fixture.model.nodes.map((node) => [node.nodeId, node]));
     const expectedWorkflowFacts = fixture.model.edges
@@ -252,7 +292,7 @@ async function runBrowserAssertions(fixture) {
       }));
     // 交互探针：在搜索框输入 XSS 探针标题，viewer 应把它作为纯文本结果呈现
     // （既证明搜索框可输入，又证明 <script> 未被当作 HTML 解析/执行）。
-    const expression = `(function(){
+    const expression = `(async function(){
       var out = { alertCount: window.__alertCount };
       out.scriptSrcCount = document.querySelectorAll("script[src]").length;
       var modelEl = document.getElementById("atlas-model");
@@ -315,23 +355,46 @@ async function runBrowserAssertions(fixture) {
       if (flowTab) flowTab.click();
       out.behaviorViews = {};
       var flowPanel = document.getElementById("view-flow");
+      function inspectorCounts(panel){
+        return {
+          interactions: panel ? panel.querySelectorAll(
+            '[data-flow-ref^="interaction-"]').length : 0,
+          failures: panel ? panel.querySelectorAll(
+            '[data-flow-ref^="failure-"]').length : 0,
+          pageStates: panel ? panel.querySelectorAll(
+            '[data-flow-ref^="state-"]').length : 0,
+          impacts: panel ? panel.querySelectorAll(
+            '[data-flow-ref^="impact-"]').length : 0
+        };
+      }
+      function flowRects(panel){
+        return Array.prototype.map.call(
+          panel ? panel.querySelectorAll(".flow-step-wrap") : [],
+          function(node){
+            return {id:node.getAttribute("data-node-id"),
+              left:node.offsetLeft,top:node.offsetTop,
+              width:node.offsetWidth,height:node.offsetHeight};
+          });
+      }
       out.scenarioFlow = {
         defaultVisible: !!flowPanel && !flowPanel.hidden,
         selector: !!document.getElementById("scenario-picker"),
         groups: flowPanel ? flowPanel.querySelectorAll(".scenario-group").length : 0,
         steps: flowPanel ? flowPanel.querySelectorAll(".flow-step-wrap").length : 0,
-        roleSources: flowPanel ? flowPanel.querySelectorAll(
-          ".workflow-role-source").length : 0,
-        attributedRoles: flowPanel ? Array.prototype.every.call(
-          flowPanel.querySelectorAll(".workflow-role-source"),
-          function(source){return source.title.includes("prd.md");}) : false,
-        selectedSteps: flowPanel ? flowPanel.querySelectorAll('.flow-node[aria-pressed="true"]').length : 0,
-        interactionPanels: flowPanel ? flowPanel.querySelectorAll(".interaction-panel").length : 0,
-        interactions: flowPanel ? flowPanel.querySelectorAll(".interaction-card").length : 0,
-        attachments: flowPanel ? flowPanel.querySelectorAll(".interaction-attachments button").length : 0,
-        failureDisclosures: flowPanel ? flowPanel.querySelectorAll(".interaction-attachments details").length : 0,
-        dependencyLanes: flowPanel ? flowPanel.querySelectorAll(".scenario-lane").length - 1 : 0,
-        boundaryDisclosures: flowPanel ? flowPanel.querySelectorAll(".scenario-details").length : 0,
+        selectedSteps: flowPanel ?
+          flowPanel.querySelectorAll('.flow-node[aria-pressed="true"]').length : 0,
+        inspectors: flowPanel ? flowPanel.querySelectorAll(".flow-inspector").length : 0,
+        inspectorTitle: flowPanel ?
+          ((flowPanel.querySelector("#flow-inspector-heading") || {}).textContent || "") : "",
+        counts: inspectorCounts(flowPanel),
+        pageStateDisclosures: flowPanel ?
+          flowPanel.querySelectorAll("details.inspector-disclosure").length : 0,
+        openPageStateDisclosures: flowPanel ?
+          flowPanel.querySelectorAll("details.inspector-disclosure[open]").length : 0,
+        moduleSummaryOpen: !!(flowPanel &&
+          flowPanel.querySelector(".scenario-module-summary[open]")),
+        drawerOpen: !!(document.getElementById("drawer") &&
+          document.getElementById("drawer").classList.contains("open")),
         roleLanes: flowPanel ? flowPanel.querySelectorAll(".workflow-role-lane").length : 0,
         workflowLinks: flowPanel ? flowPanel.querySelectorAll(".workflow-link").length : 0,
         workflowLinkLabels: flowPanel ? Array.prototype.map.call(
@@ -346,45 +409,262 @@ async function runBrowserAssertions(fixture) {
             condition: node.getAttribute("data-condition")
           };}) : [],
         semanticIcons: flowPanel ? flowPanel.querySelectorAll(".semantic-icon").length : 0,
-        interactionLegend: !!(flowPanel && flowPanel.querySelector(".interaction-legend")),
-        interactionFieldIcons: flowPanel ? flowPanel.querySelectorAll(".interaction-card dt .semantic-icon").length : 0,
-        branchDisclosures: flowPanel ?
-          flowPanel.querySelectorAll("details.step-branches").length : 0,
-        openBranchDisclosures: flowPanel ?
-          flowPanel.querySelectorAll("details.step-branches[open]").length : 0,
-      };
-      out.scenarioFlow.branchKinds = {};
-      ["failureBranch","pageState","failureRecovery","stateImpact"].forEach(function(kind){
-        out.scenarioFlow.branchKinds[kind] = flowPanel ?
+        railMode: document.getElementById("body").classList.contains("flow-mode"),
+        railWidth: Math.round(document.querySelector(".sidebar").getBoundingClientRect().width),
+        coverageText: flowPanel ?
+          ((flowPanel.querySelector(".scenario-coverage") || {}).textContent || "") : "",
+        contractKeys: flowPanel ? Array.prototype.map.call(
+          flowPanel.querySelectorAll(".contract-item[data-contract-key]"),
+          function(node){return node.getAttribute("data-contract-key");}) : [],
+        contractLabels: flowPanel ? Array.prototype.map.call(
+          flowPanel.querySelectorAll(".contract-item dt"),
+          function(node){return node.textContent.trim();}) : [],
+        contractText: flowPanel ?
+          ((flowPanel.querySelector(".scenario-contract") || {}).innerText || "") : "",
+        readiness: flowPanel ? {
+          status: ((flowPanel.querySelector(".review-readiness") || {})
+            .getAttribute?.("data-review-status") || ""),
+          text: ((flowPanel.querySelector(".review-readiness") || {}).innerText || ""),
+          verdict: ((flowPanel.querySelector(".review-verdict") || {}).textContent || ""),
+          rule: ((flowPanel.querySelector(".review-rule") || {}).textContent || ""),
+          blockers: flowPanel.querySelectorAll(
+            '.readiness-metric[data-review-state="blocker"]').length,
+          pending: flowPanel.querySelectorAll(
+            '.readiness-metric[data-review-state="pending"]').length,
+          satisfied: flowPanel.querySelectorAll(
+            '.readiness-metric[data-review-state="satisfied"]').length,
+          issues: flowPanel.querySelectorAll(
+            ".review-all-issues .review-issue[data-review-step]").length,
+          primaryIssues: flowPanel.querySelectorAll(
+            ".review-primary-issues .review-issue[data-review-step]").length,
+          filters: flowPanel.querySelectorAll(
+            ".review-filter[data-review-filter]").length,
+          allSummary: ((flowPanel.querySelector(".review-all summary") || {})
+            .textContent || "")
+        } : {},
+        lenses: flowPanel ? Array.prototype.map.call(
+          flowPanel.querySelectorAll(".flow-lens[data-lens]"),
+          function(node){return node.getAttribute("data-lens");}) : [],
+        activeLens: flowPanel ?
+          ((flowPanel.querySelector('.flow-lens[aria-pressed="true"]') || {})
+            .getAttribute?.("data-lens") || "") : "",
+        attachedFailures: flowPanel ?
+          flowPanel.querySelectorAll('.flow-branch[data-branch-kind="failure"]').length : 0,
+        attachedPageStates: flowPanel ?
+          flowPanel.querySelectorAll('.flow-branch[data-branch-kind="page-state"]').length : 0,
+        inspectorSections: flowPanel ? Array.prototype.map.call(
           flowPanel.querySelectorAll(
-            '.branch-node[data-branch-kind="' + kind + '"]').length : 0;
+            ".step-contract-section[data-contract-section] > h5"),
+          function(node){return node.textContent.trim();}) : [],
+        permissionDimensions: flowPanel ? Array.prototype.map.call(
+          flowPanel.querySelectorAll(
+            ".permission-dimension[data-permission-dimension]"),
+          function(node){return node.getAttribute("data-permission-dimension");}) : [],
+        exceptionText: flowPanel ?
+          ((flowPanel.querySelector(
+            '.step-contract-section[data-contract-section="exception"]') || {})
+            .innerText || "") : "",
+        permissionText: flowPanel ?
+          ((flowPanel.querySelector(
+            '.step-contract-section[data-contract-section="permission"]') || {})
+            .innerText || "") : "",
+        stepPermissionText: flowPanel ?
+          ((flowPanel.querySelector("[data-step-permission-contract]") || {})
+            .innerText || "") : "",
+        rolePermissionMatrixOpen: flowPanel ?
+          !!flowPanel.querySelector(".role-permission-matrix[open]") : false,
+        rolePermissionMatrixText: flowPanel ?
+          ((flowPanel.querySelector(".role-permission-matrix") || {})
+            .textContent || "") : "",
+        compactEngineeringBoundary: flowPanel ?
+          ((flowPanel.querySelector(".engineering-boundary.compact") || {})
+            .innerText || "") : "",
+        compactEngineeringBoundaryRows: flowPanel ?
+          flowPanel.querySelectorAll(".engineering-boundary.compact .kv").length : 0,
+        blockingGaps: flowPanel ?
+          flowPanel.querySelectorAll(".flow-empty.blocking").length : 0,
+        referenceNav: !!document.querySelector(".reference-nav"),
+        referenceNavOpen: !!document.querySelector(".reference-nav[open]")
+      };
+      var rolePermissionMatrix = flowPanel &&
+        flowPanel.querySelector(".role-permission-matrix");
+      var permissionGrid = rolePermissionMatrix && rolePermissionMatrix.parentElement;
+      var matrixStyle = rolePermissionMatrix ?
+        getComputedStyle(rolePermissionMatrix) : null;
+      out.scenarioFlow.rolePermissionMatrix = {
+        last: !!(permissionGrid &&
+          permissionGrid.lastElementChild === rolePermissionMatrix),
+        rows: rolePermissionMatrix ?
+          rolePermissionMatrix.querySelectorAll("tbody tr").length : 0,
+        compactTable: !!(rolePermissionMatrix &&
+          rolePermissionMatrix.querySelector(".role-permission-table")),
+        fullRow: !!(matrixStyle && matrixStyle.gridColumnStart === "1" &&
+          matrixStyle.gridColumnEnd === "-1")
+      };
+      out.scenarioFlow.defaultDensity = {
+        expanded: flowPanel ? flowPanel.querySelectorAll(
+          '.flow-step-wrap[data-expanded="true"]').length : 0,
+        collapsed: flowPanel ? flowPanel.querySelectorAll(
+          '.flow-step-wrap[data-expanded="false"]').length : 0,
+        collapsedDetails: flowPanel ? flowPanel.querySelectorAll(
+          '.flow-step-wrap[data-expanded="false"] .flow-lens-facts, '
+          + '.flow-step-wrap[data-expanded="false"] .flow-branch-list').length : 0,
+        collapsedSummaries: flowPanel ? flowPanel.querySelectorAll(
+          '.flow-step-wrap[data-expanded="false"] .flow-node-summary').length : 0
+      };
+      var secondReviewIssue = ${JSON.stringify(fixtureSecondStep?.nodeId || "")}
+        ? flowPanel.querySelector(
+          '.review-issue[data-review-step="${fixtureSecondStep?.nodeId || ""}"]')
+        : null;
+      if (secondReviewIssue) secondReviewIssue.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      out.scenarioFlow.issueLocate = {
+        found: !!secondReviewIssue,
+        selected: !!document.querySelector(
+          '.flow-node[data-node-id="${fixtureSecondStep?.nodeId || ""}"][aria-pressed="true"]'),
+        focusedTitle: document.activeElement ===
+          document.getElementById("flow-inspector-heading")
+      };
+      flowPanel = document.getElementById("view-flow");
+      var resetStep = flowPanel && flowPanel.querySelector(".flow-node");
+      if (resetStep) resetStep.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      flowPanel = document.getElementById("view-flow");
+      out.scenarioFlow.lensResults = {};
+      ["flow","state","data","exception","access"].forEach(function(name){
+        var lensButton = flowPanel.querySelector('.flow-lens[data-lens="' + name + '"]');
+        if (lensButton) lensButton.click();
+        flowPanel = document.getElementById("view-flow");
+        out.scenarioFlow.lensResults[name] = {
+          active: !!flowPanel.querySelector(
+            '.scenario-graph-pane[data-active-lens="' + name + '"]'),
+          text: (flowPanel.querySelector(".scenario-graph-pane") || {}).innerText || ""
+        };
       });
+      var flowLens = flowPanel.querySelector('.flow-lens[data-lens="flow"]');
+      if (flowLens) flowLens.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      flowPanel = document.getElementById("view-flow");
+      var rectsBefore = flowRects(flowPanel);
+      var firstInspectorTitle = out.scenarioFlow.inspectorTitle;
+      var conflictSteps = flowPanel.querySelectorAll(".flow-node");
+      if (conflictSteps.length > 1) conflictSteps[1].click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      flowPanel = document.getElementById("view-flow");
+      var exceptionLens = flowPanel.querySelector('.flow-lens[data-lens="exception"]');
+      if (exceptionLens) exceptionLens.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      flowPanel = document.getElementById("view-flow");
+      var failureButton = flowPanel.querySelector(
+        '.flow-branch[data-branch-kind="failure"]');
+      var failureRef = failureButton ? failureButton.getAttribute("data-flow-ref") : "";
+      if (failureButton) failureButton.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      var evidencePanel = document.getElementById("flow-inspector");
+      out.scenarioFlow.failureEvidence = {
+        opened: !!document.getElementById("flow-evidence-heading"),
+        focused: document.activeElement === document.getElementById("flow-evidence-heading"),
+        text: evidencePanel ? evidencePanel.innerText : "",
+        drawerClosed: !document.getElementById("drawer").classList.contains("open"),
+        selectedStep: ((document.querySelector(
+          '.flow-node[aria-pressed="true"]') || {}).getAttribute?.("data-node-id") || ""),
+        secondarySelected: document.querySelectorAll(
+          '.flow-branch[aria-pressed="true"]').length,
+        backText: ((evidencePanel.querySelector(".flow-inspector-back") || {})
+          .textContent || "")
+      };
+      var evidenceBack = evidencePanel && evidencePanel.querySelector(".flow-inspector-back");
+      if (evidenceBack) evidenceBack.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      out.scenarioFlow.failureEvidence.returnedFocus =
+        !!failureRef && document.activeElement?.getAttribute("data-flow-ref") === failureRef;
+      flowPanel = document.getElementById("view-flow");
+      var recoveryRef = ${JSON.stringify(expectedRecoveryEvidence?.nodeId
+        ? `interaction-${expectedRecoveryEvidence.nodeId}` : "")};
+      var recoveryButton = recoveryRef && flowPanel ?
+        flowPanel.querySelector('[data-flow-ref="' + recoveryRef + '"]') : null;
+      if (recoveryButton) recoveryButton.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      evidencePanel = document.getElementById("flow-inspector");
+      out.scenarioFlow.recoveryEvidence = {
+        opened: !!recoveryButton && !!document.getElementById("flow-evidence-heading"),
+        text: evidencePanel ? evidencePanel.innerText : "",
+        drawerClosed: !document.getElementById("drawer").classList.contains("open")
+      };
+      evidenceBack = evidencePanel && evidencePanel.querySelector(".flow-inspector-back");
+      if (evidenceBack) evidenceBack.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      flowPanel = document.getElementById("view-flow");
       var stepButtons = flowPanel ? flowPanel.querySelectorAll(".flow-node") : [];
-      var beforeStep = flowPanel && flowPanel.querySelector(".interaction-head") ?
-        flowPanel.querySelector(".interaction-head").textContent : "";
-      var beforeAttachments = flowPanel && flowPanel.querySelector(".interaction-panel") ?
-        flowPanel.querySelector(".interaction-panel").innerText : "";
       if (stepButtons.length > 1) stepButtons[1].click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
       var switchedPanel = document.getElementById("view-flow");
-      var afterStep = switchedPanel && switchedPanel.querySelector(".interaction-head") ?
-        switchedPanel.querySelector(".interaction-head").textContent : "";
-      var afterAttachments = switchedPanel && switchedPanel.querySelector(".interaction-panel") ?
-        switchedPanel.querySelector(".interaction-panel").innerText : "";
+      var afterInspectorTitle = switchedPanel ?
+        ((switchedPanel.querySelector("#flow-inspector-heading") || {}).textContent || "") : "";
       var switchedSelected = switchedPanel ?
         switchedPanel.querySelectorAll('.flow-node[aria-pressed="true"]').length : 0;
-      var switchedCards = switchedPanel ?
-        switchedPanel.querySelectorAll(".interaction-card").length : 0;
-      out.scenarioFlow.stepSwitch = {
-        changed: !!beforeStep && !!afterStep && beforeStep !== afterStep,
-        oneSelected: switchedSelected === 1,
-        hasInteractions: switchedCards > 0,
-        firstHasOnlyException: beforeAttachments.includes("异常与恢复")
-          && !beforeAttachments.includes("状态 ·"),
-        secondHasOnlyState: afterAttachments.includes("状态 ·")
-          && !afterAttachments.includes("异常与恢复")
+      out.scenarioFlow.engineeringBoundary = {
+        links: switchedPanel ? switchedPanel.querySelectorAll(
+          '.workflow-link[data-boundary-kind="cross-system"]').length : 0,
+        labels: switchedPanel ? Array.prototype.map.call(
+          switchedPanel.querySelectorAll(".workflow-boundary-label"),
+          function(node){return node.textContent.trim();}) : [],
+        text: switchedPanel ?
+          ((switchedPanel.querySelector(".engineering-boundary") || {}).innerText || "") : ""
       };
-      var switchedButtons = switchedPanel ? switchedPanel.querySelectorAll(".flow-node") : [];
+      var rectsAfter = flowRects(switchedPanel);
+      var maxShift=0;
+      rectsBefore.forEach(function(before,index){
+        var after=rectsAfter[index];if(!after) return;
+        maxShift=Math.max(maxShift,Math.abs(before.left-after.left),
+          Math.abs(before.top-after.top),Math.abs(before.width-after.width),
+          Math.abs(before.height-after.height));
+      });
+      var systemPermission = switchedPanel ?
+        switchedPanel.querySelector(
+          '.step-contract-section[data-contract-section="permission"]') : null;
+      var systemProcess = switchedPanel ?
+        switchedPanel.querySelector(
+          '.step-contract-section[data-contract-section="process"]') : null;
+      var systemEntry = switchedPanel ?
+        switchedPanel.querySelector(
+          '.step-contract-section[data-contract-section="entry"]') : null;
+      out.scenarioFlow.stepSwitch = {
+        changed: !!firstInspectorTitle && !!afterInspectorTitle
+          && firstInspectorTitle !== afterInspectorTitle,
+        oneSelected: switchedSelected === 1,
+        inspectorCount: switchedPanel ?
+          switchedPanel.querySelectorAll(".flow-inspector").length : 0,
+        graphMaxShift: maxShift,
+        focusedTitle: document.activeElement ===
+          document.getElementById("flow-inspector-heading"),
+        systemPermissionText: systemPermission ? systemPermission.innerText : "",
+        systemPermissionBlocking: systemPermission ?
+          systemPermission.querySelectorAll(".flow-empty.blocking").length : 0,
+        systemProcessText: systemProcess ? systemProcess.innerText : "",
+        systemProcessBlocking: systemProcess ?
+          systemProcess.querySelectorAll(".flow-empty.blocking").length : 0,
+        systemEntryText: systemEntry ? systemEntry.innerText : ""
+      };
+      var systemAccessLens = switchedPanel ?
+        switchedPanel.querySelector('[data-lens="access"]') : null;
+      if (systemAccessLens) systemAccessLens.click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
+      var systemAccessPanel = document.getElementById("view-flow");
+      var systemSelected = systemAccessPanel ?
+        systemAccessPanel.querySelector('.flow-node[aria-pressed="true"]') : null;
+      var systemStepWrap = systemSelected ?
+        systemSelected.closest(".flow-step-wrap") : null;
+      var systemAccessFacts = systemStepWrap ?
+        systemStepWrap.querySelector(".flow-lens-facts") : null;
+      out.scenarioFlow.stepSwitch.systemAccessText =
+        systemAccessFacts ? systemAccessFacts.innerText : "";
+      out.scenarioFlow.stepSwitch.systemAccessBlocking = systemStepWrap ?
+        systemStepWrap.querySelectorAll(".flow-lens-fact.blocking").length : 0;
+      var switchedButtons = systemAccessPanel ?
+        systemAccessPanel.querySelectorAll(".flow-node") : [];
       if (switchedButtons.length) switchedButtons[0].click();
+      await new Promise(function(resolve){requestAnimationFrame(resolve);});
       ["flow", "state", "boundary"].forEach(function(name){
         var tab = document.getElementById("tab-" + name);
         var panel = document.getElementById("view-" + name);
@@ -607,10 +887,157 @@ async function runBrowserAssertions(fixture) {
       return JSON.stringify(out);
     })()`;
     const evaluated = await cdp.send("Runtime.evaluate",
-      { expression, returnByValue: true });
+      { expression, returnByValue: true, awaitPromise: true });
     if (evaluated.exceptionDetails) {
       throw new Error(`断言表达式执行失败: ${JSON.stringify(evaluated.exceptionDetails)}`);
     }
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const desktop1280Evaluated = await cdp.send("Runtime.evaluate", {
+      expression: `(async function(){
+        var flowTab=document.getElementById("tab-flow");
+        if(flowTab) flowTab.click();
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        var panel=document.getElementById("view-flow");
+        var graphElement=panel.querySelector(".scenario-graph-pane");
+        graphElement.scrollIntoView({block:"start"});
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        var graph=graphElement.getBoundingClientRect();
+        var inspector=panel.querySelector("#flow-inspector").getBoundingClientRect();
+        function rects(){
+          return Array.prototype.map.call(panel.querySelectorAll(".flow-step-wrap"),
+            function(wrap){
+              var node=wrap.querySelector(".flow-node");
+              var rect=node.getBoundingClientRect();
+              return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,
+                layoutLeft:wrap.offsetLeft,layoutTop:wrap.offsetTop,
+                layoutWidth:wrap.offsetWidth,layoutHeight:wrap.offsetHeight,
+                clipped:node.scrollHeight>node.clientHeight||
+                  node.scrollWidth>node.clientWidth};
+            });
+        }
+        var before=rects();
+        var buttons=panel.querySelectorAll(".flow-node");
+        if(buttons.length>1) buttons[1].click();
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        panel=document.getElementById("view-flow");
+        var after=rects(),maxShift=0;
+        before.forEach(function(item,index){
+          var next=after[index];if(!next)return;
+          ["layoutLeft","layoutTop","layoutWidth","layoutHeight"].forEach(function(key){
+            maxShift=Math.max(maxShift,Math.abs(item[key]-next[key]));
+          });
+        });
+        var workflow=panel.querySelector(".workflow-scroll");
+        return JSON.stringify({
+          width:window.innerWidth,height:window.innerHeight,
+          pageNoHorizontalScroll:document.documentElement.scrollWidth<=window.innerWidth
+            &&document.body.scrollWidth<=window.innerWidth,
+          allStepsVisible:before.every(function(rect){
+            return rect.left>=graph.left&&rect.right<=graph.right
+              &&rect.right<=inspector.left&&rect.top>=0&&rect.bottom<=window.innerHeight;
+          }),
+          cardContentComplete:before.every(function(rect){return !rect.clipped;}),
+          inspectorFullyVisible:inspector.right<=window.innerWidth
+            &&inspector.bottom<=window.innerHeight,
+          workflowNoHorizontalScroll:workflow.scrollWidth===workflow.clientWidth,
+          graphMaxShift:maxShift
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (desktop1280Evaluated.exceptionDetails) {
+      throw new Error(`1280×800 断言表达式执行失败: ${
+        JSON.stringify(desktop1280Evaluated.exceptionDetails)}`);
+    }
+    const desktop1280 = JSON.parse(desktop1280Evaluated.result.value);
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const mobileEvaluated = await cdp.send("Runtime.evaluate", {
+      expression: `(async function(){
+        var flowTab=document.getElementById("tab-flow");
+        if(flowTab) flowTab.click();
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        var panel=document.getElementById("view-flow");
+        var initialClose=panel&&panel.querySelector(".flow-inspector-close");
+        if(initialClose&&getComputedStyle(initialClose).display!=="none") initialClose.click();
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        panel=document.getElementById("view-flow");
+        panel.scrollTop=0;
+        var scene=panel.querySelector(".behavior-head h3");
+        var contract=panel.querySelector(".scenario-contract");
+        var step=panel.querySelector(".mobile-flow-step");
+        var sceneRect=scene&&scene.getBoundingClientRect();
+        var contractRect=contract&&contract.getBoundingClientRect();
+        var stepRect=step&&step.getBoundingClientRect();
+        if(step&&(!stepRect||stepRect.top<0||stepRect.bottom>844)){
+          step.scrollIntoView({block:"center"});
+          await new Promise(function(resolve){requestAnimationFrame(resolve);});
+          panel=document.getElementById("view-flow");
+          step=panel.querySelector(".mobile-flow-step");
+          stepRect=step&&step.getBoundingClientRect();
+        }
+        var stepId=step&&step.getAttribute("data-node-id");
+        var beforeScroll=panel.scrollTop;
+        if(step) step.click();
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        panel=document.getElementById("view-flow");
+        var workspace=panel.querySelector(".scenario-workspace");
+        var inspector=panel.querySelector(".flow-inspector");
+        var graph=panel.querySelector(".scenario-graph-pane");
+        var heading=document.getElementById("flow-inspector-heading");
+        var close=panel.querySelector(".flow-inspector-close");
+        var detailState={
+          inspectorVisible:!!inspector&&getComputedStyle(inspector).display!=="none",
+          graphHidden:!!graph&&graph.getClientRects().length===0,
+          focusedTitle:document.activeElement===heading,
+          drawerClosed:!document.getElementById("drawer").classList.contains("open"),
+          workspaceOpen:!!workspace&&workspace.classList.contains("inspector-open")
+        };
+        if(close) close.click();
+        await new Promise(function(resolve){requestAnimationFrame(resolve);});
+        panel=document.getElementById("view-flow");
+        var returned=document.activeElement;
+        return JSON.stringify({
+          width:window.innerWidth,
+          pageNoHorizontalScroll:document.documentElement.scrollWidth<=window.innerWidth
+            &&document.body.scrollWidth<=window.innerWidth,
+          scenarioVisible:!!sceneRect&&sceneRect.top>=0&&sceneRect.bottom<=844,
+          contractVisible:!!contractRect&&contractRect.top>=0&&contractRect.top<844,
+          firstStepVisible:!!stepRect&&stepRect.top>=0&&stepRect.bottom<=844,
+          mobileListVisible:!!panel.querySelector(".workflow-mobile-list")
+            &&getComputedStyle(panel.querySelector(".workflow-mobile-list")).display!=="none",
+          desktopGraphHidden:getComputedStyle(
+            panel.querySelector(".workflow-scroll")).display==="none",
+          detail:detailState,
+          returnedFocus:!!returned&&returned.classList.contains("mobile-flow-step")
+            &&returned.getAttribute("data-node-id")===stepId,
+          scrollRestored:panel.scrollTop===beforeScroll
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (mobileEvaluated.exceptionDetails) {
+      throw new Error(`窄屏断言表达式执行失败: ${
+        JSON.stringify(mobileEvaluated.exceptionDetails)}`);
+    }
+    const mobile = JSON.parse(mobileEvaluated.result.value);
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+      width: 1440,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
     const dom = JSON.parse(evaluated.result.value);
 
     const fallbackLoaded = cdp.waitForEvent("Page.loadEventFired", 20000);
@@ -694,40 +1121,200 @@ async function runBrowserAssertions(fixture) {
       failures.push(`场景流程主干未渲染完整: ${JSON.stringify(scenario)}`);
     }
     if (!scenario.selector) failures.push("场景流程缺少业务场景选择器");
-    if (scenario.selectedSteps !== 1 || scenario.interactionPanels !== 1 || scenario.interactions < 1) {
-      failures.push(`场景步骤未展开唯一页面交互轨迹: ${JSON.stringify(scenario)}`);
+    if (scenario.selectedSteps !== 1 || scenario.inspectors !== 1
+        || !scenario.inspectorTitle) {
+      failures.push(`场景步骤未进入唯一步骤检查器: ${JSON.stringify(scenario)}`);
+    }
+    if (JSON.stringify(scenario.counts ?? {})
+        !== JSON.stringify(expectedFirstStepFacts)) {
+      failures.push(
+        `默认步骤检查器与模型事实数量不一致: DOM=${JSON.stringify(
+          scenario.counts)} model=${JSON.stringify(expectedFirstStepFacts)}`);
     }
     if (scenario.roleLanes < 2
         || scenario.workflowLinks !== expectedWorkflowFacts.length) {
       failures.push(`场景流程未按角色泳道和模型主路径渲染: ${JSON.stringify(scenario)}`);
     }
-    if (scenario.semanticIcons < scenario.steps || !scenario.interactionLegend
-        || scenario.interactionFieldIcons < scenario.interactions * 5) {
-      failures.push(`场景流程或交互卡缺少稳定语义图标: ${JSON.stringify(scenario)}`);
+    if (scenario.semanticIcons < scenario.steps
+        || !scenario.railMode || scenario.railWidth !== 64
+        || !scenario.coverageText.includes("页面操作")) {
+      failures.push(`场景主线缺少稳定语义、覆盖签名或窄模块栏: ${JSON.stringify(scenario)}`);
     }
-    if (scenario.attachments < 1) failures.push("页面交互未精确挂载状态变化或异常");
-    if (scenario.failureDisclosures < 1) failures.push("页面交互未提供可展开异常");
+    if (scenario.drawerOpen || scenario.moduleSummaryOpen
+        || scenario.pageStateDisclosures !== 1
+        || scenario.openPageStateDisclosures !== 0) {
+      failures.push(`场景首屏未保持“主线 + 唯一 Inspector”的渐进披露: ${JSON.stringify(scenario)}`);
+    }
+    if (JSON.stringify(scenario.contractKeys || []) !== JSON.stringify([
+          "goal","trigger","preconditions","success","participants","exclusions"])
+        || scenario.contractLabels?.[0] !== "场景名称与目标"
+        || !scenario.contractText.includes("查看订单详情")
+        || !scenario.contractText.includes("会员")
+        || !scenario.contractText.includes("支付结算")) {
+      failures.push(`场景合同未覆盖目标、触发、成功标准、参与方与边界: ${
+        JSON.stringify(scenario)}`);
+    }
+    if (scenario.readiness?.status !== "pending"
+        || scenario.readiness.blockers !== 1
+        || scenario.readiness.pending !== 1
+        || scenario.readiness.satisfied !== 1
+        || scenario.readiness.issues < 1
+        || scenario.readiness.primaryIssues !== Math.min(3,scenario.readiness.issues)
+        || scenario.readiness.filters !== 3
+        || !scenario.readiness.allSummary.includes(String(scenario.readiness.issues))
+        || !scenario.readiness.verdict.includes("评审结论：待确认")
+        || !scenario.readiness.rule.includes("不存在阻断项且仍有待确认项")
+        || !scenario.readiness.text.includes("可进入产品评审，研发评审待确认")) {
+      failures.push(`评审就绪度未给出阻断/待确认/已满足结论: ${
+        JSON.stringify(scenario.readiness)}`);
+    }
+    if (!scenario.issueLocate?.found || !scenario.issueLocate.selected
+        || !scenario.issueLocate.focusedTitle) {
+      failures.push(`评审阻断项不能直接定位到对应步骤: ${
+        JSON.stringify(scenario.issueLocate)}`);
+    }
+    if (scenario.defaultDensity?.expanded !== 1
+        || scenario.defaultDensity.collapsed !== scenario.steps-1
+        || scenario.defaultDensity.collapsedDetails !== 0
+        || scenario.defaultDensity.collapsedSummaries !== scenario.steps-1) {
+      failures.push(`默认流程透镜未保持“主路径摘要 + 当前步骤展开”: ${
+        JSON.stringify(scenario.defaultDensity)}`);
+    }
+    if (JSON.stringify(scenario.lenses || []) !== JSON.stringify([
+          "flow","state","data","exception","access"])
+        || scenario.activeLens !== "flow"
+        || !Object.values(scenario.lensResults || {}).every((result) => result.active)
+        || !scenario.lensResults?.state?.text.includes("处理中")
+        || !scenario.lensResults?.data?.text.includes("订单编号")
+        || !scenario.lensResults?.exception?.text.includes("提示订单不存在")
+        || !scenario.lensResults?.access?.text.includes("数据范围")) {
+      failures.push(`五个评审透镜未在同一场景上下文中完整切换: ${
+        JSON.stringify(scenario.lensResults)}`);
+    }
+    if (scenario.attachedFailures !== 1 || scenario.attachedPageStates !== 1) {
+      failures.push(`异常与页面边缘状态未挂到触发步骤: ${JSON.stringify(scenario)}`);
+    }
+    if (JSON.stringify(scenario.inspectorSections || []) !== JSON.stringify([
+          "1. 进入条件","2. 输入字段与校验","3. 操作及系统处理",
+          "4. 成功结果与状态变化","5. 异常、用户提示及恢复",
+          "6. 权限、数据范围和需求来源"])
+        || JSON.stringify(scenario.permissionDimensions || []) !== JSON.stringify([
+          "operation","data-scope","field-visibility","denial"])
+        || !scenario.exceptionText.includes("恢复执行角色 超级管理员")
+        || !scenario.exceptionText.includes("责任交接 会员 → 超级管理员")
+        || !scenario.stepPermissionText.includes("本步骤所需权限")
+        || !scenario.stepPermissionText.includes("会员 · 查看 · 允许")
+        || scenario.stepPermissionText.includes("会员 · 导出")
+        || scenario.rolePermissionMatrixOpen
+        || !scenario.rolePermissionMatrixText.includes("导出")
+        || !scenario.permissionText.includes("本人所属订单")
+        || !scenario.permissionText.includes("联系方式可见性: 脱敏")
+        || !scenario.permissionText.includes("入口隐藏，直接请求返回无权限")) {
+      failures.push(`步骤检查器未固定为六段合同或未突出机械缺口: ${
+        JSON.stringify(scenario)}`);
+    }
+    if (!scenario.exceptionText.includes(
+          "流程失败触发未声明；页面边缘触发已声明：加载中（首次进入）")) {
+      failures.push(`流程失败与页面边缘触发条件仍相互矛盾: ${
+        JSON.stringify(scenario.exceptionText)}`);
+    }
+    if (!scenario.rolePermissionMatrix?.last
+        || !scenario.rolePermissionMatrix?.compactTable
+        || !scenario.rolePermissionMatrix?.fullRow
+        || scenario.rolePermissionMatrix?.rows !== 3) {
+      failures.push(`角色完整权限矩阵未默认折叠为末尾整行紧凑表格: ${
+        JSON.stringify(scenario.rolePermissionMatrix)}`);
+    }
+    if (!scenario.permissionText.includes("角色全局数据边界（补充）")
+        || !scenario.permissionText.includes("不代表本步骤实际访问范围")) {
+      failures.push(`角色全局数据边界仍被误写为步骤访问范围: ${
+        JSON.stringify(scenario.permissionText)}`);
+    }
+    if (!scenario.compactEngineeringBoundary.includes(
+          "不适用：本步骤不跨系统，不要求事件、事务或重试合同。")
+        || scenario.compactEngineeringBoundaryRows !== 0) {
+      failures.push(`非跨系统步骤仍展示完整工程合同: ${JSON.stringify({
+        text: scenario.compactEngineeringBoundary,
+        rows: scenario.compactEngineeringBoundaryRows
+      })}`);
+    }
+    if (!scenario.referenceNav || scenario.referenceNavOpen) {
+      failures.push(`全局资料页未降级为默认收起的补充入口: ${JSON.stringify(scenario)}`);
+    }
+    if (expectedFailureEvidence
+        && (!scenario.failureEvidence?.opened
+          || !scenario.failureEvidence.focused
+          || !scenario.failureEvidence.drawerClosed
+          || !scenario.failureEvidence.returnedFocus
+          || scenario.failureEvidence.selectedStep !== fixtureFirstStep?.nodeId
+          || scenario.failureEvidence.secondarySelected !== 1
+          || !scenario.failureEvidence.backText.includes(
+            `返回 ${fixtureFirstStep?.detail?.stepId}`)
+          || !scenario.failureEvidence.text.includes(
+            expectedFailureEvidence.handling))) {
+      failures.push(`流程失败证据未在 Inspector 内完成追溯与焦点返回: ${
+        JSON.stringify(scenario.failureEvidence)}`);
+    }
+    if (expectedRecoveryEvidence
+        && (!scenario.recoveryEvidence?.opened
+          || !scenario.recoveryEvidence.drawerClosed
+          || !scenario.recoveryEvidence.text.includes(
+            expectedRecoveryEvidence.recovery))) {
+      failures.push(`交互失败恢复未在 Inspector 内保真呈现: ${
+        JSON.stringify(scenario.recoveryEvidence)}`);
+    }
+    if (scenario.engineeringBoundary?.links < 1
+        || !scenario.engineeringBoundary.labels.some((label) =>
+          label.includes("跨系统") && label.includes("异步"))
+        || !scenario.engineeringBoundary.text.includes("工程边界")
+        || !scenario.engineeringBoundary.text.includes("协作模块")
+        || !scenario.engineeringBoundary.text.includes("事件名称")
+        || !scenario.engineeringBoundary.text.includes("order.completed.v1")
+        || !scenario.engineeringBoundary.text.includes("事务提交点")
+        || !scenario.engineeringBoundary.text.includes("TX-FIXTURE-001")
+        || !scenario.engineeringBoundary.text.includes("重试 / 幂等")
+        || !scenario.engineeringBoundary.text.includes("重复投递幂等")
+        || !scenario.engineeringBoundary.text.includes("失败影响")) {
+      failures.push(`跨系统步骤未保真展示事件、事务、重试与失败影响: ${
+        JSON.stringify(scenario.engineeringBoundary)}`);
+    }
     if (!scenario.stepSwitch?.changed || !scenario.stepSwitch?.oneSelected
-        || !scenario.stepSwitch?.hasInteractions
-        || !scenario.stepSwitch?.firstHasOnlyException
-        || !scenario.stepSwitch?.secondHasOnlyState) {
-      failures.push(`场景步骤切换或精确附件挂载失败: ${JSON.stringify(scenario.stepSwitch)}`);
+        || scenario.stepSwitch?.inspectorCount !== 1
+        || !scenario.stepSwitch?.focusedTitle
+        || scenario.stepSwitch?.systemPermissionBlocking !== 0
+        || scenario.stepSwitch?.systemProcessBlocking !== 0
+        || scenario.stepSwitch?.systemAccessBlocking !== 0
+        || !scenario.stepSwitch?.systemPermissionText.includes(
+          "系统步骤不适用角色 × 操作权限矩阵")
+        || !scenario.stepSwitch?.systemProcessText.includes("系统任务")
+        || !scenario.stepSwitch?.systemEntryText.includes(
+          "页面前置\n不适用：非用户操作")
+        || !scenario.stepSwitch?.systemAccessText.includes(
+          "系统步骤不适用角色权限矩阵")) {
+      failures.push(`步骤切换、系统任务权限或 Inspector 聚焦不正确: ${
+        JSON.stringify(scenario.stepSwitch)}`);
     }
-    const branchKinds = scenario.branchKinds ?? {};
-    if (branchKinds.failureBranch < 1 || branchKinds.pageState < 1
-        || branchKinds.failureRecovery < 1 || branchKinds.stateImpact < 1) {
-      failures.push(`流程未按四类事实绘制可对账分支: ${JSON.stringify(branchKinds)}`);
+    if (desktop1280.width !== 1280 || desktop1280.height !== 800
+        || !desktop1280.pageNoHorizontalScroll
+        || !desktop1280.allStepsVisible
+        || !desktop1280.cardContentComplete
+        || !desktop1280.inspectorFullyVisible
+        || !desktop1280.workflowNoHorizontalScroll
+        || desktop1280.graphMaxShift > 1) {
+      failures.push(`1280×800 主线或 Inspector 出现遮挡、截断或位移: ${
+        JSON.stringify(desktop1280)}`);
     }
-    for (const kind of ["failureBranch","pageState","failureRecovery","stateImpact"]) {
-      if (branchKinds[kind] !== expectedBranchKinds[kind]) {
-        failures.push(
-          `流程分支 ${kind} 与模型数量不一致: DOM=${branchKinds[kind]} model=${expectedBranchKinds[kind]}`);
-      }
+    if (mobile.width !== 390 || !mobile.pageNoHorizontalScroll
+        || !mobile.scenarioVisible || !mobile.contractVisible || !mobile.firstStepVisible
+        || !mobile.mobileListVisible || !mobile.desktopGraphHidden
+        || !mobile.detail?.inspectorVisible || !mobile.detail.graphHidden
+        || !mobile.detail.focusedTitle || !mobile.detail.drawerClosed
+        || !mobile.detail.workspaceOpen || !mobile.returnedFocus
+        || !mobile.scrollRestored) {
+      failures.push(`390×844 场景主线与全屏步骤详情不符合阅读契约: ${
+        JSON.stringify(mobile)}`);
     }
-    if (scenario.branchDisclosures < 1 || scenario.openBranchDisclosures !== 0) {
-      failures.push(`异常分支默认未折叠: ${JSON.stringify(scenario)}`);
-    }
-    if (scenario.dependencyLanes < 1) failures.push("场景流程未渲染跨模块/外部依赖泳道");
+
     // ⑤ 场景连线：condition 为空/「—」占位不得渲染标签节点（fixture S2 条件为「—」）。
     var placeholderLinkLabels = (scenario.workflowLinkLabels || []).filter(
       function(text){return text === "" || text === "—";});
@@ -840,6 +1427,8 @@ async function runBrowserAssertions(fixture) {
     console.log(`- XSS 探针以纯文本可见: ${dom.probeVisibleAsText}`);
     console.log(`- 行为视图可见且可交互: ${JSON.stringify(dom.behaviorViews)}`);
     console.log(`- 场景流程、步骤切换与页面交互轨迹: ${JSON.stringify(dom.scenarioFlow)}`);
+    console.log(`- 1280×800 主线与 Inspector: ${JSON.stringify(desktop1280)}`);
+    console.log(`- 390×844 场景主线与详情返回: ${JSON.stringify(mobile)}`);
     console.log(`- Lifecycle SVG 与降级路径: ${JSON.stringify({svg:dom.lifecycle,fallback})}`);
     ws.close();
   } finally {

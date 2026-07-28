@@ -78,7 +78,7 @@ class CompileTest(unittest.TestCase):
         model = atlas.compile(self.root)
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
-        self.assertEqual(model["generatorVersion"], "1.7.0")
+        self.assertEqual(model["generatorVersion"], "1.8.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -133,6 +133,96 @@ class CompileTest(unittest.TestCase):
             for node in rules))
         self.assertEqual(model["coverage"]["fieldCount"], 2)
         self.assertEqual(model["coverage"]["permissionCount"], 4)
+
+    def test_permission_review_dimensions_are_metadata_not_actions(self):
+        contracts = """
+
+## 8. 权限矩阵
+
+| 角色 | 查看 | 编辑 | 客户数据范围 | 联系方式可见性 | 初始密码可见性 | 无权限拒绝行为 | 需求编号 |
+|---|---|---|---|---|---|---|---|
+| 运营员 | ✓ | ✗ | 平台全量客户 | 有敏感权限时明文，否则脱敏 | 创建成功页仅一次 | 入口隐藏，直接请求拒绝并记日志 | TST-003 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        rules = [
+            node for node in model["nodes"] if node["kind"] == "permission"]
+        self.assertEqual(
+            {node["detail"]["action"] for node in rules}, {"查看", "编辑"})
+        self.assertTrue(all(
+            node["detail"]["dataScope"] == "平台全量客户"
+            and node["detail"]["fieldVisibility"]
+            == "联系方式可见性: 有敏感权限时明文，否则脱敏；初始密码可见性: 创建成功页仅一次"
+            and node["detail"]["denialBehavior"] == "入口隐藏，直接请求拒绝并记日志"
+            for node in rules), rules)
+        self.assertEqual(model["coverage"]["permissionCount"], 2)
+
+    def test_step_permission_contract_resolves_exact_actions_and_recovery_handoff(self):
+        contracts = """
+
+### 5.0.4 步骤权限合同（机器可解析）
+
+| 流程 | 步骤ID | 用途 | 执行角色 | 所需操作 | 未授权处理 | 转交角色 | 需求编号 |
+|---|---|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 主操作 | 管理员 | 查看 | 阻断并提示无权限 | — | TST-001 |
+| 查看客户详情 | S1 | 异常恢复 | 管理员 | 编辑 | 阻断并转交超级管理员 | 超级管理员 | TST-002 |
+
+## 8. 权限矩阵
+
+| 角色 | 查看 | 编辑 | 导出 | 需求编号 |
+|---|---|---|---|---|
+| 管理员 | ✓ | ✗ | ✓ | TST-003 |
+| 超级管理员 | ✓ | ✓ | ✓ | TST-003 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + contracts)
+
+        model = atlas.compile(self.root)
+        step = next(
+            node for node in model["nodes"]
+            if node["kind"] == "flow"
+            and (node.get("detail") or {}).get("category") == "flowStep"
+            and node["detail"].get("stepId") == "S1")
+        actions = step["detail"]["requiredActions"]
+        self.assertEqual(
+            [(item["purpose"], item["subject"], item["action"])
+             for item in actions],
+            [("operation", "管理员", "查看"),
+             ("recovery", "管理员", "编辑")])
+        self.assertEqual(actions[0]["permissionRefs"], [
+            "permission:01-test-system/01-module-a:管理员:查看"])
+        self.assertEqual(actions[1]["permissionRefs"], [
+            "permission:01-test-system/01-module-a:管理员:编辑",
+            "permission:01-test-system/01-module-a:超级管理员:编辑"])
+        self.assertEqual(step["detail"]["permissionRefs"], [
+            "permission:01-test-system/01-module-a:管理员:查看",
+            "permission:01-test-system/01-module-a:管理员:编辑",
+            "permission:01-test-system/01-module-a:超级管理员:编辑"])
+
+        failure = next(
+            node for node in model["nodes"]
+            if node["kind"] == "flow"
+            and (node.get("detail") or {}).get("category") == "failureBranch"
+            and node["detail"].get("stepId") == "S1")
+        self.assertEqual(failure["detail"]["recoveryRequesterRole"], "管理员")
+        self.assertEqual(failure["detail"]["recoveryRole"], "超级管理员")
+        self.assertEqual(failure["detail"]["handoffRole"], "超级管理员")
+        self.assertEqual(
+            failure["detail"]["unauthorizedBehavior"],
+            "阻断并转交超级管理员")
+        self.assertEqual(failure["detail"]["permissionRefs"],
+                         actions[1]["permissionRefs"])
+        self.assertEqual(
+            check(model, load_schema(SKILL_ROOT / "schemas", "logic-model")),
+            [])
+        malformed = json.loads(json.dumps(model, ensure_ascii=False))
+        malformed_step = next(
+            node for node in malformed["nodes"]
+            if node["nodeId"] == step["nodeId"])
+        malformed_step["detail"]["requiredActions"][0]["permissionRefs"] = [1]
+        self.assertTrue(check(
+            malformed,
+            load_schema(SKILL_ROOT / "schemas", "logic-model")))
 
     def test_sensitive_field_unknown_value_is_redacted_and_reported(self):
         contracts = """
@@ -567,6 +657,30 @@ class CompileTest(unittest.TestCase):
                          ["TST-001", "TST-002", "TST-003"])
         self.assertEqual(model["coverage"]["flowCount"], 1)
 
+    def test_non_ui_system_step_accepts_page_placeholder_without_page_gap(self):
+        content = ATLAS_MODULE_PRD.replace(
+            "| 查看客户详情 | S2 | 客户详情页 | 管理员 | 查看资料 |",
+            "| 查看客户详情 | S2 | — | 系统 | 消费详情事件 |")
+        write_atlas_module(self.root, content)
+
+        model = atlas.compile(self.root)
+        step = next(
+            node for node in model["nodes"]
+            if node["kind"] == "flow"
+            and node["detail"].get("category") == "flowStep"
+            and node["detail"].get("stepId") == "S2")
+
+        self.assertEqual(step["detail"]["pageTitle"], "—")
+        self.assertEqual(step["detail"]["pageIds"], [])
+        self.assertFalse([
+            edge for edge in model["edges"]
+            if edge["from"] == step["nodeId"]
+            and edge["detail"].get("relation") == "flow-step-page"])
+        self.assertFalse([
+            gap for gap in model["gaps"]
+            if gap["gapId"].endswith(
+                ":flow:查看客户详情:S2:page:0")])
+
     def test_extracts_terminal_interaction_chains_with_step_and_page_traces(self):
         model = atlas.compile(self.root)
         interactions = [
@@ -886,6 +1000,48 @@ class CompileTest(unittest.TestCase):
             "interacts", "state-impact-dependency",
             "01-test-system/02-module-b",
         ), relations)
+
+    def test_dependency_only_step_does_not_invent_state_transition(self):
+        content = ATLAS_MODULE_PRD.replace(
+            "| 查看客户详情 | S1 | I2 | 客户 | 待激活 | 已激活 | "
+            "02-module-b | 依赖不可用时阻断并提示 | TST-001 |",
+            "| 查看客户详情 | S1 | I2 | 客户同步 | "
+            "不涉及:只调用协作模块 | 不涉及:结果由协作模块管理 | "
+            "02-module-b | 依赖不可用时保留当前页并重试 | TST-001 |")
+        write_atlas_module(self.root, content)
+
+        model = atlas.compile(self.root)
+        impacts = [
+            node for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "stateImpact"]
+        self.assertEqual(len(impacts), 1)
+        impact = impacts[0]
+        self.assertFalse(impact["detail"]["stateChanged"])
+        self.assertIsNone(impact["detail"]["fromStateId"])
+        self.assertIsNone(impact["detail"]["toStateId"])
+        self.assertIsNone(impact["detail"]["transitionEdgeId"])
+        self.assertEqual(
+            impact["detail"]["dependencyScopeId"],
+            "01-test-system/02-module-b")
+        relations = {
+            (edge["kind"], edge["detail"].get("relation"), edge["to"])
+            for edge in model["edges"] if edge["from"] == impact["nodeId"]}
+        self.assertIn((
+            "traces", "state-impact-step",
+            "flowstep:01-test-system/01-module-a:查看客户详情:S1"), relations)
+        self.assertIn((
+            "traces", "state-impact-interaction",
+            "interaction:01-test-system/01-module-a:查看客户详情:S1:I2"),
+            relations)
+        self.assertIn((
+            "interacts", "state-impact-dependency",
+            "01-test-system/02-module-b"), relations)
+        self.assertFalse(any(
+            relation in {"state-impact-from", "state-impact-to"}
+            for _, relation, _ in relations))
+        self.assertFalse(any(
+            "流程状态影响未找到状态流转" in gap["detail"]
+            for gap in model["gaps"]), model["gaps"])
 
     def test_extracts_page_states_with_page_traceability(self):
         model = atlas.compile(self.root)

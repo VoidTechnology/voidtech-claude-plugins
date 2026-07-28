@@ -116,6 +116,12 @@ a{color:var(--accent-text)}
 .tab{padding:5px 12px;border:none;background:none;border-radius:5px;color:var(--muted);font-weight:550}
 .tab.active{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
 .crumbs{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);flex:1;flex-wrap:wrap}
+.reference-nav{position:relative}
+.reference-nav summary{min-height:32px;display:flex;align-items:center;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-size:12px;list-style:none}
+.reference-nav summary::-webkit-details-marker{display:none}
+.reference-nav[open] summary{color:var(--text);border-color:var(--border-strong)}
+.reference-tabs{position:absolute;top:calc(100% + 6px);left:0;z-index:40;display:grid;min-width:190px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);box-shadow:var(--shadow-lg)}
+.reference-tabs .tab{text-align:left;min-height:38px}
 .crumbs button{border:none;background:none;color:var(--accent-text);padding:0}
 .crumbs .sep{color:var(--faint)}
 .crumbs .cur{color:var(--text);font-weight:550}
@@ -186,8 +192,8 @@ a{color:var(--accent-text)}
 .tooltip .tt-row b{color:var(--text);font-weight:600}
 
 /* card drawer */
-.drawer{position:absolute;top:0;right:0;bottom:0;width:380px;max-width:92vw;background:var(--panel);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;transform:translateX(100%);z-index:50}
-.drawer.open{transform:none}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:380px;max-width:92vw;background:var(--panel);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);display:none;flex-direction:column;z-index:50}
+.drawer.open{display:flex}
 .drawer-head{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
 .drawer-head .dt{flex:1;min-width:0}
 .drawer-head .dt h3{margin:0 0 4px;font-size:16px;line-height:1.3}
@@ -284,77 +290,182 @@ a{color:var(--accent-text)}
 .behavior-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
 .behavior-head h3{font-size:14px;margin:0;flex:1}.behavior-head .meta{font:11px var(--mono);color:var(--muted)}
 .flow-node,.state-node{border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);text-align:left}
-.flow-step-wrap{display:flex;flex-direction:column;min-width:0;width:calc(100% - 20px);max-width:280px;justify-self:center;position:relative;z-index:3;margin:14px 0}
-.flow-node{padding:10px 11px;width:100%;height:170px;overflow:hidden}
+.flow-step-wrap{display:flex;flex-direction:column;min-width:0;width:calc(100% - 18px);max-width:300px;justify-self:center;position:relative;z-index:3;margin:12px 0}
+.flow-node{flex:none;padding:10px 11px;width:100%;min-height:210px;overflow:visible}
+.flow-step-wrap[data-expanded="false"] .flow-node{min-height:142px}
 .flow-node:hover,.flow-node[aria-pressed="true"],.state-node:hover,.boundary-card:hover{border-color:var(--accent)}
 .flow-node[aria-pressed="true"]{background:var(--accent-weak);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
 .flow-node-head{display:flex;align-items:center;gap:6px;margin-bottom:7px}
 .flow-node .step{font:11px var(--mono);color:var(--accent-text);flex:1}
 .flow-stage{font-size:9.5px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:1px 5px}
-.flow-node .page{font-size:11px;color:var(--muted);margin-bottom:7px}
-.flow-node .action{font-weight:650;margin-bottom:7px}.flow-node .result{font-size:12px;color:var(--muted);margin-top:4px}
-.flow-node .page,.flow-node .action,.flow-node .result{display:flex;align-items:flex-start;gap:6px}
+.flow-node-kind{display:inline-flex;align-items:center;gap:4px;margin-bottom:7px;color:var(--muted);font-size:10.5px}
+.flow-node .action{display:flex;align-items:flex-start;gap:6px;font-weight:650;margin-bottom:8px}
+.flow-lens-facts{display:grid;gap:5px}
+.flow-lens-fact{padding:5px 6px;border-left:2px solid var(--border-strong);background:var(--panel);font-size:10.5px;line-height:1.35}
+.flow-lens-fact b{display:block;margin-bottom:2px;color:var(--muted);font-size:9.5px}
+.flow-lens-fact.blocking{border-left-color:var(--danger);background:var(--danger-bg);color:var(--danger);font-weight:650}
+.flow-fact-count{margin-top:7px;color:var(--muted);font-size:10.5px}
+.flow-node-summary{display:flex;gap:4px;flex-wrap:wrap;margin-top:9px}
+.flow-node-summary span{padding:2px 5px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:9.5px}
+.flow-branch-list{display:grid;gap:5px;margin-top:7px}
+.flow-branch{width:100%;min-height:36px;padding:6px 8px;border:1px solid var(--border);border-left-width:3px;border-radius:var(--radius-sm);background:var(--surface);color:var(--text);text-align:left;font-size:10px}
+.flow-branch[data-branch-kind="failure"]{border-left-color:var(--danger)}
+.flow-branch[data-branch-kind="page-state"]{border-left-color:var(--warn)}
+.flow-branch[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-weak);box-shadow:0 0 0 1px var(--accent)}
+.flow-branch b,.flow-branch small{display:block}.flow-branch small{margin-top:2px;color:var(--muted)}
+.scenario-module-summary{margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.scenario-module-summary summary{padding:8px 11px;cursor:pointer;color:var(--muted);font-size:11.5px}
+.scenario-module-summary .behavior-summary{padding:0 10px 10px;margin:0}
+.scenario-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.scenario-toolbar label,.scope-label{font-size:11px;color:var(--muted)}
+.scenario-toolbar .scenario-picker{min-width:260px}
+.scenario-coverage{font:11px var(--mono);color:var(--muted)}
+.scenario-contract{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;border-bottom:1px solid var(--border);background:var(--border)}
+.contract-item{min-height:94px;padding:11px 12px;background:var(--surface)}
+.contract-item dt{margin-bottom:6px;color:var(--muted);font-size:10.5px;font-weight:700}
+.contract-item dd{margin:0;font-size:12px;line-height:1.5}
+.contract-item.missing{background:var(--danger-bg)}
+.contract-item.missing dd{color:var(--danger);font-weight:650}
+.review-readiness{padding:11px 14px;border-bottom:1px solid var(--border);background:var(--panel)}
+.readiness-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:9px}
+.readiness-head h4{margin:0;font-size:13px}.readiness-head p{margin:3px 0 0;color:var(--muted);font-size:11.5px}
+.readiness-status{margin-left:auto;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.review-readiness[data-review-status="blocked"] .readiness-status{color:var(--danger);background:var(--danger-bg)}
+.review-readiness[data-review-status="pending"] .readiness-status{color:var(--warn);background:var(--warn-bg)}
+.review-readiness[data-review-status="ready"] .readiness-status{color:var(--read);background:var(--read-bg)}
+.readiness-metrics{display:flex;gap:8px;flex-wrap:wrap}
+.readiness-metric{display:flex;align-items:baseline;gap:5px;min-width:94px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);font-size:11px}
+.readiness-metric b{font:700 16px var(--mono)}
+.readiness-metric[data-review-state="blocker"] b{color:var(--danger)}
+.readiness-metric[data-review-state="pending"] b{color:var(--warn)}
+.readiness-metric[data-review-state="satisfied"] b{color:var(--read)}
+.review-primary-issues{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}
+.review-issue{width:100%;min-height:40px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);text-align:left;font-size:10.5px}
+.review-issue.blocker{border-color:color-mix(in srgb,var(--danger) 60%,var(--border))}
+.review-issue.pending{border-color:color-mix(in srgb,var(--warn) 60%,var(--border))}
+.review-all{margin-top:8px;border-top:1px solid var(--border)}
+.review-all summary{min-height:40px;display:flex;align-items:center;color:var(--accent-text);cursor:pointer;font-size:11.5px;font-weight:700}
+.review-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.review-filter{min-width:0;min-height:40px}
+.review-all-issues{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:280px;overflow:auto;padding-bottom:2px}
+.flow-lenses{display:flex;align-items:center;gap:4px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto}
+.flow-lenses-label{flex:none;margin-right:4px;color:var(--muted);font-size:10.5px;font-weight:700}
+.flow-lens{flex:none;min-height:36px;padding:5px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:none;color:var(--muted)}
+.flow-lens:hover{border-color:var(--border-strong);color:var(--text)}
+.flow-lens[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-weak);color:var(--accent-text);font-weight:700}
+.flow-empty.blocking{border-style:solid;border-color:var(--danger);background:var(--danger-bg);color:var(--danger);font-weight:650}
+.permission-dimensions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.permission-dimension{padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+.permission-dimension b,.permission-dimension small{display:block}.permission-dimension small{margin-top:3px;color:var(--muted)}
+.role-permission-matrix{grid-column:1 / -1;order:10;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+.role-permission-matrix summary{min-height:40px;padding:8px 10px;color:var(--muted);cursor:pointer;font-size:11px}
+.role-permission-table-wrap{overflow-x:auto;padding:0 8px 8px}
+.role-permission-table{width:100%;border-collapse:collapse;font-size:10.5px}
+.role-permission-table th,.role-permission-table td{padding:6px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+.role-permission-table th{color:var(--muted);font-weight:700;white-space:nowrap}
+.scenario-workspace{display:grid;grid-template-columns:minmax(620px,1fr) minmax(360px,420px);align-items:start;min-width:0}
+.scenario-graph-pane{min-width:0}
 .scenario-map{padding:12px 14px 14px}
 .scenario-lane{display:grid;grid-template-columns:112px minmax(0,1fr);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
 .scenario-lane+.scenario-lane{margin-top:8px}
 .scenario-lane-label{padding:12px 10px;background:var(--accent-weak);color:var(--accent-text);font-size:11px;font-weight:700;border-right:1px solid var(--border);word-break:break-word}
 .workflow-shell{display:block;background:var(--panel)}
 .workflow-scroll{overflow-x:auto;overscroll-behavior-x:contain}
-.workflow-canvas{position:relative;min-height:250px}
-.workflow-grid{display:grid;grid-template-columns:128px repeat(var(--workflow-cols),minmax(235px,1fr));grid-auto-rows:250px;position:relative;padding:0}
+.workflow-canvas{position:relative;min-height:340px}
+.workflow-grid{display:grid;grid-template-columns:128px repeat(var(--workflow-cols),minmax(210px,1fr));grid-auto-rows:minmax(340px,auto);position:relative;padding:0}
 .workflow-role-lane{display:grid;grid-template-columns:128px 1fr;position:relative;z-index:0;background:var(--panel);border-bottom:1px solid var(--border)}
 .workflow-role-lane:last-of-type{border-bottom:0}
 .workflow-role-label{display:flex;align-items:flex-start;gap:6px;padding:18px 10px;background:var(--accent-weak);border-right:1px solid var(--border);color:var(--accent-text);font-size:11px;font-weight:700;word-break:break-word}
 .workflow-links{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:visible}
 .workflow-link{fill:none;stroke:var(--accent);stroke-width:1.7}
 .workflow-link-label{fill:var(--muted);font-size:10px;paint-order:stroke;stroke:var(--panel);stroke-width:4px;stroke-linejoin:round}
-.workflow-source{border:0;background:none;color:var(--accent-text);font-size:11px}
-.state-impact-list{display:grid;gap:6px;margin-top:7px}
-.state-impact-chip{width:100%;border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-weak);color:var(--text);padding:7px 8px;text-align:left;font-size:11.5px}
-.state-impact-chip b{display:block;color:var(--accent-text);margin-bottom:2px}
-.state-impact-chip small{display:block;color:var(--muted);margin-top:3px}
-.state-impact-empty{font-size:11px;color:var(--faint);padding:6px 1px}
-.step-exceptions{margin-top:7px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--danger-bg);color:var(--danger)}
-.step-exceptions summary{cursor:pointer;padding:6px 8px;font-size:11.5px;font-weight:650}
-.step-exceptions button{display:block;width:100%;border:0;border-top:1px dashed color-mix(in srgb,var(--danger) 35%,transparent);background:none;color:inherit;text-align:left;padding:7px 8px;font-size:11px}
-.scenario-dependencies{display:flex;gap:7px;flex-wrap:wrap;padding:10px 12px}
-.dependency-card{display:flex;align-items:flex-start;gap:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);padding:7px 9px;text-align:left;font-size:11.5px}
-.dependency-card b{color:var(--accent-text)}
-.scenario-details{margin:9px 14px 13px;border-top:1px solid var(--border);padding-top:9px;color:var(--muted)}
-.scenario-details summary{cursor:pointer;font-size:12px;font-weight:650}
-.scenario-details-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;margin-top:8px}
-.step-summary{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
-.step-summary span,.interaction-badge{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:3px 7px;background:var(--panel);color:var(--muted);font-size:10.5px}
-.step-branches{margin-top:7px;border-left:2px solid var(--border);padding-left:8px}.step-branches summary{cursor:pointer;color:var(--muted);font-size:10.5px;padding:3px 0}
-.step-branch-list{display:grid;gap:5px;padding-top:5px}
-.branch-node{display:block;width:100%;border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:6px 7px;text-align:left;color:var(--text);font-size:10.5px;cursor:pointer}
-.branch-node b{display:block;margin-bottom:2px;font-size:10px}.branch-node small{display:block;color:var(--muted);line-height:1.35}
-.branch-node.failureBranch,.branch-node.failureRecovery{border-color:var(--danger)}.branch-node.pageState{border-color:var(--warn)}.branch-node.stateImpact{border-color:var(--read)}
-.step-source{margin-top:6px;border:0;background:none;color:var(--accent-text);padding:2px;text-align:left;font-size:11px}
-.interaction-panel{margin:10px 14px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);overflow:hidden}
-.interaction-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface)}
-.interaction-legend{display:flex;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--panel);font-size:10.5px;color:var(--muted)}
-.interaction-legend span{display:inline-flex;align-items:center;gap:4px}
-.interaction-head h4{margin:0;flex:1;font-size:13px}.interaction-head span{font:11px var(--mono);color:var(--muted)}
-.interaction-track{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;padding:12px}
-.interaction-wrap{display:flex;flex-direction:column;min-width:0;max-width:none}
-.interaction-card{height:100%;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);padding:10px;text-align:left}
-.interaction-card:hover{border-color:var(--accent)}
-.interaction-card .iid{font:11px var(--mono);color:var(--accent-text);margin-bottom:5px}
-.interaction-card .where{font-size:11px;color:var(--muted);margin-bottom:7px}
-.interaction-card .where,.interaction-card .event{display:flex;align-items:flex-start;gap:6px}
-.interaction-card dt{display:flex;align-items:center;gap:4px}
-.interaction-card .event{font-weight:650;margin-bottom:7px}
-.interaction-card dl{display:grid;grid-template-columns:58px minmax(0,1fr);gap:4px 7px;margin:0;font-size:11px}
-.interaction-card dt{color:var(--faint)}.interaction-card dd{margin:0;word-break:break-word}
-.interaction-arrow{display:none}
-.interaction-attachments{display:grid;gap:5px;margin-top:6px}
-.interaction-attachments button,.interaction-attachments details{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:10.5px}
-.interaction-attachments button{padding:6px 7px;text-align:left}.interaction-attachments summary{cursor:pointer;padding:6px 7px;color:var(--danger)}
-.interaction-attachments details button{display:block;width:100%;border:0;border-top:1px dashed var(--border);border-radius:0}
-.interaction-empty{padding:18px;color:var(--muted);font-size:12px}
-.page-gap{color:var(--warn);border-color:var(--warn)}
-@media(max-width:900px){.scenario-lane{grid-template-columns:1fr}.scenario-lane-label{border-right:0;border-bottom:1px solid var(--border)}.interaction-track{grid-template-columns:1fr}}
+.workflow-boundary-label{fill:var(--warn);font-weight:700}
+.workflow-mobile-list{display:none}
+.mobile-flow-step{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;width:100%;border:0;background:none;color:var(--text);padding:0 0 18px;text-align:left;min-height:76px}
+.mobile-flow-step:not(:last-child)::after{content:"";position:absolute;left:16px;top:34px;bottom:0;border-left:2px solid var(--accent)}
+.mobile-flow-index{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:2px solid var(--accent);background:var(--surface);color:var(--accent-text);font:11px var(--mono);z-index:1}
+.mobile-flow-copy{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.mobile-flow-copy b,.mobile-flow-copy small,.mobile-flow-cta{display:block}
+.mobile-flow-copy small{margin-top:4px;color:var(--text);font-size:12px;line-height:1.45}
+.mobile-flow-copy small:last-of-type{color:var(--muted)}
+.mobile-flow-cta{margin-top:7px;color:var(--accent-text);font-size:12px;font-weight:650}
+.flow-inspector{position:sticky;top:0;max-height:calc(100vh - 270px);overflow:auto;border-left:1px solid var(--border);background:var(--surface);min-width:0}
+.flow-inspector-head{display:flex;align-items:flex-start;gap:8px;padding:13px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
+.flow-inspector-head h4{margin:0;flex:1;font-size:14px}.flow-inspector-head p{margin:3px 0 0;color:var(--muted);font-size:11.5px}
+.flow-inspector-close,.flow-inspector-back{min-width:44px;min-height:44px;border:1px solid var(--border);background:var(--panel);border-radius:var(--radius-sm)}
+.flow-inspector-close{display:none}
+.flow-inspector-body{padding:12px 14px 18px}
+.flow-inspector-section{margin-bottom:16px}.flow-inspector-section h5{margin:0 0 7px;font-size:12px;color:var(--muted)}
+.flow-inspector-summary{margin:0 0 8px;color:var(--text)}
+.flow-source-line{display:flex;gap:6px;align-items:center;min-height:44px;color:var(--muted);font-size:11px}
+.flow-source-line button{min-height:44px;border:0;background:none;color:var(--accent-text);text-align:left}
+.inspector-list,.flow-timeline{display:grid;gap:7px}
+.inspector-row{display:block;width:100%;min-height:44px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);padding:8px 9px;text-align:left}
+.inspector-row:hover{border-color:var(--accent)}.inspector-row b,.inspector-row small{display:block}.inspector-row small{margin-top:3px;color:var(--muted)}
+.inspector-row.failure{border-color:color-mix(in srgb,var(--danger) 55%,var(--border))}
+.flow-timeline-item{position:relative;display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px}
+.flow-timeline-item:not(:last-child)::after{content:"";position:absolute;left:18px;top:38px;bottom:-8px;border-left:1px solid var(--accent)}
+.flow-timeline-id{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--accent-weak);color:var(--accent-text);font:10px var(--mono);z-index:1}
+.flow-timeline .inspector-row{margin:0}
+.engineering-boundary{grid-column:1 / -1;margin-top:3px;padding:10px;border:1px solid var(--warn);border-radius:var(--radius-sm);background:var(--warn-bg)}
+.engineering-boundary h5{margin:0 0 8px;color:var(--warn);font-size:11px}
+.engineering-boundary .kv{margin:0;background:var(--surface)}
+.engineering-boundary.compact{display:flex;align-items:center;gap:8px;border-color:var(--border);background:var(--panel);color:var(--muted)}
+.engineering-boundary.compact h5{margin:0;color:var(--text)}
+.engineering-boundary.compact small{font-size:11px}
+.inspector-disclosure{margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+.inspector-disclosure summary{min-height:44px;padding:10px;cursor:pointer;color:var(--muted)}
+.inspector-disclosure .inspector-list{padding:0 8px 8px}
+.flow-inspector .src,.flow-inspector .mchip{min-height:44px;display:inline-flex;align-items:center}
+.flow-inspector .src{display:flex}
+.flow-empty{padding:10px;border:1px dashed var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:11.5px}
+.flow-evidence-breadcrumb{font-size:11px;color:var(--muted);margin-bottom:8px}
+.flow-evidence-block{margin-bottom:13px}.flow-evidence-block h5{margin:0 0 6px;color:var(--muted);font-size:11px}
+.flow-evidence-block .kv{margin:0}
+.body.flow-mode{grid-template-columns:64px minmax(0,1fr)}
+.body.flow-mode .sidebar{width:64px}
+.body.flow-mode .search-wrap,.body.flow-mode .mods{display:none}
+.flow-rail-toggle{display:none}
+.body.flow-mode .flow-rail-toggle{display:block;width:44px;min-height:44px;margin:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+.body.flow-mode.flow-sidebar-open .sidebar{position:absolute;left:0;top:0;bottom:0;width:280px;z-index:45;box-shadow:var(--shadow-lg)}
+.body.flow-mode.flow-sidebar-open .search-wrap,.body.flow-mode.flow-sidebar-open .mods{display:block}
+.body.flow-mode.flow-sidebar-open .flow-rail-toggle{margin-left:226px}
+@media(max-width:760px){
+  .scenario-contract{grid-template-columns:1fr 1fr}
+  .contract-item{min-height:0}
+  .readiness-head{display:block}.readiness-status{display:inline-block;margin:7px 0 0}
+}
+@media(max-width:1100px){
+  .body.flow-mode{grid-template-columns:minmax(0,1fr)}
+  .body.flow-mode .sidebar{display:none}
+  .main-head{display:block;overflow:hidden}
+  .tabs{display:flex;max-width:100%;overflow-x:auto;margin-bottom:6px}.tab{flex:none;min-height:44px}
+  .behavior-panel{padding:10px}
+  .scenario-module-summary{display:none}
+  .scenario-toolbar{align-items:stretch}.scenario-toolbar label{width:100%}.scenario-toolbar .scenario-picker{width:100%;min-width:0;min-height:44px}
+  .scenario-workspace{display:block}
+  .workflow-scroll{display:none}
+  .workflow-mobile-list{display:block;padding:14px}
+  .scenario-map{padding:0}
+  .flow-inspector{display:none;position:static;max-height:none;border-left:0;min-height:calc(100vh - 150px)}
+  .scenario-workspace.inspector-open .scenario-graph-pane{display:none}
+  .scenario-workspace.inspector-open .flow-inspector{display:block}
+  .flow-inspector-close{display:block}
+  .behavior-head{align-items:flex-start;flex-wrap:wrap}.behavior-head .meta{width:100%}
+}
+@media(max-width:520px){
+  .topbar{padding:8px 10px;gap:8px}.topmeta{display:none}
+  .main-head{padding:6px 8px}.crumbs{font-size:11px}
+  .tabs{display:grid;grid-template-rows:repeat(2,36px);grid-auto-flow:column;grid-auto-columns:max-content;gap:2px;overflow-x:auto}
+  .tab{min-height:36px;padding:4px 6px;font-size:12px}
+  .scenario-coverage{width:100%}
+  .scenario-contract{display:grid;grid-template-columns:1fr 1fr;overflow:visible;background:var(--border)}
+  .contract-item{min-height:0;border-right:0}
+  .review-primary-issues,.review-filters,.review-all-issues{grid-template-columns:1fr}
+  .permission-dimensions{grid-template-columns:1fr}
+  .reference-tabs{position:fixed;left:8px;right:8px;top:102px;min-width:0}
+  .behavior-head{padding:10px}.behavior-head h3{font-size:15px}
+}
 .lifecycle-legend{display:flex;gap:12px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel);font-size:11px;color:var(--muted)}
 .lifecycle-legend span{display:inline-flex;align-items:center;gap:5px}
 .state-audit-note{display:flex;gap:14px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)}
@@ -428,6 +539,7 @@ a{color:var(--accent-text)}
   </header>
   <div class="body" id="body">
     <aside class="sidebar" aria-label="模块导航">
+      <button class="flow-rail-toggle" id="flowRailToggle" type="button" aria-label="展开模块导航" aria-expanded="false">模块</button>
       <div class="search-wrap">
         <input class="search-input" id="search" type="search" placeholder="搜索页面 / 数据 / 需求编号 (如 MBR-011)" autocomplete="off" aria-label="全局搜索" role="combobox" aria-expanded="false" aria-controls="results">
         <div class="results" id="results" role="listbox" hidden></div>
@@ -436,18 +548,23 @@ a{color:var(--accent-text)}
     </aside>
     <main class="main">
       <div class="main-head">
-        <div class="tabs" role="tablist">
+        <div class="tabs primary-tabs" role="tablist" aria-label="主要工作区">
           <button class="tab active" id="tab-explore" role="tab" aria-selected="true">探索</button>
           <button class="tab" id="tab-audit" role="tab" aria-selected="false">质量与来源</button>
           <button class="tab" id="tab-graph" role="tab" aria-selected="false">系统关系</button>
-          <button class="tab" id="tab-flow" role="tab" aria-selected="false">场景流程</button>
-          <button class="tab" id="tab-state" role="tab" aria-selected="false">状态机</button>
-          <button class="tab" id="tab-boundary" role="tab" aria-selected="false">状态与异常</button>
-          <button class="tab" id="tab-field" role="tab" aria-selected="false">数据与字段</button>
-          <button class="tab" id="tab-access" role="tab" aria-selected="false">访问与可见性</button>
-          <button class="tab" id="tab-req" role="tab" aria-selected="false">需求索引</button>
-          <button class="tab" id="tab-gap" role="tab" aria-selected="false">缺口</button>
+          <button class="tab" id="tab-flow" role="tab" aria-selected="false">场景评审</button>
         </div>
+        <details class="reference-nav" id="referenceNav">
+          <summary>补充资料</summary>
+          <div class="reference-tabs" role="tablist" aria-label="补充资料">
+            <button class="tab" id="tab-state" role="tab" aria-selected="false">状态机</button>
+            <button class="tab" id="tab-boundary" role="tab" aria-selected="false">状态与异常</button>
+            <button class="tab" id="tab-field" role="tab" aria-selected="false">数据与字段</button>
+            <button class="tab" id="tab-access" role="tab" aria-selected="false">访问与可见性</button>
+            <button class="tab" id="tab-req" role="tab" aria-selected="false">需求索引</button>
+            <button class="tab" id="tab-gap" role="tab" aria-selected="false">缺口</button>
+          </div>
+        </details>
         <div class="crumbs" id="crumbs"></div>
       </div>
       <div id="view-explore" class="explore-panel" role="tabpanel" aria-label="探索首页"></div>
@@ -760,7 +877,7 @@ function moduleDepth(scopeId){
 function scopeTitle(id){ return (scopeById[id]&&scopeById[id].title)||id||"—"; }
 
 /* ---------- state ---------- */
-var state={ view:"explore", level:"overview", moduleId:null, scenarioId:null, stepId:null, selKey:null, focusId:null, fieldScope:null, accessScope:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
+var state={ view:"explore", level:"overview", moduleId:null, scenarioId:null, stepId:null, flowLens:"flow", flowDetailId:null, flowReturnId:null, flowInspectorOpen:false, selKey:null, focusId:null, fieldScope:null, accessScope:null, k:1, tx:0, ty:0, reqFilter:"", reqHl:null, gapStructOnly:false };
 /* ---------- theme ---------- */
 function effTheme(){
   var t=document.documentElement.getAttribute("data-theme");
@@ -938,11 +1055,26 @@ $("mods").addEventListener("keydown",function(e){
   rows[ni].focus();
 });
 
+$("flowRailToggle").addEventListener("click",function(){
+  var open=$("body").classList.toggle("flow-sidebar-open");
+  this.setAttribute("aria-expanded",String(open));
+  this.setAttribute("aria-label",open?"收起模块导航":"展开模块导航");
+});
+
 /* ---------- view switching ---------- */
 function setView(v){
   if(state.view!==v&&drawer&&drawer.classList.contains("open")) closeDrawer();
   state.view=v;
+  $("body").classList.toggle("flow-mode",v==="flow");
+  if(v!=="flow"){
+    $("body").classList.remove("flow-sidebar-open");
+    $("flowRailToggle").setAttribute("aria-expanded","false");
+  }
   if(isBehaviorView(v)) ensureBehaviorModule(v);
+  var referenceNav=$("referenceNav");
+  if(referenceNav){
+    referenceNav.open=["state","boundary","field","access","req","gap"].indexOf(v)>=0;
+  }
   ["explore","audit","graph","flow","state","boundary","field","access","req","gap"]
     .forEach(function(name){
       var active=v===name;
@@ -1482,110 +1614,1038 @@ function behaviorDependencyTitle(id,fallback){
   var node=nodeById[id],scope=scopeById[id];
   return (node&&node.title)||(scope&&(scope.title||scope.scopeId))||fallback||"未解析依赖";
 }
-function renderInteractionPanel(scopeId,root,step,impacts,pageStates,failures){
+function flowInteractionsFor(scopeId,root,step){
   var sd=step.detail||{};
-  var interactions=(interactionStepsByScope[scopeId]||[]).filter(function(n){
-    var d=n.detail||{};
-    return d.flowId===root.nodeId&&(d.stepNodeId===step.nodeId||d.stepId===sd.stepId);
+  return (interactionStepsByScope[scopeId]||[]).filter(function(node){
+    var d=node.detail||{};
+    return d.flowId===root.nodeId&&
+      (d.stepNodeId===step.nodeId||d.stepId===sd.stepId);
   }).sort(function(a,b){
     return String((a.detail||{}).interactionId||"").localeCompare(
       String((b.detail||{}).interactionId||""),undefined,{numeric:true});
   });
-  var panel=h("section",{class:"interaction-panel",id:"interaction-panel",
-    "aria-label":"当前步骤页面交互","aria-live":"polite"});
-  panel.appendChild(h("div",{class:"interaction-head"},
-    h("h4",{},semanticIcon("action"),"页面交互 · "+(sd.stepId||step.title)),
-    h("span",{},interactions.length+" 个操作")));
-  panel.appendChild(h("div",{class:"interaction-legend","aria-label":"页面交互图例"},
-    h("span",{},semanticIcon("page"),"页面"),
-    h("span",{},semanticIcon("action"),"操作"),
-    h("span",{},semanticIcon("lock"),"条件"),
-    h("span",{},semanticIcon("feedback"),"反馈"),
-    h("span",{},semanticIcon("system"),"系统"),
-    h("span",{},semanticIcon("success"),"成功"),
-    h("span",{},semanticIcon("failure"),"异常")));
-  if(!interactions.length){
-    panel.appendChild(h("div",{class:"interaction-empty"},
-      "本步骤尚未声明可机械解析的页面交互；查看来源确认缺失内容。"));
-    return panel;
-  }
-  var track=h("div",{class:"interaction-track"});
-  interactions.forEach(function(interaction,index){
-    var d=interaction.detail||{};
-    var wrap=h("div",{class:"interaction-wrap","data-interaction-id":d.interactionId||""});
-    var pageLabel=d.pageTitle||d.pageRef||"未绑定页面";
-    var where=pageLabel+(d.containerState?" · "+d.containerState:"");
-    var pageGap=!d.pageId&&String(d.pageRef||d.pageTitle||"").indexOf("::")>=0;
-    var card=h("button",{class:"interaction-card",onclick:function(){openNodeCard(interaction);}},
-      h("div",{class:"iid"},(d.interactionId||("操作 "+(index+1)))+" → "+(d.nextInteraction||"结束")),
-      h("div",{class:"where"},semanticIcon("page"),h("span",{},where)),
-      h("div",{class:"event"},semanticIcon(eventIcon(d.event)),
-        h("span",{},(d.control||"无")+" · "+(d.event||"系统触发"))),
-      h("dl",{},
-        h("dt",{},semanticIcon("lock"),"可用"),h("dd",{},d.availability||"—"),
-        h("dt",{},semanticIcon("feedback"),"即时"),h("dd",{},d.immediateFeedback||"—"),
-        h("dt",{},semanticIcon("system"),"系统"),h("dd",{},d.systemAction||"—"),
-        h("dt",{},semanticIcon("success"),"成功"),h("dd",{},d.successResult||"—"),
-        h("dt",{},semanticIcon("failure"),"失败"),h("dd",{},d.failureRecovery||"—")));
-    if(pageGap) card.appendChild(h("span",{class:"interaction-badge page-gap"},"页面契约待补"));
-    wrap.appendChild(card);
-    var linkedImpacts=impacts.filter(function(n){
-      var x=n.detail||{},sameStep=x.stepNodeId===step.nodeId||x.stepId===sd.stepId;
-      return sameStep&&(x.interactionNodeId===interaction.nodeId||
-        x.interactionId===d.interactionId);
+}
+function flowTraceMeta(node){
+  var sources=arr(node&&node.sources),requirements={};
+  sources.forEach(function(source){
+    arr(source.requirementIds).forEach(function(id){requirements[id]=true;});
+  });
+  return {sources:sources.length,requirements:Object.keys(requirements).length,
+    attribution:sourceAttribution(node)};
+}
+function flowInspectorRow(node,title,description,kind,refId){
+  var trace=flowTraceMeta(node);
+  return h("button",{class:"inspector-row "+(kind||""),
+      dataset:{flowRef:refId||node.nodeId},
+      onclick:function(){openFlowEvidence(node,refId||node.nodeId);}},
+    h("b",{},title),
+    h("small",{},description||"未声明"),
+    h("small",{},"来源 "+trace.sources+" · 需求 "+trace.requirements));
+}
+function flowDeclared(value){
+  return value!=null&&String(value).trim()!==""&&String(value).trim()!=="—";
+}
+function flowExternalDependencyValue(value){
+  var normalized=String(value==null?"":value).trim();
+  return flowDeclared(normalized)&&
+    !/^(?:无|不涉及|不适用|none|n\/a)$/i.test(normalized);
+}
+function flowExternalDependencyTitle(id,fallback){
+  var title=behaviorDependencyTitle(id,fallback);
+  return flowExternalDependencyValue(title)?title:"";
+}
+function flowUnique(values){
+  var seen={};
+  return values.filter(flowDeclared).map(function(value){return String(value).trim();})
+    .filter(function(value){
+      if(seen[value]) return false;seen[value]=true;return true;
     });
-    var linkedStates=pageStates.filter(function(n){
-      var x=n.detail||{},sameStep=x.stepNodeId===step.nodeId||x.stepId===sd.stepId;
-      return sameStep&&(x.interactionNodeId===interaction.nodeId||
-        x.interactionId===d.interactionId);
-    });
-    if(linkedImpacts.length||linkedStates.length){
-      var attachments=h("div",{class:"interaction-attachments"});
-      linkedImpacts.forEach(function(impact){
-        var x=impact.detail||{};
-        attachments.appendChild(h("button",{onclick:function(){openNodeCard(impact);}},
-          "状态 · "+(x.object||"业务对象")+"："+(x.currentState||"—")+" → "+(x.nextState||"—")+
-          (x.dependency?" · 依赖 "+behaviorDependencyTitle(x.dependencyScopeId,x.dependency):"")));
-      });
-      if(linkedStates.length){
-        var details=h("details",{},h("summary",{},"异常与恢复 "+linkedStates.length));
-        linkedStates.forEach(function(pageState){
-          var x=pageState.detail||{};
-          details.appendChild(h("button",{onclick:function(){openNodeCard(pageState);}},
-            pageState.title+" · "+(x.systemBehavior||x.acceptance||"查看处理方式")));
-        });
-        attachments.appendChild(details);
-      }
-      wrap.appendChild(attachments);
+}
+function flowFieldsForObjects(objectIds){
+  var wanted={};
+  objectIds.forEach(function(id){wanted[id]=true;});
+  var fieldIds={};
+  EDGES.forEach(function(edge){
+    if(edge.kind==="traces"&&wanted[edge.to]&&
+        (edge.detail||{}).relation==="field-data-object"){
+      fieldIds[edge.from]=true;
     }
-    track.appendChild(wrap);
   });
-  panel.appendChild(track);
-  var stepOnlyStates=pageStates.filter(function(n){
-    var d=n.detail||{};
-    return (d.stepNodeId===step.nodeId||d.stepId===sd.stepId)&&!d.interactionId&&!d.interactionNodeId;
+  return Object.keys(fieldIds).map(function(id){return nodeById[id];})
+    .filter(Boolean).sort(byPath);
+}
+function scenarioStepFacts(scopeId,root,step,impacts,pageStates,failures){
+  var sd=step.detail||{};
+  var stepImpacts=impacts.filter(function(node){
+    var d=node.detail||{};return d.stepNodeId===step.nodeId||d.stepId===sd.stepId;
   });
-  var stepOnlyFailures=failures.filter(function(n){return (n.detail||{}).stepId===sd.stepId;});
-  if(stepOnlyStates.length||stepOnlyFailures.length){
-    var fallback=h("details",{class:"scenario-details"},
-      h("summary",{},"仅关联到本步骤的异常 ("+(stepOnlyStates.length+stepOnlyFailures.length)+")"));
-    var grid=h("div",{class:"scenario-details-grid"});
-    stepOnlyFailures.concat(stepOnlyStates).forEach(function(n){
-      var d=n.detail||{};
-      grid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
-        h("h4",{},"异常 · "+n.title),
-        h("div",{class:"muted-text"},d.handling||d.systemBehavior||d.acceptance||"查看来源")));
+  var stepStates=pageStates.filter(function(node){
+    var d=node.detail||{};return d.stepNodeId===step.nodeId||d.stepId===sd.stepId;
+  });
+  var stepFailures=failures.filter(function(node){
+    var d=node.detail||{};return d.stepNodeId===step.nodeId||d.stepId===sd.stepId;
+  });
+  var dataEdges=(pageDataEdgesByScope[scopeId]||[]).filter(function(edge){
+    var d=edge.detail||{};
+    if(d.flowId&&d.flowId!==root.nodeId) return false;
+    if(d.stepNodeId||d.stepId){
+      return d.stepNodeId===step.nodeId||d.stepId===sd.stepId;
+    }
+    return edge.from===(sd.pageId||sd.pageRef);
+  });
+  var objectIds=flowUnique(dataEdges.map(function(edge){return edge.to;}));
+  var requiredActions=Array.isArray(sd.requiredActions)?sd.requiredActions:[];
+  var permissionIds={};
+  requiredActions.forEach(function(requiredAction){
+    (requiredAction.permissionRefs||[]).forEach(function(id){permissionIds[id]=true;});
+  });
+  var permissions=Object.keys(permissionIds).map(function(id){return nodeById[id];})
+    .filter(Boolean).sort(byPath);
+  var rolePermissions=(accessByScope[scopeId]||[]).filter(function(node){
+    return (node.detail||{}).subject===sd.role;
+  }).sort(byPath);
+  return {
+    interactions:flowInteractionsFor(scopeId,root,step),
+    impacts:stepImpacts,states:stepStates,failures:stepFailures,
+    dataEdges:dataEdges,fields:flowFieldsForObjects(objectIds),
+    requiredActions:requiredActions,permissions:permissions,
+    rolePermissions:rolePermissions,
+    dependencies:flowUnique(stepImpacts.map(function(node){
+      var d=node.detail||{};
+      return flowExternalDependencyTitle(d.dependencyScopeId,d.dependency);
+    }))
+  };
+}
+function scenarioEntryStep(root,steps){
+  return steps.find(function(step){
+    return EDGES.some(function(edge){
+      return edge.kind==="navigates"&&edge.from===root.nodeId&&edge.to===step.nodeId&&
+        (edge.detail||{}).branch==="entry";
     });
-    fallback.appendChild(grid); panel.appendChild(fallback);
+  })||steps[0]||null;
+}
+function scenarioSuccessStep(steps){
+  return steps.find(function(step){
+    return EDGES.some(function(edge){
+      var target=nodeById[edge.to];
+      return edge.kind==="navigates"&&edge.from===step.nodeId&&
+        (edge.detail||{}).branch==="success"&&target&&
+        (target.detail||{}).category==="terminal";
+    });
+  })||steps[steps.length-1]||null;
+}
+function scenarioContract(scopeId,root,steps,impacts){
+  var entry=scenarioEntryStep(root,steps),entryDetail=(entry&&entry.detail)||{};
+  var entryPage=nodeById[entryDetail.pageId||entryDetail.pageRef];
+  var pageDetail=(entryPage&&entryPage.detail)||{};
+  var success=scenarioSuccessStep(steps),successDetail=(success&&success.detail)||{};
+  var roles=flowUnique(steps.map(function(step){return (step.detail||{}).role;}));
+  var pages=flowUnique(steps.map(function(step){
+    var d=step.detail||{};return d.pageTitle||d.pageRef;
+  }));
+  var dependencies=flowUnique(impacts.map(function(node){
+    var d=node.detail||{};
+    return flowExternalDependencyTitle(d.dependencyScopeId,d.dependency);
+  }));
+  var exclusions=flowUnique((boundariesByScope[scopeId]||[]).map(function(node){
+    return (node.detail||{}).excluded;
+  }));
+  var prerequisites=flowUnique([pageDetail.precondition,entryDetail.condition]);
+  var participants=[];
+  if(roles.length) participants.push("角色："+roles.join("、"));
+  if(pages.length) participants.push("页面："+pages.join("、"));
+  if(dependencies.length) participants.push("依赖："+dependencies.join("、"));
+  return {
+    goal:root.title,
+    trigger:entry?(entryDetail.role||"角色未声明")+
+      (prerequisites.length?"在"+prerequisites.join("、")+"时":" · ")+
+      (flowDeclared(entryDetail.action)?entryDetail.action:"发起动作未声明"):"",
+    preconditions:prerequisites.join("；"),
+    success:successDetail.result,
+    participants:participants.join("；"),
+    exclusions:exclusions.join("、")
+  };
+}
+function renderScenarioContract(contract){
+  var block=h("dl",{class:"scenario-contract","aria-label":"场景合同"});
+  [
+    ["goal","场景名称与目标",contract.goal],
+    ["trigger","发起者与触发",contract.trigger],
+    ["preconditions","前置条件",contract.preconditions],
+    ["success","成功标准",contract.success],
+    ["participants","角色、页面与系统",contract.participants],
+    ["exclusions","明确不包含（模块边界）",contract.exclusions]
+  ].forEach(function(item){
+    var missing=!flowDeclared(item[2]);
+    block.appendChild(h("div",{class:"contract-item"+(missing?" missing":""),
+        "data-contract-key":item[0]},
+      h("dt",{},item[1]),
+      h("dd",{},missing?"未声明（评审阻断）":item[2])));
+  });
+  return block;
+}
+function flowUsesRolePermissions(step){
+  var role=String(((step||{}).detail||{}).role||"").trim();
+  return !/^(?:系统|系统任务|后台任务|定时任务|事件消费者|system)$/i.test(role);
+}
+function flowRequiredActionRule(requiredAction,subject){
+  var action=requiredAction||{};
+  var target=String(subject||action.subject||"");
+  var refs=action.permissionRefs||[];
+  for(var i=0;i<refs.length;i+=1){
+    var node=nodeById[refs[i]],detail=(node&&node.detail)||{};
+    if(detail.subject===target&&detail.action===action.action) return node;
   }
+  return null;
+}
+function flowRequiredActionLabel(purpose){
+  return {operation:"本步骤所需权限",read:"本步骤读取资源",
+    recovery:"异常恢复所需权限"}[purpose]||"本步骤所需权限";
+}
+function flowFailureTriggerText(node,pageStates){
+  var detail=(node&&node.detail)||{};
+  var trigger=detail.condition||detail.trigger;
+  if(flowDeclared(trigger)) return "流程失败触发："+trigger;
+  var pageTriggers=(pageStates||[]).map(function(pageState){
+    var pageDetail=(pageState&&pageState.detail)||{};
+    var pageTrigger=pageDetail.trigger||pageDetail.condition;
+    if(!flowDeclared(pageTrigger)) return "";
+    return (pageState.title||"页面边缘状态")+"（"+pageTrigger+"）";
+  }).filter(flowDeclared);
+  if(pageTriggers.length){
+    return "流程失败触发未声明；页面边缘触发已声明："+pageTriggers.join("；");
+  }
+  return "流程失败触发未声明";
+}
+function flowRequiredActionDecision(requiredAction){
+  var actorRule=flowRequiredActionRule(requiredAction,requiredAction.subject);
+  var actorDecision=((actorRule||{}).detail||{}).decision;
+  var handoffRule=requiredAction.handoffRole?
+    flowRequiredActionRule(requiredAction,requiredAction.handoffRole):null;
+  var handoffDecision=((handoffRule||{}).detail||{}).decision;
+  return {actorRule:actorRule,actorDecision:actorDecision,
+    handoffRule:handoffRule,handoffDecision:handoffDecision};
+}
+function flowRequiredActionIsClosed(requiredAction,decision){
+  decision=decision||flowRequiredActionDecision(requiredAction);
+  if(decision.actorDecision==="allow") return true;
+  return decision.actorDecision==="deny"&&
+    flowDeclared(requiredAction.handoffRole)&&
+    decision.handoffDecision==="allow"&&
+    flowDeclared(requiredAction.unauthorizedBehavior);
+}
+function scenarioReview(scopeId,root,steps,impacts,pageStates,failures,contract){
+  var issues=[],satisfied=0;
+  function issue(kind,text,step,lens){
+    issues.push({kind:kind,text:text,step:step||steps[0]||null,lens:lens||"flow"});
+  }
+  ["goal","trigger","preconditions","success","participants","exclusions"]
+    .forEach(function(key){
+      if(flowDeclared(contract[key])) satisfied+=1;
+      else issue(key==="preconditions"?"pending":"blocker",
+        "场景合同缺少「"+key+"」",steps[0],"flow");
+    });
+  steps.forEach(function(step){
+    var sd=step.detail||{},facts=scenarioStepFacts(
+      scopeId,root,step,impacts,pageStates,failures);
+    var prefix=(sd.stepId||step.title)+" · ";
+    if(facts.impacts.length) satisfied+=1;
+    else issue("blocker",prefix+"未声明状态影响",step,"state");
+    if(flowDeclared(sd.pageId||sd.pageRef||sd.pageTitle)){
+      if(facts.dataEdges.length){
+        satisfied+=1;
+        if(facts.fields.length) satisfied+=1;
+        else issue("pending",prefix+"数据对象缺少字段定义",step,"data");
+      }else issue("blocker",prefix+"页面未声明数据读写",step,"data");
+    }
+    if(!flowUsesRolePermissions(step)) satisfied+=1;
+    else if(!facts.requiredActions.length){
+      issue("blocker",prefix+"未声明本步骤所需权限",step,"access");
+    }else facts.requiredActions.forEach(function(requiredAction){
+      var decision=flowRequiredActionDecision(requiredAction);
+      var label=flowRequiredActionLabel(requiredAction.purpose)+"「"+
+        (requiredAction.subject||"角色未声明")+" × "+
+        (requiredAction.action||"操作未声明")+"」";
+      if(decision.actorDecision==="allow"){
+        satisfied+=1;return;
+      }
+      if(decision.actorDecision==="deny"&&requiredAction.handoffRole&&
+          decision.handoffDecision==="allow"&&
+          flowDeclared(requiredAction.unauthorizedBehavior)){
+        satisfied+=1;return;
+      }
+      if(!decision.actorRule){
+        issue("blocker",prefix+label+"没有明确权限规则",step,"access");return;
+      }
+      if(decision.actorDecision==="deny"&&!requiredAction.handoffRole){
+        issue("blocker",prefix+label+"被拒绝且未声明转交角色",step,"access");return;
+      }
+      if(decision.actorDecision==="deny"&&!decision.handoffRule){
+        issue("blocker",prefix+label+"的转交角色没有明确权限规则",step,"access");
+        return;
+      }
+      if(decision.actorDecision==="deny"&&decision.handoffDecision!=="allow"){
+        issue("blocker",prefix+label+"的转交角色未被明确允许",step,"access");
+        return;
+      }
+      issue("blocker",prefix+label+"缺少明确 allow/deny 裁决",step,"access");
+    });
+    if(!facts.failures.length){
+      issue("pending",prefix+"未声明流程失败",step,"exception");
+    }else{
+      facts.failures.forEach(function(node){
+        var d=node.detail||{};
+        if(flowDeclared(d.condition||d.trigger)) satisfied+=1;
+        else issue("pending",prefix+"失败分支缺少触发条件",step,"exception");
+        if(flowDeclared(d.handling||d.recovery||d.systemBehavior)) satisfied+=1;
+        else issue("blocker",prefix+"失败分支缺少恢复方式",step,"exception");
+        if(!flowUsesRolePermissions(step)) satisfied+=1;
+        else if(flowDeclared(d.recoveryRole)) satisfied+=1;
+        else issue("blocker",
+          prefix+"失败分支缺少恢复执行角色与权限转交",step,"exception");
+      });
+    }
+    if(!facts.interactions.length&&!flowUsesRolePermissions(step)&&
+        flowDeclared(sd.action)&&flowDeclared(sd.result)){
+      satisfied+=1;
+    }else if(!facts.interactions.length){
+      issue("pending",prefix+"未声明页面操作或系统处理",step,"flow");
+    }else if(facts.interactions.every(function(node){
+      return flowDeclared((node.detail||{}).failureRecovery);
+    })) satisfied+=1;
+    else issue("pending",prefix+"交互恢复路径未完整声明",step,"exception");
+    if(flowDeclared(sd.result)) satisfied+=1;
+    else issue("blocker",prefix+"成功结果未声明",step,"flow");
+  });
+  issues.sort(function(a,b){
+    var severity={blocker:0,pending:1};
+    return severity[a.kind]-severity[b.kind]||
+      steps.indexOf(a.step)-steps.indexOf(b.step)||
+      String(a.text).localeCompare(String(b.text),"zh-CN");
+  });
+  var blockers=issues.filter(function(item){return item.kind==="blocker";});
+  var pending=issues.filter(function(item){return item.kind==="pending";});
+  return {
+    issues:issues,blockers:blockers.length,pending:pending.length,satisfied:satisfied,
+    status:blockers.length?"blocked":pending.length?"pending":"ready",
+    label:blockers.length?"不具备研发评审条件":
+      pending.length?"可进入产品评审，研发评审待确认":"具备研发评审条件",
+    verdict:blockers.length?"阻断":pending.length?"待确认":"通过",
+    rule:blockers.length?"存在阻断项即不通过":
+      pending.length?"不存在阻断项且仍有待确认项":"不存在阻断项或待确认项"
+  };
+}
+function renderReviewIssue(item){
+  var step=item.step,stepId=step&&step.nodeId;
+  return h("button",{class:"review-issue "+item.kind,type:"button",
+      "data-review-step":stepId||"","data-review-lens":item.lens,
+      "data-review-severity":item.kind,
+      onclick:function(){
+        state.flowLens=item.lens||"flow";
+        if(step) selectScenarioStep(step.nodeId,(step.detail||{}).stepId);
+      }},
+    (item.kind==="blocker"?"阻断 · ":"待确认 · ")+item.text);
+}
+function reviewFilterSelect(kind,label,items){
+  var select=h("select",{class:"review-filter filter-input",
+    "data-review-filter":kind,"aria-label":label});
+  select.appendChild(h("option",{value:""},"全部"+label));
+  items.forEach(function(item){
+    select.appendChild(h("option",{value:item[0]},item[1]));
+  });
+  return select;
+}
+function applyReviewFilters(container,filters){
+  var severity=filters.severity.value,step=filters.step.value,lens=filters.lens.value;
+  Array.prototype.forEach.call(
+    container.querySelectorAll(".review-issue"),function(item){
+      item.hidden=!!((severity&&item.dataset.reviewSeverity!==severity)||
+        (step&&item.dataset.reviewStep!==step)||
+        (lens&&item.dataset.reviewLens!==lens));
+    });
+}
+function renderReviewReadiness(review){
+  var block=h("section",{class:"review-readiness","data-review-status":review.status,
+    "aria-label":"评审就绪度"});
+  block.appendChild(h("div",{class:"readiness-head"},
+    h("div",{},
+      h("h4",{class:"review-verdict"},"评审结论："+review.verdict+"，"+review.label),
+      h("p",{class:"review-rule"},"判定规则："+review.rule+"；缺失信息不会被推断补齐。")),
+    h("span",{class:"readiness-status"},review.verdict)));
+  var metrics=h("div",{class:"readiness-metrics"});
+  [["blocker","阻断项",review.blockers],["pending","待确认",review.pending],
+    ["satisfied","已满足",review.satisfied]].forEach(function(item){
+    metrics.appendChild(h("div",{class:"readiness-metric",
+        "data-review-state":item[0]},
+      h("b",{},String(item[2])),h("span",{},item[1])));
+  });
+  block.appendChild(metrics);
+  if(review.issues.length){
+    var primary=h("div",{class:"review-primary-issues",
+      "aria-label":"最高优先级评审问题"});
+    review.issues.slice(0,3).forEach(function(item){
+      primary.appendChild(renderReviewIssue(item));
+    });
+    block.appendChild(primary);
+    var all=h("details",{class:"review-all"},
+      h("summary",{},"查看全部 "+review.issues.length+" 项"));
+    var stepItems=[],seenSteps={};
+    review.issues.forEach(function(item){
+      var step=item.step,stepId=step&&step.nodeId;
+      if(stepId&&!seenSteps[stepId]){
+        seenSteps[stepId]=true;
+        stepItems.push([stepId,(step.detail||{}).stepId||step.title]);
+      }
+    });
+    var filters={
+      severity:reviewFilterSelect("severity","严重程度",
+        [["blocker","阻断"],["pending","待确认"]]),
+      step:reviewFilterSelect("step","步骤",stepItems),
+      lens:reviewFilterSelect("lens","透镜",FLOW_LENSES.map(function(item){
+        return [item[0],item[1]];
+      }))
+    };
+    var filterBar=h("div",{class:"review-filters"},
+      filters.severity,filters.step,filters.lens);
+    var allList=h("div",{class:"review-all-issues","aria-label":"全部评审问题"});
+    review.issues.forEach(function(item){allList.appendChild(renderReviewIssue(item));});
+    Object.keys(filters).forEach(function(key){
+      filters[key].addEventListener("change",function(){
+        applyReviewFilters(allList,filters);
+      });
+    });
+    all.appendChild(filterBar);all.appendChild(allList);block.appendChild(all);
+  }
+  return block;
+}
+var FLOW_LENSES=[
+  ["flow","流程"],["state","状态"],["data","数据"],
+  ["exception","异常"],["access","权限"]
+];
+function selectFlowLens(name){
+  state.flowLens=name;renderFlows();
+  requestAnimationFrame(function(){
+    var target=$("view-flow").querySelector('.flow-lens[data-lens="'+name+'"]');
+    if(target) target.focus();
+  });
+}
+function renderFlowLenses(){
+  var group=h("div",{class:"flow-lenses",role:"group","aria-label":"评审透镜"},
+    h("span",{class:"flow-lenses-label"},"评审透镜"));
+  FLOW_LENSES.forEach(function(item){
+    group.appendChild(h("button",{class:"flow-lens",type:"button",
+        "data-lens":item[0],"aria-pressed":String(state.flowLens===item[0]),
+        onclick:function(){selectFlowLens(item[0]);}},item[1]));
+  });
+  return group;
+}
+function stepContractSection(key,title,content){
+  return h("section",{class:"flow-inspector-section step-contract-section",
+      "data-contract-section":key},
+    h("h5",{},title),content);
+}
+function flowInteractionKind(detail){
+  if(detail.event==="系统触发"||detail.control==="无") return "系统任务";
+  return "用户操作";
+}
+function flowStepKind(step,facts){
+  var d=step.detail||{};
+  var hasPage=flowDeclared(d.pageTitle||d.pageRef);
+  var systemRole=String(d.role||"").indexOf("系统")>=0;
+  if(hasPage&&!systemRole) return "用户操作";
+  if(facts.dependencies.length) return "外部系统调用";
+  if(facts.states.some(function(node){return (node.detail||{}).userAction==="等待";})){
+    return "异步等待";
+  }
+  return "系统任务";
+}
+function flowLensFacts(step,facts){
+  var d=step.detail||{},items=[];
+  if(state.flowLens==="state"){
+    facts.impacts.forEach(function(node){
+      var x=node.detail||{};
+      items.push({label:x.object||"业务对象",
+        text:(x.currentState||"未声明")+" → "+(x.action||d.action||"事件未声明")+
+          " → "+(x.nextState||"未声明")});
+    });
+    if(!items.length) items.push({label:"评审阻断",
+      text:"本步骤未声明前状态 → 事件 → 后状态",blocking:true});
+    return items;
+  }
+  if(state.flowLens==="data"){
+    facts.dataEdges.forEach(function(edge){
+      var target=nodeById[edge.to];
+      items.push({label:edge.kind==="writes"?"输出 / 写入":"输入 / 读取",
+        text:(target&&target.title)||"数据对象未解析"});
+    });
+    facts.fields.forEach(function(node){
+      var x=node.detail||{};
+      items.push({label:"字段 · "+node.title,
+        text:(x.type||"类型未声明")+" · 必填 "+(x.required||"未声明")+
+          " · "+(x.validation||"校验未声明")});
+    });
+    if(!items.length) items.push({label:"评审阻断",
+      text:"页面数据读写、输入输出与字段均未声明",blocking:true});
+    return items;
+  }
+  if(state.flowLens==="exception"){
+    facts.failures.forEach(function(node){
+      var x=node.detail||{};
+      var responsibility=flowDeclared(x.recoveryRole)?
+        " · 恢复执行角色 "+x.recoveryRole+
+          (flowDeclared(x.recoveryRequesterRole)&&
+            x.recoveryRequesterRole!==x.recoveryRole?
+            " · 责任交接 "+x.recoveryRequesterRole+" → "+x.recoveryRole:"")+
+          " · 未授权 "+(x.unauthorizedBehavior||"处理未声明"):"";
+      items.push({label:"业务前置 / 流程失败",
+        text:flowFailureTriggerText(node,facts.states)+" · "+
+          (x.handling||x.recovery||"恢复未声明")+responsibility,
+        blocking:flowUsesRolePermissions(step)&&!flowDeclared(x.recoveryRole)});
+    });
+    facts.states.forEach(function(node){
+      var x=node.detail||{};
+      items.push({label:"页面边缘状态",
+        text:node.title+" · "+(x.trigger||x.condition||"触发未声明")+
+          " · "+(x.systemBehavior||x.acceptance||"处理未声明")});
+    });
+    if(!items.length) items.push({label:"待确认",
+      text:"本步骤未声明异常或页面边缘状态"});
+    return items;
+  }
+  if(state.flowLens==="access"){
+    if(!flowUsesRolePermissions(step)){
+      items.push({label:"系统步骤不适用角色权限矩阵",
+        text:"执行边界见生产者/消费者与工程合同"});
+      items.push({label:"数据范围与字段可见性",text:"不适用：非用户操作"});
+      items.push({label:"越权拒绝行为",text:"不适用：非用户操作"});
+      return items;
+    }
+    facts.requiredActions.forEach(function(requiredAction){
+      var decision=flowRequiredActionDecision(requiredAction);
+      var actorDecision=decision.actorRule?
+        accessDecisionLabel(decision.actorDecision):"未匹配明确规则";
+      var transfer=requiredAction.handoffRole?
+        " · 转交 "+requiredAction.handoffRole+" "+
+          (decision.handoffRule?
+            accessDecisionLabel(decision.handoffDecision):"未匹配明确规则"):"";
+      items.push({label:flowRequiredActionLabel(requiredAction.purpose),
+        text:(requiredAction.subject||"角色未声明")+" · "+
+          (requiredAction.action||"操作未声明")+" · "+actorDecision+transfer+
+          " · 未授权："+(requiredAction.unauthorizedBehavior||"未声明"),
+        blocking:!flowRequiredActionIsClosed(requiredAction,decision)});
+    });
+    if(!facts.requiredActions.length) items.push({label:"评审阻断",
+      text:"本步骤未声明 requiredActions，不能用角色全量权限代替",
+      blocking:true});
+    items.push({label:"角色完整权限矩阵（补充）",
+      text:facts.rolePermissions.length+
+        " 条规则；请在步骤合同中查看折叠明细"});
+    var exactPermissions=facts.permissions;
+    [["角色全局数据边界（补充）","dataScope",true],
+      ["字段可见性","fieldVisibility",false],
+      ["越权拒绝行为","denialBehavior",false]].forEach(function(item){
+      var value=flowUnique(exactPermissions.map(function(node){
+        return (node.detail||{})[item[1]];
+      })).join("；")||"未单独声明";
+      items.push({label:item[0],text:item[2]&&value!=="未单独声明"?
+        "不代表本步骤实际访问范围 · "+value:value});
+    });
+    return items;
+  }
+  facts.interactions.forEach(function(node){
+    var x=node.detail||{};
+    items.push({label:(x.interactionId||"子步骤")+" · "+flowInteractionKind(x),
+      text:x.systemAction||((x.control||"无")+" · "+(x.event||"系统触发"))});
+  });
+  facts.dependencies.forEach(function(dependency){
+    items.push({label:"外部系统调用",text:dependency});
+  });
+  facts.states.filter(function(node){return (node.detail||{}).userAction==="等待";})
+    .forEach(function(node){
+      items.push({label:"异步等待",text:node.title+" · "+
+        ((node.detail||{}).acceptance||"完成条件未声明")});
+    });
+  if(!items.length) items.push({label:"待确认",text:"操作与系统处理未拆分"});
+  return items;
+}
+function renderFlowLensFacts(step,facts){
+  var items=flowLensFacts(step,facts),list=h("div",{class:"flow-lens-facts"});
+  items.slice(0,3).forEach(function(item){
+    list.appendChild(h("div",{class:"flow-lens-fact"+(item.blocking?" blocking":"")},
+      h("b",{},item.label),h("span",{},item.text)));
+  });
+  if(items.length>3){
+    list.appendChild(h("div",{class:"flow-fact-count"},
+      "另有 "+(items.length-3)+" 条，在步骤合同中查看"));
+  }
+  return list;
+}
+function renderFlowBranches(step,facts){
+  var list=h("div",{class:"flow-branch-list","aria-label":"挂接到本步骤的异常"});
+  facts.failures.slice(0,2).forEach(function(node,index){
+    var d=node.detail||{},ref="branch-failure-"+node.nodeId;
+    list.appendChild(h("button",{class:"flow-branch",type:"button",
+        "data-branch-kind":"failure","data-fact-id":node.nodeId,
+        "aria-pressed":String(state.flowDetailId===node.nodeId),
+        dataset:{flowRef:ref},
+        onclick:function(){openFlowEvidence(node,ref);}},
+      h("b",{},"异常分支 · "+(node.title||("流程失败 "+(index+1)))),
+      h("small",{},d.handling||d.recovery||"恢复方式未声明")));
+  });
+  facts.states.slice(0,1).forEach(function(node){
+    var d=node.detail||{},ref="branch-state-"+node.nodeId;
+    list.appendChild(h("button",{class:"flow-branch",type:"button",
+        "data-branch-kind":"page-state","data-fact-id":node.nodeId,
+        "aria-pressed":String(state.flowDetailId===node.nodeId),
+        dataset:{flowRef:ref},
+        onclick:function(){openFlowEvidence(node,ref);}},
+      h("b",{},"页面边缘 · "+node.title),
+      h("small",{},d.systemBehavior||d.acceptance||"处理方式未声明")));
+  });
+  var hidden=Math.max(0,facts.failures.length-2)+Math.max(0,facts.states.length-1);
+  if(hidden){
+    list.appendChild(h("button",{class:"flow-branch",type:"button",
+        onclick:function(){selectScenarioStep(step.nodeId,(step.detail||{}).stepId);}},
+      h("b",{},"另有 "+hidden+" 条异常事实"),h("small",{},"在步骤合同中查看")));
+  }
+  return list;
+}
+function flowEvidencePairs(node){
+  var d=node.detail||{},category=d.category,pairs=[];
+  if(category==="flowStep"){
+    pairs=[["角色",d.role],["页面",flowDeclared(d.pageTitle||d.pageRef)?
+      (d.pageTitle||d.pageRef):(flowUsesRolePermissions(node)?
+        "未声明":"不适用：非用户操作")],["前置 / 条件",d.condition],
+      ["动作",d.action],["成功结果",d.result]];
+  }else if(category==="interactionStep"){
+    pairs=[["交互 ID",d.interactionId],["页面",d.pageTitle||d.pageRef],
+      ["容器状态",d.containerState],["控件 / 事件",(d.control||"无")+" · "+(d.event||"系统触发")],
+      ["可用条件",d.availability],["即时反馈",d.immediateFeedback],
+      ["系统行为",d.systemAction],["成功结果",d.successResult],
+      ["失败与恢复",d.failureRecovery]];
+  }else if(category==="failureBranch"){
+    pairs=[["步骤",d.stepId],["触发条件",d.condition||d.trigger],
+      ["系统行为",d.systemBehavior],["处理 / 恢复",d.handling||d.recovery],
+      ["责任方",d.owner||d.role]];
+  }else if(category==="pageState"){
+    pairs=[["步骤",d.stepId],["页面",d.pageTitle],["触发条件",d.trigger||d.condition],
+      ["系统行为",d.systemBehavior],["恢复 / 验收",d.acceptance||d.recovery]];
+  }else if(category==="stateImpact"){
+    pairs=[["步骤",d.stepId],["业务对象",d.object],
+      ["状态变化",(d.currentState||"—")+" → "+(d.nextState||"—")],
+      ["触发动作",d.action],["依赖",behaviorDependencyTitle(d.dependencyScopeId,d.dependency)],
+      ["失败传播",d.failurePropagation]];
+  }else{
+    pairs=[["所属模块",scopeTitle(node.scopeId)],["类别",referenceKind(node)]];
+  }
+  return pairs.map(function(pair){
+    var value=pair[1];
+    return [pair[0],value==null||value===""||value==="—"?"未声明":value];
+  });
+}
+function flowEvidenceStep(node){
+  var d=(node&&node.detail)||{};
+  if(d.stepNodeId&&nodeById[d.stepNodeId]) return nodeById[d.stepNodeId];
+  var interaction=d.interactionNodeId&&nodeById[d.interactionNodeId];
+  var interactionStep=interaction&&(interaction.detail||{}).stepNodeId;
+  if(interactionStep&&nodeById[interactionStep]) return nodeById[interactionStep];
+  return flowPart(state.moduleId,state.scenarioId,"flowStep").find(function(step){
+    return flowDeclared(d.stepId)&&
+      String((step.detail||{}).stepId)===String(d.stepId);
+  })||null;
+}
+function renderFlowEvidence(node){
+  var panel=h("aside",{class:"flow-inspector",id:"flow-inspector",
+    "aria-label":"流程证据详情"});
+  var label=referenceLabel(node),owner=flowEvidenceStep(node);
+  var ownerStep=owner&&((owner.detail||{}).stepId||owner.title);
+  var backLabel="返回 "+(ownerStep||"步骤合同");
+  panel.appendChild(h("div",{class:"flow-inspector-head"},
+    h("button",{class:"flow-inspector-back",type:"button",
+      onclick:returnFromFlowEvidence,"aria-label":backLabel},"← "+backLabel),
+    h("div",{},
+      h("div",{class:"flow-evidence-breadcrumb"},
+        (ownerStep?ownerStep+" 步骤合同":"步骤合同")+" / "+label.kind),
+      h("h4",{id:"flow-evidence-heading",tabindex:"-1"},label.title))));
+  var body=h("div",{class:"flow-inspector-body"});
+  body.appendChild(h("div",{class:"flow-evidence-block"},
+    h("h5",{},"已声明事实"),kvList(flowEvidencePairs(node))));
+  var sourceSections=sourcesSection(node.sources);
+  if(sourceSections.length){
+    sourceSections.forEach(function(section){body.appendChild(section);});
+  }else{
+    body.appendChild(h("div",{class:"flow-empty"},
+      "该事实未提供可追溯来源；不能据此补充或推断。"));
+  }
+  panel.appendChild(body);
+  return panel;
+}
+function openFlowEvidence(node,returnId){
+  var owner=flowEvidenceStep(node);
+  if(owner) state.stepId=owner.nodeId;
+  state.flowDetailId=node.nodeId;
+  state.flowReturnId=returnId||node.nodeId;
+  state.flowInspectorOpen=true;
+  renderFlows();
+  requestAnimationFrame(function(){
+    var heading=$("flow-evidence-heading");if(heading) heading.focus();
+  });
+}
+function returnFromFlowEvidence(){
+  var returnId=state.flowReturnId;
+  state.flowDetailId=null;state.flowReturnId=null;
+  renderFlows();
+  requestAnimationFrame(function(){
+    var target=$("view-flow").querySelector('[data-flow-ref="'+cssEsc(returnId||"")+'"]');
+    if(target) target.focus();
+  });
+}
+function closeMobileFlowInspector(){
+  var step=state.stepId;
+  state.flowInspectorOpen=false;state.flowDetailId=null;state.flowReturnId=null;
+  renderFlows();
+  requestAnimationFrame(function(){
+    var target=$("view-flow").querySelector('.mobile-flow-step[data-node-id="'+
+      cssEsc(step||"")+'"]');
+    if(target) target.focus();
+  });
+}
+function flowEngineeringBoundary(step,facts){
+  var dependencies=flowUnique((facts.dependencies||[])
+    .filter(flowExternalDependencyValue));
+  if(!dependencies.length) return {applicable:false};
+  var nodes=[step].concat(facts.interactions,facts.impacts),texts=[];
+  nodes.forEach(function(node){
+    var d=(node&&node.detail)||{};
+    ["action","condition","result","event","systemAction","successResult",
+      "failureRecovery","failureHandling","failurePropagation"].forEach(function(key){
+      if(flowDeclared(d[key])) texts.push(String(d[key]));
+    });
+  });
+  var joined=texts.join("；");
+  var mode=joined.indexOf("异步")>=0?"异步":
+    joined.indexOf("同步")>=0?"同步":"同步/异步未声明";
+  var eventName="";
+  nodes.some(function(node){
+    var d=(node&&node.detail)||{};
+    return ["eventName","publishedEvent","domainEvent","messageName"].some(function(key){
+      if(!flowDeclared(d[key])) return false;
+      eventName=String(d[key]);return true;
+    });
+  });
+  if(!eventName){
+    var eventMatch=joined.match(/\b[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+\.v\d+\b/i);
+    if(eventMatch) eventName=eventMatch[0];
+  }
+  if(!eventName){
+    nodes.some(function(node){
+      var value=String(((node&&node.detail)||{}).event||"");
+      if(!/事件|消息/.test(value)) return false;
+      eventName=value;return true;
+    });
+  }
+  var transaction="";
+  nodes.some(function(node){
+    var d=(node&&node.detail)||{};
+    return ["transactionBoundary","transaction","commitPoint"].some(function(key){
+      if(!flowDeclared(d[key])) return false;
+      transaction=String(d[key]);return true;
+    });
+  });
+  if(!transaction){
+    var transactionMatch=joined.match(/\bTX-[A-Z0-9-]+\b/i);
+    if(transactionMatch) transaction=transactionMatch[0];
+  }
+  var retry=flowUnique(nodes.map(function(node){
+    var d=(node&&node.detail)||{};
+    return d.retryPolicy||d.idempotency||
+      (/重试|幂等/.test(String(d.failureRecovery||d.failureHandling||""))?
+        (d.failureRecovery||d.failureHandling):"");
+  })).join("；");
+  var failureImpact=flowUnique(facts.impacts.map(function(node){
+    return (node.detail||{}).failurePropagation;
+  })).join("；");
+  return {
+    applicable:true,
+    dependency:dependencies.join("；"),
+    mode:mode,
+    eventName:eventName||"未声明",
+    transaction:transaction||"未声明",
+    retry:retry||"未声明",
+    failureImpact:failureImpact||"未声明"
+  };
+}
+function renderEngineeringBoundary(boundary){
+  if(!boundary.applicable){
+    return h("section",{class:"engineering-boundary compact",
+        "aria-label":"工程边界"},
+      h("h5",{},"工程边界"),
+      h("small",{},"不适用：本步骤不跨系统，不要求事件、事务或重试合同。"));
+  }
+  return h("section",{class:"engineering-boundary","aria-label":"工程边界"},
+    h("h5",{},"工程边界"),
+    kvList([
+      ["协作系统",boundary.dependency],
+      ["同步 / 异步",boundary.mode],
+      ["事件名称",boundary.eventName],
+      ["事务提交点",boundary.transaction],
+      ["重试 / 幂等",boundary.retry],
+      ["失败影响",boundary.failureImpact]
+    ]));
+}
+function renderFlowInspector(scopeId,root,step,impacts,pageStates,failures){
+  if(state.flowDetailId&&nodeById[state.flowDetailId]){
+    return renderFlowEvidence(nodeById[state.flowDetailId]);
+  }
+  var sd=step.detail||{};
+  var facts=scenarioStepFacts(scopeId,root,step,impacts,pageStates,failures);
+  var trace=flowTraceMeta(step);
+  var page=nodeById[sd.pageId||sd.pageRef],pageDetail=(page&&page.detail)||{};
+  var panel=h("aside",{class:"flow-inspector",id:"flow-inspector",
+    "aria-label":"当前步骤合同","aria-live":"polite"});
+  panel.appendChild(h("div",{class:"flow-inspector-head"},
+    h("div",{},
+      h("h4",{id:"flow-inspector-heading",tabindex:"-1"},
+        (sd.stepId||step.title)+" · 步骤合同"),
+      h("p",{},flowStepKind(step,facts)+" · "+(sd.role||"角色未声明"))),
+    h("button",{class:"flow-inspector-close",type:"button",
+      onclick:closeMobileFlowInspector,"aria-label":"返回场景主线"},"返回主线")));
+  var body=h("div",{class:"flow-inspector-body"});
+
+  var entryContent=h("div",{},
+    h("p",{class:"flow-inspector-summary"},sd.action||step.title),
+    kvList([
+      ["角色",sd.role||"未声明"],
+      ["页面前置",flowDeclared(sd.pageId||sd.pageRef||sd.pageTitle)?
+        (pageDetail.precondition||"未声明"):"不适用：非用户操作"],
+      ["步骤条件",flowDeclared(sd.condition)?sd.condition:"未声明"]
+    ]));
+  body.appendChild(stepContractSection(
+    "entry","1. 进入条件",entryContent));
+
+  var inputList=h("div",{class:"inspector-list"});
+  facts.dataEdges.forEach(function(edge){
+    var target=nodeById[edge.to],detail=edge.detail||{};
+    if(!target) return;
+    inputList.appendChild(flowInspectorRow(target,
+      (edge.kind==="writes"?"输出 / 写入 · ":"输入 / 读取 · ")+target.title,
+      (detail.authoritativeSource||"来源未声明")+" · "+
+        (detail.syncMethod||"同步方式未声明"),"","data-"+edge.edgeId));
+  });
+  facts.fields.forEach(function(node){
+    var d=node.detail||{};
+    inputList.appendChild(flowInspectorRow(node,
+      "字段 · "+node.title,
+      (d.type||"类型未声明")+" · 必填 "+(d.required||"未声明")+
+        " · "+(d.validation||"校验未声明"),"","field-"+node.nodeId));
+  });
+  if(!facts.dataEdges.length&&!flowUsesRolePermissions(step)){
+    inputList.appendChild(h("div",{class:"flow-empty"},
+      "非页面系统步骤：输入、输出由事件与状态影响合同声明。"));
+  }else if(!facts.dataEdges.length){
+    inputList.appendChild(h("div",{class:"flow-empty blocking"},
+      "评审阻断：本步骤未声明输入、输出或页面数据读写。"));
+  }else if(!facts.fields.length){
+    inputList.appendChild(h("div",{class:"flow-empty"},
+      "已声明数据对象，但尚未声明可机械解析的字段定义。"));
+  }
+  body.appendChild(stepContractSection(
+    "data","2. 输入字段与校验",inputList));
+
+  var processTimeline=h("div",{class:"flow-timeline"});
+  facts.interactions.forEach(function(node,index){
+    var d=node.detail||{},ref="interaction-"+node.nodeId;
+    processTimeline.appendChild(h("div",{class:"flow-timeline-item"},
+      h("span",{class:"flow-timeline-id"},d.interactionId||String(index+1)),
+      flowInspectorRow(node,
+        flowInteractionKind(d)+" · "+((d.control||"无")+" / "+(d.event||"系统触发")),
+        (d.systemAction||"系统处理未声明")+" → "+
+          (d.successResult||"成功结果未声明"),"",ref)));
+  });
+  if(!facts.interactions.length&&!flowUsesRolePermissions(step)){
+    processTimeline.appendChild(h("div",{class:"flow-timeline-item"},
+      h("span",{class:"flow-timeline-id"},"系统"),
+      flowInspectorRow(step,"系统任务 · "+(sd.action||"触发未声明"),
+        sd.result||"成功结果未声明","","system-"+step.nodeId)));
+  }else if(!facts.interactions.length){
+    processTimeline.appendChild(h("div",{class:"flow-empty blocking"},
+      "评审阻断：本步骤尚未拆分操作、系统处理或异步事件。"));
+  }
+  facts.impacts.filter(function(node){
+    var d=node.detail||{};
+    return flowDeclared(flowExternalDependencyTitle(
+      d.dependencyScopeId,d.dependency));
+  }).forEach(function(node){
+    var d=node.detail||{};
+    processTimeline.appendChild(flowInspectorRow(node,
+      "外部系统调用 · "+flowExternalDependencyTitle(
+        d.dependencyScopeId,d.dependency),
+      d.failurePropagation||"失败传播未声明","","dependency-"+node.nodeId));
+  });
+  var engineeringBoundary=flowEngineeringBoundary(step,facts);
+  if(engineeringBoundary){
+    processTimeline.appendChild(renderEngineeringBoundary(engineeringBoundary));
+  }
+  body.appendChild(stepContractSection(
+    "process","3. 操作及系统处理",processTimeline));
+
+  var successList=h("div",{class:"inspector-list"});
+  successList.appendChild(h("div",{class:"flow-inspector-summary"},
+    "成功结果 · "+(sd.result||"未声明")));
+  facts.impacts.forEach(function(node){
+    var d=node.detail||{};
+    successList.appendChild(flowInspectorRow(node,d.object||"业务对象",
+      (d.currentState||"未声明")+" → "+(d.action||sd.action||"事件未声明")+
+        " → "+(d.nextState||"未声明"),"","impact-"+node.nodeId));
+  });
+  if(!facts.impacts.length){
+    successList.appendChild(h("div",{class:"flow-empty blocking"},
+      "评审阻断：本步骤尚未声明「前状态 → 事件 → 后状态」。"));
+  }
+  body.appendChild(stepContractSection(
+    "success","4. 成功结果与状态变化",successList));
+
+  var exceptionList=h("div",{class:"inspector-list"});
+  facts.failures.forEach(function(node,index){
+    var d=node.detail||{};
+    var responsibility=flowDeclared(d.recoveryRole)?
+      " · 恢复执行角色 "+d.recoveryRole+
+        (flowDeclared(d.recoveryRequesterRole)&&
+          d.recoveryRequesterRole!==d.recoveryRole?
+          " · 责任交接 "+d.recoveryRequesterRole+" → "+d.recoveryRole:"")+
+        " · 未授权 "+(d.unauthorizedBehavior||"处理未声明"):
+      (flowUsesRolePermissions(step)?" · 恢复执行角色未声明":"");
+    exceptionList.appendChild(flowInspectorRow(node,
+      node.title||("流程失败 "+(index+1)),
+      flowFailureTriggerText(node,facts.states)+" · 恢复 "+
+        (d.handling||d.recovery||d.systemBehavior||"未声明")+responsibility,
+      "failure","failure-"+node.nodeId));
+  });
+  facts.interactions.filter(function(node){
+    return flowDeclared((node.detail||{}).failureRecovery);
+  }).forEach(function(node){
+    var d=node.detail||{};
+    exceptionList.appendChild(h("div",{class:"inspector-row"},
+      h("b",{},"交互恢复 · "+(d.interactionId||node.title)),
+      h("small",{},d.failureRecovery)));
+  });
+  if(!facts.failures.length){
+    exceptionList.appendChild(h("div",{class:"flow-empty"},
+      "本步骤没有已声明的流程失败；不代表业务上绝对不会失败。"));
+  }
+  var stateList=h("div",{class:"inspector-list"});
+  facts.states.forEach(function(node){
+    var d=node.detail||{};
+    stateList.appendChild(flowInspectorRow(node,node.title,
+      "页面边缘 · "+(d.trigger||d.condition||"触发未声明")+" · "+
+        (d.systemBehavior||d.acceptance||"处理未声明"),
+      "","state-"+node.nodeId));
+  });
+  if(facts.states.length){
+    exceptionList.appendChild(h("details",{class:"inspector-disclosure"},
+      h("summary",{},"页面边缘状态 · "+facts.states.length),stateList));
+  }
+  body.appendChild(stepContractSection(
+    "exception","5. 异常、用户提示及恢复",exceptionList));
+  var permissions=h("div",{class:"permission-dimensions"});
+  var usesRolePermissions=flowUsesRolePermissions(step);
+  var operation=h("div",{class:"permission-dimension",
+    "data-permission-dimension":"operation",
+    "data-step-permission-contract":"true"},h("b",{},"本步骤权限合同"));
+  if(!usesRolePermissions){
+    operation.appendChild(h("small",{},
+      "系统步骤不适用角色 × 操作权限矩阵；执行边界见生产者/消费者与工程合同。"));
+  }else if(facts.requiredActions.length){
+    facts.requiredActions.forEach(function(requiredAction){
+      var decision=flowRequiredActionDecision(requiredAction);
+      var closed=flowRequiredActionIsClosed(requiredAction,decision);
+      var actorDecision=decision.actorRule?
+        accessDecisionLabel(decision.actorDecision):"未匹配明确规则";
+      var row=h("div",{class:"step-permission-item"+(closed?"":" blocking")},
+        h("small",{},flowRequiredActionLabel(requiredAction.purpose)+" · "+
+          (requiredAction.subject||"角色未声明")+" · "+
+          (requiredAction.action||"操作未声明")+" · "+actorDecision),
+        h("small",{},"未授权处理 · "+
+          (requiredAction.unauthorizedBehavior||"未声明")));
+      if(requiredAction.handoffRole){
+        row.appendChild(h("small",{},"转交路径 · "+
+          requiredAction.handoffRole+" · "+
+          (decision.handoffRule?
+            accessDecisionLabel(decision.handoffDecision):"未匹配明确规则")));
+      }
+      operation.appendChild(row);
+    });
+  }else operation.appendChild(h("small",{class:"flow-empty blocking"},
+    "评审阻断：本步骤未声明 requiredActions，角色全量权限不能代替步骤权限合同。"));
+  permissions.appendChild(operation);
+  var rolePermissionDisclosure=null;
+  if(usesRolePermissions&&facts.rolePermissions.length){
+    var rolePermissionBody=h("tbody",{});
+    facts.rolePermissions.forEach(function(node){
+      var d=node.detail||{};
+      rolePermissionBody.appendChild(h("tr",{},
+        h("td",{},d.action||"操作未声明"),
+        h("td",{},accessDecisionLabel(d.decision)),
+        h("td",{},d.rule||"规则未声明")));
+    });
+    var rolePermissionTable=h("table",{class:"role-permission-table",
+        "aria-label":"角色完整权限矩阵"},
+      h("thead",{},h("tr",{},
+        h("th",{scope:"col"},"操作"),
+        h("th",{scope:"col"},"裁决"),
+        h("th",{scope:"col"},"规则"))),
+      rolePermissionBody);
+    rolePermissionDisclosure=h("details",{class:"role-permission-matrix"},
+      h("summary",{},"角色完整权限矩阵（补充） · "+
+        facts.rolePermissions.length),
+      h("div",{class:"role-permission-table-wrap"},rolePermissionTable));
+  }
+  [
+    ["data-scope","角色全局数据边界（补充）","dataScope"],
+    ["field-visibility","字段可见性","fieldVisibility"],
+    ["denial","越权拒绝行为","denialBehavior"]
+  ].forEach(function(item){
+    var values=usesRolePermissions?flowUnique(facts.permissions.map(function(node){
+      return (node.detail||{})[item[2]];
+    })):[];
+    var valueText=usesRolePermissions?(values.join("；")||"未单独声明"):
+      "不适用：非用户操作";
+    if(usesRolePermissions&&item[0]==="data-scope"&&values.length){
+      valueText="不代表本步骤实际访问范围 · "+valueText;
+    }
+    permissions.appendChild(h("div",{class:"permission-dimension",
+        "data-permission-dimension":item[0]},
+      h("b",{},item[1]),h("small",{},valueText)));
+  });
+  if(rolePermissionDisclosure) permissions.appendChild(rolePermissionDisclosure);
+  var permissionContent=h("div",{},permissions,
+    h("div",{class:"flow-source-line"},
+      h("span",{},"来源 "+trace.sources+" · 需求 "+trace.requirements),
+      h("button",{dataset:{flowRef:"step-source-"+step.nodeId},
+        onclick:function(){openFlowEvidence(step,"step-source-"+step.nodeId);}},
+        "查看原文与需求号")));
+  body.appendChild(stepContractSection(
+    "permission","6. 权限、数据范围和需求来源",permissionContent));
+  panel.appendChild(body);
   return panel;
 }
 function selectScenarioStep(nodeId,stepId){
-  state.stepId=nodeId;
+  state.stepId=nodeId;state.flowDetailId=null;state.flowReturnId=null;
+  state.flowInspectorOpen=true;
   renderFlows();
-  var target=$("view-flow").querySelector(
-    '.flow-step-wrap[data-step-id="'+cssEsc(stepId||"")+'"] .flow-node');
-  if(target) target.focus();
+  if(window.innerWidth>1100){
+    Array.prototype.some.call(
+      $("view-flow").querySelectorAll(".flow-step-wrap"),
+      function(wrap){
+        if(wrap.dataset.nodeId!==nodeId) return false;
+        wrap.scrollIntoView({block:"nearest",inline:"center"});
+        return true;
+      });
+  }
+  requestAnimationFrame(function(){
+    var heading=$("flow-inspector-heading");
+    if(heading) heading.focus();
+  });
 }
 function drawWorkflowLinks(root){
   root=root||$("view-flow");
@@ -1621,17 +2681,30 @@ function drawWorkflowLinks(root){
           "M"+sx+","+sy+" C"+(sx+55)+","+(sy-52)+" "+(sx+55)+","+(sy+52)+" "+sx+","+sy:
           "M"+sx+","+sy+" H"+mx+" V"+ty+" H"+tx;
         var labelText=(edge.detail||{}).condition||"";
+        var boundaryWrap=toWrap.dataset.boundaryMode?toWrap:
+          fromWrap.dataset.boundaryMode?fromWrap:null;
+        var boundaryMode=boundaryWrap&&boundaryWrap.dataset.boundaryMode;
         var path=s("path",{class:"workflow-link",d:pathData,
           "marker-end":"url(#"+markerId+")","data-edge-id":edge.edgeId,
           "data-from-step":fromWrap.dataset.stepId||"",
           "data-to-step":toWrap.dataset.stepId||"",
-          "data-condition":labelText});
+          "data-condition":labelText,
+          "data-boundary-kind":boundaryMode?"cross-system":"",
+          "data-boundary-mode":boundaryMode||""});
         svg.appendChild(path);
+        var labelY=fromWrap===toWrap?sy-48:sy===ty?sy-9:(sy+ty)/2-6;
         if(labelText&&labelText!=="—"){
-          var labelY=fromWrap===toWrap?sy-48:sy===ty?sy-9:(sy+ty)/2-6;
           svg.appendChild(s("text",{class:"workflow-link-label",
             x:fromWrap===toWrap?sx+18:mx+5,y:labelY,
             "data-edge-id":edge.edgeId},clip(labelText,18)));
+        }
+        if(boundaryMode){
+          svg.appendChild(s("text",{
+            class:"workflow-link-label workflow-boundary-label",
+            x:fromWrap===toWrap?sx+18:mx+5,
+            y:labelY+((labelText&&labelText!=="—")?14:0),
+            "data-edge-id":edge.edgeId},
+          "跨系统 · "+boundaryMode));
         }
       });
   });
@@ -1645,220 +2718,215 @@ function flowBranch(kind,label,node,description){
 }
 
 function renderFlows(){
-
-  var view=$("view-flow"); view.textContent="";
+  var view=$("view-flow");view.textContent="";
   var scopeId=state.moduleId;
-  var roots=(flowsByScope[scopeId]||[]).slice().sort(byPath);
+  var roots=(flowsByScope[scopeId]||[]).slice();
   var parts=flowPartsByScope[scopeId]||[];
-  var allSteps=parts.filter(function(n){return (n.detail||{}).category==="flowStep";});
-  var allFailures=parts.filter(function(n){return (n.detail||{}).category==="failureBranch";});
+  var allSteps=parts.filter(function(node){return (node.detail||{}).category==="flowStep";});
+  var allFailures=parts.filter(function(node){return (node.detail||{}).category==="failureBranch";});
   var allImpacts=stateImpactsByScope[scopeId]||[];
   var allPageStates=pageStatesByScope[scopeId]||[];
   var allInteractions=interactionStepsByScope[scopeId]||[];
+  var interactionCountByFlow={};
+  allInteractions.forEach(function(node){
+    var flowId=(node.detail||{}).flowId;
+    interactionCountByFlow[flowId]=(interactionCountByFlow[flowId]||0)+1;
+  });
+  roots.sort(function(a,b){
+    return (interactionCountByFlow[b.nodeId]||0)-
+      (interactionCountByFlow[a.nodeId]||0)||byPath(a,b);
+  });
   var recoveryCount=allInteractions.filter(function(node){
     var value=(node.detail||{}).failureRecovery;
     return value&&value!=="—"&&value!=="无";
   }).length;
-  behaviorStats(view,[["业务场景",roots.length],["行为步骤",allSteps.length],
+  var moduleSummary=h("details",{class:"scenario-module-summary"},
+    h("summary",{},"模块汇总 · "+roots.length+" 场景 · "+allSteps.length+
+      " 步骤 · "+allInteractions.length+" 页面操作"));
+  behaviorStats(moduleSummary,[["业务场景",roots.length],["行为步骤",allSteps.length],
     ["页面操作",allInteractions.length],["流程失败",allFailures.length],
     ["页面边缘",allPageStates.length],["交互恢复",recoveryCount],
     ["状态影响",allImpacts.length]]);
-  if(!roots.length){ behaviorEmpty(view,"该模块尚未声明「核心流程（机器可解析）」表。"); return; }
+  view.appendChild(moduleSummary);
+  if(!roots.length){
+    behaviorEmpty(view,"该模块尚未声明「核心流程（机器可解析）」表。");return;
+  }
   var activeRoot=roots.find(function(root){return root.nodeId===state.scenarioId;});
   if(!activeRoot){
-    activeRoot=roots.find(function(root){
-      return allImpacts.some(function(impact){return (impact.detail||{}).flowId===root.nodeId;});
-    })||roots[0];
-    state.scenarioId=activeRoot.nodeId;
+    activeRoot=roots[0];
+    state.scenarioId=activeRoot.nodeId;state.stepId=null;
+    state.flowDetailId=null;state.flowReturnId=null;state.flowInspectorOpen=false;
   }
   var picker=h("select",{class:"filter-input scenario-picker",
     id:"scenario-picker","aria-label":"选择业务场景"});
   roots.forEach(function(root){
-    picker.appendChild(h("option",{value:root.nodeId},root.title));
+    var rootSteps=flowPart(scopeId,root.nodeId,"flowStep");
+    var rootInteractions=allInteractions.filter(function(node){
+      return (node.detail||{}).flowId===root.nodeId;
+    });
+    var coverage=rootSteps.length+" 步 · "+(rootInteractions.length?
+      rootInteractions.length+" 页面操作":"页面操作未声明");
+    picker.appendChild(h("option",{value:root.nodeId},
+      root.title+" · "+coverage));
   });
   picker.value=activeRoot.nodeId;
   picker.addEventListener("change",function(){
-    state.scenarioId=this.value; state.stepId=null; renderFlows();
+    state.scenarioId=this.value;state.stepId=null;
+    state.flowDetailId=null;state.flowReturnId=null;state.flowInspectorOpen=false;
+    renderFlows();
   });
-  view.appendChild(h("div",{class:"filter-row"},
-    h("label",{for:"scenario-picker"},"选择业务场景"),picker,
-    h("span",{class:"muted-text"},"一次只展开一条主流程；状态与异常按步骤挂载")));
-  [activeRoot].forEach(function(root){
-    var flowSteps=flowPart(scopeId,root.nodeId,"flowStep").sort(function(a,b){
-      return String((a.detail||{}).stepId).localeCompare(String((b.detail||{}).stepId),undefined,{numeric:true});
+  var activeSteps=flowPart(scopeId,activeRoot.nodeId,"flowStep");
+  var activeInteractions=allInteractions.filter(function(node){
+    return (node.detail||{}).flowId===activeRoot.nodeId;
+  });
+  view.appendChild(h("div",{class:"scenario-toolbar"},
+    h("label",{for:"scenario-picker"},"当前场景"),picker,
+    h("span",{class:"scenario-coverage"},
+      activeSteps.length+" 步 · "+(activeInteractions.length?
+        activeInteractions.length+" 页面操作":"页面操作未声明"))));
+  var root=activeRoot;
+  var flowSteps=activeSteps.slice().sort(function(a,b){
+    return String((a.detail||{}).stepId).localeCompare(
+      String((b.detail||{}).stepId),undefined,{numeric:true});
+  });
+  var selectedStep=flowSteps.find(function(step){return step.nodeId===state.stepId;});
+  if(!selectedStep&&flowSteps.length){
+    selectedStep=flowSteps[0];state.stepId=selectedStep.nodeId;
+    state.flowDetailId=null;state.flowReturnId=null;
+  }
+  var failures=flowPart(scopeId,root.nodeId,"failureBranch");
+  var impacts=allImpacts.filter(function(node){return (node.detail||{}).flowId===root.nodeId;});
+  var pageStates=allPageStates.filter(function(node){
+    var d=node.detail||{};
+    return d.flowId===root.nodeId||(!d.flowId&&d.flowTitle===root.title);
+  });
+  if(!FLOW_LENSES.some(function(item){return item[0]===state.flowLens;})){
+    state.flowLens="flow";
+  }
+  var contract=scenarioContract(scopeId,root,flowSteps,impacts);
+  var review=scenarioReview(
+    scopeId,root,flowSteps,impacts,pageStates,failures,contract);
+  var group=h("section",{class:"behavior-group scenario-group","data-flow-id":root.nodeId});
+  group.appendChild(h("div",{class:"behavior-head"},
+    h("h3",{},"当前场景 · "+root.title),
+    h("span",{class:"meta"},review.label)));
+  group.appendChild(renderScenarioContract(contract));
+  group.appendChild(renderReviewReadiness(review));
+  group.appendChild(renderFlowLenses());
+  var workspace=h("div",{class:"scenario-workspace"+
+    (state.flowInspectorOpen?" inspector-open":"")});
+  var graphPane=h("div",{class:"scenario-graph-pane",
+    "data-active-lens":state.flowLens});
+  var map=h("div",{class:"scenario-map"});
+  var primary=h("div",{class:"scenario-lane workflow-shell"});
+  var workflowScroll=h("div",{class:"workflow-scroll"});
+  var roles=[];
+  flowSteps.forEach(function(step){
+    var role=(step.detail||{}).role||"未声明角色";
+    if(roles.indexOf(role)<0) roles.push(role);
+  });
+  var minWidth=Math.max(620,128+flowSteps.length*210);
+  var canvas=h("div",{class:"workflow-canvas",
+    style:"min-width:"+minWidth+"px;min-height:"+(Math.max(1,roles.length)*340)+"px"});
+  var links=s("svg",{class:"workflow-links","aria-hidden":"true",focusable:"false"});
+  var workflowGrid=h("div",{class:"workflow-grid",
+    style:"--workflow-cols:"+flowSteps.length+";min-width:"+minWidth+"px"});
+  roles.forEach(function(role,roleIndex){
+    workflowGrid.appendChild(h("div",{class:"workflow-role-lane",
+      style:"grid-row:"+(roleIndex+1)+";grid-column:1 / -1"},
+      h("div",{class:"workflow-role-label"},
+        h("span",{},semanticIcon("role"),role))));
+  });
+  var mobileList=h("div",{class:"workflow-mobile-list","aria-label":"场景主线步骤"});
+  flowSteps.forEach(function(step,index){
+    var d=step.detail||{};
+    var roleRow=roles.indexOf(d.role||"未声明角色")+1;
+    var facts=scenarioStepFacts(scopeId,root,step,impacts,pageStates,failures);
+    var isStart=EDGES.some(function(edge){
+      return edge.kind==="navigates"&&edge.from===root.nodeId&&
+        edge.to===step.nodeId&&(edge.detail||{}).branch==="entry";
     });
-    var selectedStep=flowSteps.find(function(step){return step.nodeId===state.stepId;});
-    if(!selectedStep&&flowSteps.length){selectedStep=flowSteps[0];state.stepId=selectedStep.nodeId;}
-    var failures=flowPart(scopeId,root.nodeId,"failureBranch");
-    var impacts=allImpacts.filter(function(n){return (n.detail||{}).flowId===root.nodeId;});
-    var pageStates=allPageStates.filter(function(n){
-      var d=n.detail||{};
-      return d.flowId===root.nodeId||(!d.flowId&&d.flowTitle===root.title);
+    var reachesTerminal=EDGES.some(function(edge){
+      var target=nodeById[edge.to];
+      return edge.kind==="navigates"&&edge.from===step.nodeId&&
+        (edge.detail||{}).branch==="success"&&target&&
+        (target.detail||{}).category==="terminal";
     });
-    var group=h("section",{class:"behavior-group scenario-group","data-flow-id":root.nodeId});
-    group.appendChild(h("div",{class:"behavior-head"},
-      h("h3",{},root.title),
-      h("button",{class:"workflow-source",onclick:function(){openNodeCard(root);}},
-        "查看场景来源"),
-      h("span",{class:"meta"},flowSteps.length+" 步 · "+
-        failures.length+" 个流程失败 · "+pageStates.length+
-        " 个页面边缘 · "+impacts.length+" 个状态影响")));
-    var map=h("div",{class:"scenario-map"});
-    var primary=h("div",{class:"scenario-lane workflow-shell"});
-    var workflowScroll=h("div",{class:"workflow-scroll"});
-    var roles=[];
-    var roleNodes={};
-    flowSteps.forEach(function(step){
-      var role=(step.detail||{}).role||"未声明角色";
-      if(roles.indexOf(role)<0){roles.push(role);roleNodes[role]=step;}
-    });
-    var minWidth=Math.max(720,128+flowSteps.length*235);
-    var canvas=h("div",{class:"workflow-canvas",
-      style:"min-width:"+minWidth+"px;min-height:"+(Math.max(1,roles.length)*250)+"px"});
-    var links=s("svg",{class:"workflow-links","aria-hidden":"true",focusable:"false"});
-    var workflowGrid=h("div",{class:"workflow-grid",
-      style:"--workflow-cols:"+flowSteps.length+";min-width:"+minWidth+"px"});
-    roles.forEach(function(role,roleIndex){
-      var roleNode=roleNodes[role],roleSource=sourceAttribution(roleNode);
-      workflowGrid.appendChild(h("div",{class:"workflow-role-lane",
-        style:"grid-row:"+(roleIndex+1)+";grid-column:1 / -1"},
-        h("div",{class:"workflow-role-label"},
-          h("span",{},semanticIcon("role"),role),
-          h("button",{class:"workflow-role-source",title:roleSource.full,
-              onclick:function(){openNodeCard(roleNode);}},
-            "来源 · "+roleSource.short))));
-    });
-    flowSteps.forEach(function(step,index){
-      var d=step.detail||{};
-      var roleRow=roles.indexOf(d.role||"未声明角色")+1;
-      var stepImpacts=impacts.filter(function(n){
-        var x=n.detail||{};
-        return x.stepNodeId===step.nodeId||x.stepId===d.stepId;
-      });
-      var stepStates=pageStates.filter(function(n){
-        var x=n.detail||{};
-        return x.stepNodeId===step.nodeId||x.stepId===d.stepId;
-      });
-      var stepFailures=failures.filter(function(n){
-        return (n.detail||{}).stepId===d.stepId;
-      });
-      var isStart=EDGES.some(function(edge){
-        return edge.kind==="navigates"&&edge.from===root.nodeId&&
-          edge.to===step.nodeId&&(edge.detail||{}).branch==="entry";
-      });
-      var reachesTerminal=EDGES.some(function(edge){
-        var target=nodeById[edge.to];
-        return edge.kind==="navigates"&&edge.from===step.nodeId&&
-          (edge.detail||{}).branch==="success"&&target&&
-          (target.detail||{}).category==="terminal";
-      });
-      var stage=isStart?"起点":reachesTerminal?"终点":"过程";
-      var stageIcon=isStart?"start":reachesTerminal?"terminal":"active";
-      var wrap=h("div",{class:"flow-step-wrap","data-step-id":d.stepId||"",
-        "data-node-id":step.nodeId,"data-condition":d.condition||"",
-        style:"grid-row:"+roleRow+";grid-column:"+(index+2)});
-      wrap.appendChild(h("button",{class:"flow-node","aria-pressed":String(state.stepId===step.nodeId),
-        "aria-controls":"interaction-panel",onclick:function(){selectScenarioStep(step.nodeId,d.stepId);}},
-        h("div",{class:"flow-node-head"},semanticIcon(stageIcon),
-          h("span",{class:"step"},d.stepId||("步骤 "+(index+1))),
-          h("span",{class:"flow-stage"},stage)),
-        h("div",{class:"page"},semanticIcon("page"),
-          h("span",{},d.pageTitle||"未绑定页面")),
-        h("div",{class:"action"},semanticIcon("action"),
-          h("span",{},d.action||step.title)),
-        h("div",{class:"result"},semanticIcon("success"),
-          h("span",{},"成功 · "+(d.result||"—"))),
-        h("div",{class:"result"},semanticIcon("active"),
-          h("span",{},"下一步 · "+(d.nextStep||"—")))));
-      var stepInteractions=allInteractions.filter(function(n){
-        var x=n.detail||{};
-        return x.flowId===root.nodeId&&(x.stepNodeId===step.nodeId||x.stepId===d.stepId);
-      });
-      wrap.appendChild(h("div",{class:"step-summary"},
-        h("span",{},stepInteractions.length+" 个页面操作"),
-        h("span",{},stepFailures.length+" 个流程失败"),
-        h("span",{},stepStates.length+" 个页面边缘"),
-        h("span",{},stepImpacts.length+" 个状态影响")));
-      var branchList=h("div",{class:"step-branch-list"});
-      stepFailures.forEach(function(node){
-        branchList.appendChild(flowBranch("failureBranch","流程失败",
-          node,(node.detail||{}).handling));
-      });
-      stepStates.forEach(function(node){
-        var x=node.detail||{};
-        branchList.appendChild(flowBranch("pageState","页面边缘 · "+node.title,
-          node,x.systemBehavior||x.acceptance));
-      });
-      stepInteractions.forEach(function(node){
-        var x=node.detail||{},recovery=x.failureRecovery;
-        if(!recovery||recovery==="—"||recovery==="无") return;
-        branchList.appendChild(flowBranch("failureRecovery",
-          "交互失败与恢复 · "+(x.interactionId||node.title),node,recovery));
-      });
-      stepImpacts.forEach(function(node){
-        var x=node.detail||{};
-        branchList.appendChild(flowBranch("stateImpact","成功后的状态影响",
-          node,(x.object||"业务对象")+"："+(x.currentState||"—")+
-          " → "+(x.nextState||"—")));
-      });
-      if(branchList.childElementCount){
-        wrap.appendChild(h("details",{class:"step-branches"},
-          h("summary",{},branchList.childElementCount+" 个分支与影响"),
-          branchList));
-      }
-      wrap.appendChild(h("button",{class:"step-source",onclick:function(){openNodeCard(step);}},
-        "查看步骤来源"));
-      workflowGrid.appendChild(wrap);
-    });
-    canvas.appendChild(links);canvas.appendChild(workflowGrid);
-    workflowScroll.appendChild(canvas);primary.appendChild(workflowScroll);
-    map.appendChild(primary);
-    var dependencyItems=[],dependencySeen={};
-    impacts.forEach(function(impact){
-      var x=impact.detail||{},key=x.dependencyScopeId||x.dependency;
-      if(!key||dependencySeen[key]) return;
-      dependencySeen[key]=1; dependencyItems.push(impact);
-    });
-    if(dependencyItems.length){
-      var dependencyLane=h("div",{class:"scenario-lane"},
-        h("div",{class:"scenario-lane-label"},"跨模块 / 外部依赖"));
-      var dependencyCards=h("div",{class:"scenario-dependencies"});
-      dependencyItems.forEach(function(impact){
-        var x=impact.detail||{};
-        dependencyCards.appendChild(h("button",{class:"dependency-card",onclick:function(){openNodeCard(impact);}},
-          semanticIcon("dependency"),
-          h("span",{},h("b",{},behaviorDependencyTitle(x.dependencyScopeId,x.dependency)),
-            " · "+(x.failurePropagation||"失败传播未声明"))));
-      });
-      dependencyLane.appendChild(dependencyCards); map.appendChild(dependencyLane);
+    var stage=isStart?"起点":reachesTerminal?"终点":"过程";
+    var stageIcon=isStart?"start":reachesTerminal?"terminal":"active";
+    var kind=flowStepKind(step,facts);
+    var kindIcon=kind==="外部系统调用"?"dependency":
+      kind==="异步等待"?"active":kind==="系统任务"?"system":"action";
+    var factCount=facts.failures.length+facts.states.length+facts.impacts.length+
+      facts.interactions.length+facts.dataEdges.length+facts.fields.length+
+      facts.permissions.length+facts.dependencies.length;
+    var engineeringBoundary=flowEngineeringBoundary(step,facts);
+    var isSelected=state.stepId===step.nodeId;
+    var expanded=state.flowLens!=="flow"||isSelected;
+    var showBranches=(state.flowLens==="exception"||
+      (state.flowLens==="flow"&&isSelected))&&
+      (facts.failures.length||facts.states.length);
+    var wrap=h("div",{class:"flow-step-wrap","data-step-id":d.stepId||"",
+      "data-node-id":step.nodeId,"data-condition":d.condition||"",
+      "data-expanded":String(expanded),
+      "data-boundary-mode":engineeringBoundary&&engineeringBoundary.applicable?
+        engineeringBoundary.mode:"",
+      "data-boundary-dependency":engineeringBoundary&&engineeringBoundary.applicable?
+        engineeringBoundary.dependency:"",
+      style:"grid-row:"+roleRow+";grid-column:"+(index+2)});
+    var nodeButton=h("button",{class:"flow-node",
+      "data-node-id":step.nodeId,
+      "aria-pressed":String(isSelected),
+      "aria-controls":"flow-inspector",
+      dataset:{flowRef:"step-"+step.nodeId},
+      onclick:function(){selectScenarioStep(step.nodeId,d.stepId);}});
+    nodeButton.appendChild(h("div",{class:"flow-node-head"},semanticIcon(stageIcon),
+      h("span",{class:"step"},d.stepId||("步骤 "+(index+1))),
+      h("span",{class:"flow-stage"},stage)));
+    nodeButton.appendChild(h("div",{class:"flow-node-kind"},semanticIcon(kindIcon),
+      h("span",{},kind)));
+    nodeButton.appendChild(h("div",{class:"action"},semanticIcon("action"),
+      h("span",{},d.action||step.title)));
+    if(expanded){
+      nodeButton.appendChild(renderFlowLensFacts(step,facts));
+      nodeButton.appendChild(h("div",{class:"flow-fact-count"},
+        factCount+" 条已挂接合同事实"));
+    }else{
+      nodeButton.appendChild(h("div",{class:"flow-node-summary"},
+        h("span",{},facts.failures.length+" 异常"),
+        h("span",{},facts.states.length+" 边缘状态"),
+        h("span",{},factCount+" 合同事实")));
     }
-    group.appendChild(map);
-    if(selectedStep) group.appendChild(renderInteractionPanel(
+    wrap.appendChild(nodeButton);
+    if(showBranches) wrap.appendChild(renderFlowBranches(step,facts));
+    workflowGrid.appendChild(wrap);
+    var mobileFacts=flowLensFacts(step,facts);
+    var mobileCopy=h("span",{class:"mobile-flow-copy"},
+      h("b",{},d.action||step.title),
+      h("small",{},kind+" · "+(d.role||"未声明角色")));
+    mobileFacts.slice(0,2).forEach(function(item){
+      mobileCopy.appendChild(h("small",{},item.label+" · "+item.text));
+    });
+    if(mobileFacts.length>2){
+      mobileCopy.appendChild(h("small",{},"另有 "+(mobileFacts.length-2)+" 条合同事实"));
+    }
+    mobileCopy.appendChild(h("span",{class:"mobile-flow-cta"},"查看步骤合同 →"));
+    mobileList.appendChild(h("button",{class:"mobile-flow-step",
+        "data-node-id":step.nodeId,"aria-pressed":String(state.stepId===step.nodeId),
+        dataset:{flowRef:"mobile-step-"+step.nodeId},
+        onclick:function(){selectScenarioStep(step.nodeId,d.stepId);}},
+      h("span",{class:"mobile-flow-index"},d.stepId||String(index+1)),mobileCopy));
+  });
+  canvas.appendChild(links);canvas.appendChild(workflowGrid);
+  workflowScroll.appendChild(canvas);primary.appendChild(workflowScroll);
+  primary.appendChild(mobileList);map.appendChild(primary);
+  graphPane.appendChild(map);workspace.appendChild(graphPane);
+  if(selectedStep){
+    workspace.appendChild(renderFlowInspector(
       scopeId,root,selectedStep,impacts,pageStates,failures));
-    var unbound=pageStates.filter(function(n){return !(n.detail||{}).stepId;});
-    var moduleBoundaries=boundariesByScope[scopeId]||[];
-    if(unbound.length||moduleBoundaries.length){
-      var extra=h("details",{class:"scenario-details"},
-        h("summary",{},"查看流程级异常与模块职责边界 ("+
-          (unbound.length+moduleBoundaries.length)+")"));
-      var extraGrid=h("div",{class:"scenario-details-grid"});
-      unbound.forEach(function(n){var d=n.detail||{};
-        extraGrid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
-          h("h4",{},"异常 · "+n.title),
-          kvList([["页面",d.pageTitle||"流程级"],["系统",d.systemBehavior],
-            ["恢复",d.acceptance]])));
-      });
-      moduleBoundaries.forEach(function(n){var d=n.detail||{};
-        extraGrid.appendChild(h("button",{class:"boundary-card",onclick:function(){openNodeCard(n);}},
-          h("h4",{},"边界 · "+n.title),
-          kvList([["负责",d.responsibility],["不负责",d.excluded],
-            ["依赖",d.dependency]])));
-      });
-      extra.appendChild(extraGrid); group.appendChild(extra);
-    }
-    view.appendChild(group);
-    drawWorkflowLinks(group);
-  });
+  }
+  group.appendChild(workspace);view.appendChild(group);
+  drawWorkflowLinks(group);
 }
 function lifecycleKind(node,transitions){
   var incoming=false,outgoing=false;
@@ -2201,7 +3269,10 @@ function renderBoundaries(){
 /* ---------- navigation ---------- */
 function selectModule(scopeId){
   state.moduleId=scopeId; state.scenarioId=null; state.stepId=null; state.focusId=null; state.selKey=null;
+  state.flowDetailId=null;state.flowReturnId=null;state.flowInspectorOpen=false;
   state.fieldScope=scopeId; state.accessScope=scopeId; closeDrawer();
+  $("body").classList.remove("flow-sidebar-open");
+  $("flowRailToggle").setAttribute("aria-expanded","false");
   if(state.view==="audit"){openScopeCard(scopeId);return;}
   if(state.view==="flow") renderFlows();
   else if(state.view==="state") renderStateMachines();
@@ -2213,12 +3284,14 @@ function selectModule(scopeId){
 }
 function openModule(scopeId){
   state.level="module"; state.moduleId=scopeId; state.scenarioId=null; state.stepId=null;
+  state.flowDetailId=null;state.flowReturnId=null;state.flowInspectorOpen=false;
   state.focusId=null; state.selKey=null; state.fieldScope=scopeId; state.accessScope=scopeId;
   closeDrawer();
   setView("graph");
 }
 function backToOverview(){
   state.level="overview"; state.moduleId=null; state.scenarioId=null; state.stepId=null; state.focusId=null; state.selKey=null; state.fieldScope=null; state.accessScope=null;
+  state.flowDetailId=null;state.flowReturnId=null;state.flowInspectorOpen=false;
   closeDrawer();
   renderSidebar(); renderCrumbs();
   if(state.view!=="graph") setView("graph"); else renderGraph();
@@ -2461,8 +3534,19 @@ function navigateToNode(node){
       node.nodeId:detail.flowId||state.scenarioId;
     state.stepId=detail.stepNodeId||(
       detail.category==="flowStep"?node.nodeId:state.stepId);
-    setView(detail.category==="boundary"?"boundary":"flow");
-  }else if(node.kind==="state"){
+    if(detail.category==="boundary"){
+      setView("boundary");openNodeCard(node);return;
+    }
+    state.flowDetailId=detail.category==="userFlow"?null:node.nodeId;
+    state.flowReturnId=null;state.flowInspectorOpen=true;
+    setView("flow");
+    requestAnimationFrame(function(){
+      var heading=$(state.flowDetailId?"flow-evidence-heading":"flow-inspector-heading");
+      if(heading) heading.focus();
+    });
+    return;
+  }
+  if(node.kind==="state"){
     setView(detail.category==="businessState"?"state":"boundary");
   }
   openNodeCard(node);
@@ -3098,12 +4182,12 @@ function chooseResult(it){
     // wait for layout then focus
     focusOn(it.node.nodeId); openNodeCard(it.node); applyFocus(); markSelected();
     var el=svg.querySelector('[data-node="'+cssEsc(it.node.nodeId)+'"]'); if(el&&el.focus) el.focus();
-  }else if(it.type==="flow"||it.type==="interaction"||it.type==="stateImpact"||
-           it.type==="businessState"||it.type==="pageState"||
+  }else if(it.type==="flow"||it.type==="interaction"||it.type==="stateImpact"){
+    navigateToNode(it.node);
+  }else if(it.type==="businessState"||it.type==="pageState"||
            it.type==="boundary"){
     state.moduleId=it.scope;
-    setView((it.type==="flow"||it.type==="interaction"||it.type==="stateImpact")?"flow":
-      it.type==="businessState"?"state":"boundary");
+    setView(it.type==="businessState"?"state":"boundary");
     openNodeCard(it.node);
   }else if(it.type==="field"||it.type==="access"){
     setView(it.type);openNodeCard(it.node);
@@ -3131,7 +4215,15 @@ document.addEventListener("click",function(e){ if(!e.target.closest(".search-wra
 /* ---------- global keyboard ---------- */
 document.addEventListener("keydown",function(e){
   if(e.key!=="Escape") return;
+  if($("body").classList.contains("flow-sidebar-open")){
+    $("body").classList.remove("flow-sidebar-open");
+    $("flowRailToggle").setAttribute("aria-expanded","false");return;
+  }
   if(!resultsEl.hidden){ hideResults(); return; }
+  if(state.view==="flow"&&state.flowDetailId){returnFromFlowEvidence();return;}
+  if(state.view==="flow"&&state.flowInspectorOpen&&window.innerWidth<=1100){
+    closeMobileFlowInspector();return;
+  }
   if(drawer.classList.contains("open")){ closeDrawer(); return; }
   if(state.view==="graph"&&state.focusId){ state.focusId=null; applyFocus(); return; }
   if(state.view==="graph"&&state.level==="module"){ backToOverview(); return; }

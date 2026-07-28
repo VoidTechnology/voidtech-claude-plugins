@@ -37,7 +37,7 @@ from .canonical_store import (
     sha256_of_bytes,
 )
 
-GENERATOR_VERSION = "1.7.0"
+GENERATOR_VERSION = "1.8.0"
 LOGIC_MODEL_SCHEMA_VERSION = 2
 
 WORKTREE_MANIFEST_RELPATH = "prd-worktree.json"
@@ -96,6 +96,15 @@ _FIELD_MARKER = "字段定义（机器可解析）"
 _FIELD_HEADER = ["对象", "字段", "含义", "类型", "必填", "示例", "来源",
                  "校验规则", "可编辑", "可导出", "敏感"]
 _PERMISSION_MARKER = "权限矩阵"
+_STEP_PERMISSION_MARKER = "步骤权限合同（机器可解析）"
+_STEP_PERMISSION_HEADER = [
+    "流程", "步骤ID", "用途", "执行角色", "所需操作",
+    "未授权处理", "转交角色", "需求编号"]
+_STEP_PERMISSION_PURPOSES = {
+    "主操作": "operation",
+    "读取资源": "read",
+    "异常恢复": "recovery",
+}
 _REQ_ID_RE = re.compile(r"\b[A-Z][A-Z0-9]*-\d+\b")
 
 # 内容门步骤（ADR-0005 §10；阻塞性见 test_gate5_atlas.py docstring）。
@@ -482,9 +491,11 @@ def _flow_title_key(title):
 
 
 def _flow_page_titles(text):
-    """多页面步骤使用带空格的 ` / ` 分隔，避免误拆页面名内部符号。"""
-    return [item.strip() for item in re.split(r"\s+/\s+", text or "")
-            if item.strip()]
+    """解析流程页面引用；非 UI 系统步骤用占位符明确声明无页面。"""
+    placeholders = {"", "-", "—", "无", "不适用"}
+    return [
+        item.strip() for item in re.split(r"\s+/\s+", text or "")
+        if item.strip() not in placeholders]
 
 
 # ---------------------------------------------------------------- 作用域发现
@@ -702,6 +713,8 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
     business_state_nodes = {}
     external_dependency_nodes = {}
     state_object_meta = {}
+    permission_nodes = {}
+    conflicted_permissions = set()
 
     def _add_edge(edge):
         # 同一逻辑边多行声明时合并来源，绝不产出重复 edgeId。
@@ -1637,24 +1650,43 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         f"流程状态影响引用不存在交互: {interaction_id}"
                         f"（流程: {flow_title}，步骤: {step_id}）"),
                     "backlogRef": None})
-            from_state_id = (
-                f"state:{module_scope}:{object_name}:{current_state}")
-            to_state_id = f"state:{module_scope}:{object_name}:{next_state}"
-            transition = next((
-                edge for edge in edges
-                if edge["kind"] == "transition"
-                and edge["from"] == from_state_id
-                and edge["to"] == to_state_id
-            ), None)
-            if transition is None:
+            current_without_state = bool(re.match(
+                r"^不涉及(?:[:：]|$)", current_state))
+            next_without_state = bool(re.match(
+                r"^不涉及(?:[:：]|$)", next_state))
+            if current_without_state != next_without_state:
                 gaps.append({
                     "gapId": f"{gap_prefix}:transition",
-                    "scopeId": module_scope, "kind": "missing-source",
+                    "scopeId": module_scope, "kind": "unparsed",
                     "detail": (
-                        f"流程状态影响未找到状态流转: {object_name} "
-                        f"{current_state} → {next_state}"),
+                        "流程状态影响的当前状态与下一状态必须同时声明"
+                        "「不涉及:原因」，或同时引用真实状态"),
                     "backlogRef": None})
                 continue
+            state_changed = not current_without_state
+            from_state_id = (
+                f"state:{module_scope}:{object_name}:{current_state}"
+                if state_changed else None)
+            to_state_id = (
+                f"state:{module_scope}:{object_name}:{next_state}"
+                if state_changed else None)
+            transition = None
+            if state_changed:
+                transition = next((
+                    edge for edge in edges
+                    if edge["kind"] == "transition"
+                    and edge["from"] == from_state_id
+                    and edge["to"] == to_state_id
+                ), None)
+                if transition is None:
+                    gaps.append({
+                        "gapId": f"{gap_prefix}:transition",
+                        "scopeId": module_scope, "kind": "missing-source",
+                        "detail": (
+                            f"流程状态影响未找到状态流转: {object_name} "
+                            f"{current_state} → {next_state}"),
+                        "backlogRef": None})
+                    continue
             source = _source_with_requirements(
                 module_scope, _IMPACT_MARKER, " ".join(row))
             impact_id = (
@@ -1694,7 +1726,9 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             nodes.append({
                 "nodeId": impact_id, "kind": "flow",
                 "scopeId": module_scope,
-                "title": f"{object_name}: {current_state} → {next_state}",
+                "title": (
+                    f"{object_name}: {current_state} → {next_state}"
+                    if state_changed else f"{object_name}: 不涉及状态流转"),
                 "status": "original", "sources": [source],
                 "detail": {
                     "category": "stateImpact", "flowTitle": flow_title,
@@ -1703,16 +1737,21 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "interactionId": interaction_id,
                     "interactionNodeId": interaction_node_id,
                     "currentState": current_state, "nextState": next_state,
+                    "stateChanged": state_changed,
                     "fromStateId": from_state_id, "toStateId": to_state_id,
-                    "transitionEdgeId": transition["edgeId"],
+                    "transitionEdgeId": (
+                        transition["edgeId"] if transition else None),
                     "dependency": dependency,
                     "dependencyScopeId": dependency_scope_id,
                     "failurePropagation": failure,
                 }})
-            for suffix, target, relation in (
-                    ("step", step_node_id, "state-impact-step"),
+            trace_targets = [
+                ("step", step_node_id, "state-impact-step")]
+            if state_changed:
+                trace_targets.extend([
                     ("from", from_state_id, "state-impact-from"),
-                    ("to", to_state_id, "state-impact-to")):
+                    ("to", to_state_id, "state-impact-to")])
+            for suffix, target, relation in trace_targets:
                 _add_edge({
                     "edgeId": f"trace:{impact_id}:{suffix}",
                     "kind": "traces", "from": impact_id, "to": target,
@@ -1931,16 +1970,31 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "权限矩阵缺少固定末列「需求编号」；访问规则保留模块来源，"
                     "但无法进入需求反向索引"),
                 "backlogRef": None})
-        actions = permission_header[
-            1:-1 if has_requirement_column else len(permission_header)]
+        content_end = -1 if has_requirement_column else len(permission_header)
+        dimension_columns: dict[str, list[tuple[int, str]]] = {
+            "dataScope": [], "fieldVisibility": [], "denialBehavior": []}
+        action_columns: list[tuple[int, str]] = []
+        for column_index, column_title in enumerate(
+                permission_header[1:content_end], 1):
+            if column_title.endswith("数据范围"):
+                dimension_columns["dataScope"].append(
+                    (column_index, column_title))
+            elif column_title.endswith("可见性"):
+                dimension_columns["fieldVisibility"].append(
+                    (column_index, column_title))
+            elif "拒绝行为" in column_title:
+                dimension_columns["denialBehavior"].append(
+                    (column_index, column_title))
+            else:
+                action_columns.append((column_index, column_title))
+        actions = [title for _, title in action_columns]
         if not actions:
             gaps.append({
                 "gapId": f"gap:{module_scope}:permissions",
                 "scopeId": module_scope, "kind": "unparsed",
                 "detail": "权限矩阵至少需要一个操作列",
                 "backlogRef": None})
-        permission_nodes = {}
-        conflicted_permissions = set()
+
         for row_index, row in enumerate(permission_rows, 1):
             if not row or not row[0] or row[0].startswith("{"):
                 continue
@@ -1963,7 +2017,19 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "detail": (
                         f"角色「{role}」的访问规则缺少有效需求编号"),
                     "backlogRef": None})
-            for action_index, action in enumerate(actions, 1):
+            dimension_values: dict[str, str] = {}
+            for detail_key, columns in dimension_columns.items():
+                values = []
+                for column_index, column_title in columns:
+                    if column_index >= len(row) or not row[column_index].strip():
+                        continue
+                    value = row[column_index].strip()
+                    values.append(
+                        f"{column_title}: {value}"
+                        if detail_key == "fieldVisibility" else value)
+                if values:
+                    dimension_values[detail_key] = "；".join(values)
+            for action_index, action in action_columns:
                 if action_index >= len(row):
                     gaps.append({
                         "gapId": (
@@ -1984,6 +2050,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "action": action, "rule": rule,
                     "decision": _access_decision(rule),
                 }
+                detail.update(dimension_values)
                 existing = permission_nodes.get(permission_id)
                 if existing is not None:
                     if existing["detail"] != detail:
@@ -2013,6 +2080,159 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             node for permission_id, node in permission_nodes.items()
             if permission_id not in conflicted_permissions)
 
+    step_permission_status, step_permission_header, step_permission_rows = (
+        _find_section_table(text, _STEP_PERMISSION_MARKER))
+    if (step_permission_status == "ok"
+            and step_permission_header != _STEP_PERMISSION_HEADER):
+        gaps.append({
+            "gapId": f"gap:{module_scope}:step-permissions",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": (
+                "步骤权限合同表头列序不符，无法机械解析: "
+                f"{step_permission_header}"),
+            "backlogRef": None})
+    elif step_permission_status == "ok":
+        step_nodes_by_id = {
+            node["nodeId"]: node for node in nodes
+            if node["scopeId"] == module_scope
+            and node["kind"] == "flow"
+            and (node.get("detail") or {}).get("category") == "flowStep"}
+        failure_nodes_by_step = {}
+        for node in nodes:
+            detail = node.get("detail") or {}
+            if (node["scopeId"] == module_scope
+                    and node["kind"] == "flow"
+                    and detail.get("category") == "failureBranch"):
+                failure_nodes_by_step.setdefault(
+                    (detail.get("flowId"), detail.get("stepId")), []).append(node)
+        seen_required_actions = set()
+        placeholders = {"", "-", "—", "无", "不适用"}
+        for row_index, row in enumerate(step_permission_rows, 1):
+            if (len(row) < len(_STEP_PERMISSION_HEADER)
+                    or not row[0] or not row[1]):
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:step-permission:"
+                        f"row:{row_index}"),
+                    "scopeId": module_scope, "kind": "unparsed",
+                    "detail": "步骤权限合同存在缺列或缺少流程/步骤ID的行",
+                    "backlogRef": None})
+                continue
+            (flow_title, step_id, purpose_text, subject, action,
+             unauthorized_behavior, handoff_role, requirements) = row[:8]
+            purpose = _STEP_PERMISSION_PURPOSES.get(purpose_text)
+            flow_key = flow_keys_by_exact_title.get(flow_title)
+            flow_id = flow_ids_by_title.get(flow_key)
+            step_node_id = (
+                flow_steps_by_title.get(flow_key, {}).get(step_id)
+                if flow_key else None)
+            reasons = []
+            if purpose is None:
+                reasons.append(
+                    "用途必须为「主操作 / 读取资源 / 异常恢复」")
+            if not subject:
+                reasons.append("执行角色未声明")
+            if not action:
+                reasons.append("所需操作未声明")
+            if not unauthorized_behavior:
+                reasons.append("未授权处理未声明")
+            if step_node_id is None:
+                reasons.append("流程或步骤ID不存在")
+            if reasons:
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:step-permission:"
+                        f"{flow_title}:{step_id}:{row_index}"),
+                    "scopeId": module_scope, "kind": "unparsed",
+                    "detail": (
+                        f"步骤权限合同「{flow_title}/{step_id}」无法解析: "
+                        + "；".join(reasons)),
+                    "backlogRef": None})
+                continue
+            dedupe_key = (step_node_id, purpose, subject, action)
+            if dedupe_key in seen_required_actions:
+                gaps.append({
+                    "gapId": (
+                        f"gap:{module_scope}:step-permission:"
+                        f"duplicate:{flow_title}:{step_id}:{row_index}"),
+                    "scopeId": module_scope, "kind": "ambiguous-relation",
+                    "detail": (
+                        f"步骤权限合同「{flow_title}/{step_id}」重复声明"
+                        f"{purpose_text}「{subject} × {action}」"),
+                    "backlogRef": None})
+                continue
+            seen_required_actions.add(dedupe_key)
+            declared_handoff = (
+                handoff_role if handoff_role not in placeholders else None)
+            permission_refs = []
+            for actor in [subject, declared_handoff]:
+                if not actor:
+                    continue
+                permission_id = (
+                    f"permission:{module_scope}:{actor}:{action}")
+                if (permission_id in permission_nodes
+                        and permission_id not in conflicted_permissions):
+                    permission_refs.append(permission_id)
+            required_action = {
+                "purpose": purpose,
+                "subject": subject,
+                "action": action,
+                "permissionRefs": permission_refs,
+                "unauthorizedBehavior": unauthorized_behavior,
+            }
+            if declared_handoff:
+                required_action["handoffRole"] = declared_handoff
+            source = _source_with_requirements(
+                module_scope, _STEP_PERMISSION_MARKER, requirements)
+            step_node = step_nodes_by_id[step_node_id]
+            step_detail = step_node["detail"]
+            step_detail.setdefault("requiredActions", []).append(
+                required_action)
+            step_detail["permissionRefs"] = list(dict.fromkeys(
+                step_detail.get("permissionRefs", []) + permission_refs))
+            if source not in step_node["sources"]:
+                step_node["sources"].append(source)
+            for actor in [subject, declared_handoff]:
+                if not actor:
+                    continue
+                permission_id = f"permission:{module_scope}:{actor}:{action}"
+                if permission_id not in permission_refs:
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:step-permission:"
+                            f"unresolved:{flow_title}:{step_id}:{actor}:{action}"),
+                        "scopeId": module_scope,
+                        "kind": "missing-relation",
+                        "detail": (
+                            f"步骤「{flow_title}/{step_id}」所需权限"
+                            f"「{actor} × {action}」没有明确权限规则"),
+                        "backlogRef": None})
+            if purpose == "recovery":
+                recovery_nodes = failure_nodes_by_step.get(
+                    (flow_id, step_id), [])
+                if not recovery_nodes:
+                    gaps.append({
+                        "gapId": (
+                            f"gap:{module_scope}:step-permission:"
+                            f"recovery:{flow_title}:{step_id}"),
+                        "scopeId": module_scope,
+                        "kind": "missing-relation",
+                        "detail": (
+                            f"步骤「{flow_title}/{step_id}」声明异常恢复权限，"
+                            "但没有可关联的失败分支"),
+                        "backlogRef": None})
+                for failure_node in recovery_nodes:
+                    failure_detail = failure_node["detail"]
+                    failure_detail["recoveryRequesterRole"] = subject
+                    failure_detail["recoveryRole"] = (
+                        declared_handoff or subject)
+                    failure_detail["unauthorizedBehavior"] = (
+                        unauthorized_behavior)
+                    failure_detail["permissionRefs"] = permission_refs
+                    if declared_handoff:
+                        failure_detail["handoffRole"] = declared_handoff
+                    if source not in failure_node["sources"]:
+                        failure_node["sources"].append(source)
     mapping_status, mapping_header, mapping_rows = _find_section_table(
         text, _PAGE_DATA_MARKER)
     if page_titles and mapping_status in {"absent", "empty"}:
@@ -2738,9 +2958,9 @@ def proof_inherits(previous_proof, current_env):
 # - VALIDATION_HARNESS_VERSION：scripts/validate-renderer.mjs 的断言集版本。
 import inspect
 
-RENDERER_VERSION = "9.0.0"
+RENDERER_VERSION = "10.2.1"
 BROWSER_MATRIX_VERSION = "2026-07"
-VALIDATION_HARNESS_VERSION = "9.0.0"
+VALIDATION_HARNESS_VERSION = "10.2.1"
 
 _FIXTURE_MODULE = "01-portal/01-module"
 _FIXTURE_MODULE_B = "01-portal/02-module"
@@ -2788,19 +3008,22 @@ def _fixture_model():
         f"interaction:{_FIXTURE_MODULE}:查看订单详情:S1:I1")
     interaction2_id = (
         f"interaction:{_FIXTURE_MODULE}:查看订单详情:S1:I2")
-    interaction3_id = (
-        f"interaction:{_FIXTURE_MODULE}:查看订单详情:S2:I1")
-    interaction4_id = (
-        f"interaction:{_FIXTURE_MODULE}:查看订单详情:S2:I2")
     terminal_id = f"flowterminal:{_FIXTURE_MODULE}:查看订单详情"
     failure_id = f"flowfailure:{_FIXTURE_MODULE}:查看订单详情:S1"
     page_state_id = f"pagestate:{_FIXTURE_MODULE}:查看订单详情:首页:加载中:1"
     active_state_id = f"state:{_FIXTURE_MODULE}:订单:处理中"
     done_state_id = f"state:{_FIXTURE_MODULE}:订单:已完成"
     impact_id = f"stateimpact:{_FIXTURE_MODULE}:查看订单详情:S2:订单"
+    no_dependency_impact_id = (
+        f"stateimpact:{_FIXTURE_MODULE}:查看订单详情:S1:订单查询")
     field_id = f"field:{_FIXTURE_MODULE}:订单:订单编号"
     allow_permission_id = f"permission:{_FIXTURE_MODULE}:会员:查看"
+    extra_permission_id = f"permission:{_FIXTURE_MODULE}:会员:导出"
     deny_permission_id = f"permission:{_FIXTURE_MODULE}:访客:查看"
+    recovery_deny_permission_id = (
+        f"permission:{_FIXTURE_MODULE}:会员:恢复订单")
+    recovery_allow_permission_id = (
+        f"permission:{_FIXTURE_MODULE}:超级管理员:恢复订单")
 
     scopes = [
         {"scopeId": WORKTREE_SCOPE_ID, "kind": "worktree",
@@ -2828,12 +3051,42 @@ def _fixture_model():
          "scopeId": _FIXTURE_MODULE, "title": "会员 · 查看",
          "status": "original", "sources": [permission_src],
          "detail": {"category": "accessRule", "subject": "会员",
-                    "action": "查看", "rule": "✓", "decision": "allow"}},
+                    "action": "查看", "rule": "✓", "decision": "allow",
+                    "dataScope": "本人所属订单",
+                    "fieldVisibility": "联系方式可见性: 脱敏",
+                    "denialBehavior": "入口隐藏，直接请求返回无权限"}},
+        {"nodeId": extra_permission_id, "kind": "permission",
+         "scopeId": _FIXTURE_MODULE, "title": "会员 · 导出",
+         "status": "original", "sources": [permission_src],
+         "detail": {"category": "accessRule", "subject": "会员",
+                    "action": "导出", "rule": "✓", "decision": "allow",
+                    "dataScope": "本人所属订单",
+                    "fieldVisibility": "联系方式可见性: 脱敏",
+                    "denialBehavior": "入口隐藏，直接请求返回无权限"}},
         {"nodeId": deny_permission_id, "kind": "permission",
          "scopeId": _FIXTURE_MODULE, "title": "访客 · 查看",
          "status": "original", "sources": [permission_src],
          "detail": {"category": "accessRule", "subject": "访客",
-                    "action": "查看", "rule": "✗", "decision": "deny"}},
+                    "action": "查看", "rule": "✗", "decision": "deny",
+                    "dataScope": "无",
+                    "fieldVisibility": "全部字段不可见",
+                    "denialBehavior": "入口隐藏，直接请求返回无权限"}},
+        {"nodeId": recovery_deny_permission_id, "kind": "permission",
+         "scopeId": _FIXTURE_MODULE, "title": "会员 · 恢复订单",
+         "status": "original", "sources": [permission_src],
+         "detail": {"category": "accessRule", "subject": "会员",
+                    "action": "恢复订单", "rule": "✗", "decision": "deny",
+                    "dataScope": "本人所属订单",
+                    "fieldVisibility": "联系方式可见性: 脱敏",
+                    "denialBehavior": "阻断并转交超级管理员"}},
+        {"nodeId": recovery_allow_permission_id, "kind": "permission",
+         "scopeId": _FIXTURE_MODULE, "title": "超级管理员 · 恢复订单",
+         "status": "original", "sources": [permission_src],
+         "detail": {"category": "accessRule", "subject": "超级管理员",
+                    "action": "恢复订单", "rule": "✓", "decision": "allow",
+                    "dataScope": "全部订单",
+                    "fieldVisibility": "联系方式可见性: 明文",
+                    "denialBehavior": "不适用"}},
         {"nodeId": home_id, "kind": "page", "scopeId": _FIXTURE_MODULE,
          "title": _FIXTURE_HOME_TITLE, "status": "original",
          "sources": [page_src],
@@ -2855,14 +3108,31 @@ def _fixture_model():
                     "pageTitle": _FIXTURE_HOME_TITLE, "pageId": home_id,
                     "role": "会员", "action": "打开订单", "condition": "订单存在",
                     "result": "进入详情", "nextStep": "S2",
-                    "failureHandling": "提示订单不存在并停留"}},
+                    "failureHandling": "提示订单不存在并停留",
+                    "requiredActions": [{
+                        "purpose": "operation", "subject": "会员",
+                        "action": "查看",
+                        "permissionRefs": [allow_permission_id],
+                        "unauthorizedBehavior": "阻断并提示无权限"
+                    }, {
+                        "purpose": "recovery", "subject": "会员",
+                        "action": "恢复订单",
+                        "permissionRefs": [
+                            recovery_deny_permission_id,
+                            recovery_allow_permission_id],
+                        "unauthorizedBehavior": "阻断并转交超级管理员",
+                        "handoffRole": "超级管理员"}],
+                    "permissionRefs": [
+                        allow_permission_id,
+                        recovery_deny_permission_id,
+                        recovery_allow_permission_id]}},
         {"nodeId": step2_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
          "title": "S2 · 查看订单", "status": "original", "sources": [flow_src],
          "detail": {"category": "flowStep", "flowId": flow_id, "stepId": "S2",
-                    "pageTitle": _FIXTURE_PROBE_TITLE, "pageId": probe_id,
-                    "role": "运营人员", "action": "查看订单", "condition": "—",
-                    "result": "展示订单", "nextStep": "结束",
-                    "failureHandling": "支持重试"}},
+                    "pageTitle": "—", "pageId": None, "pageIds": [],
+                    "role": "系统", "action": "查看订单", "condition": "—",
+                    "result": "提交 TX-FIXTURE-001 后异步发布 order.completed.v1",
+                    "nextStep": "结束", "failureHandling": "重复投递幂等，失败支持重试"}},
         {"nodeId": interaction1_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
          "title": "I1 · 进入 无", "status": "original",
          "sources": [interaction_src],
@@ -2890,32 +3160,6 @@ def _fixture_model():
              "failureRecovery": "订单不存在时返回列表",
              "nextInteraction": "结束", "requirements": "REQ-100",
              "entry": False}},
-        {"nodeId": interaction3_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
-         "title": "I1 · 进入 无", "status": "original",
-         "sources": [interaction_src],
-         "detail": {
-             "category": "interactionStep", "flowTitle": "查看订单详情",
-             "flowId": flow_id, "stepId": "S2", "stepNodeId": step2_id,
-             "interactionId": "I1", "pageTitle": _FIXTURE_PROBE_TITLE,
-             "pageId": probe_id, "containerState": "详情",
-             "control": "无", "event": "进入",
-             "availability": "详情已加载", "immediateFeedback": "展示内容",
-             "systemAction": "校验订单状态", "successResult": "启用完成操作",
-             "failureRecovery": "失败时保留当前页", "nextInteraction": "I2",
-             "requirements": "REQ-100", "entry": True}},
-        {"nodeId": interaction4_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
-         "title": "I2 · 点击 完成", "status": "original",
-         "sources": [interaction_src],
-         "detail": {
-             "category": "interactionStep", "flowTitle": "查看订单详情",
-             "flowId": flow_id, "stepId": "S2", "stepNodeId": step2_id,
-             "interactionId": "I2", "pageTitle": _FIXTURE_PROBE_TITLE,
-             "pageId": probe_id, "containerState": "详情",
-             "control": "完成", "event": "点击",
-             "availability": "订单处理中", "immediateFeedback": "按钮 Loading",
-             "systemAction": "完成订单", "successResult": "状态变为已完成",
-             "failureRecovery": "失败时允许重试", "nextInteraction": "结束",
-             "requirements": "REQ-100", "entry": False}},
         {"nodeId": terminal_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
          "title": "结束", "status": "original", "sources": [flow_src],
          "detail": {"category": "terminal", "flowId": flow_id}},
@@ -2923,14 +3167,32 @@ def _fixture_model():
          "title": "提示订单不存在并停留", "status": "original",
          "sources": [flow_src],
          "detail": {"category": "failureBranch", "flowId": flow_id,
-                    "stepId": "S1", "handling": "提示订单不存在并停留"}},
+                    "stepId": "S1", "handling": "提示订单不存在并停留",
+                    "recoveryRequesterRole": "会员",
+                    "recoveryRole": "超级管理员",
+                    "handoffRole": "超级管理员",
+                    "unauthorizedBehavior": "阻断并转交超级管理员",
+                    "permissionRefs": [
+                        recovery_deny_permission_id,
+                        recovery_allow_permission_id]}},
+        {"nodeId": no_dependency_impact_id, "kind": "flow",
+         "scopeId": _FIXTURE_MODULE,
+         "title": "订单查询: 不涉及状态流转", "status": "original",
+         "sources": [impact_src],
+         "detail": {
+             "category": "stateImpact", "flowTitle": "查看订单详情",
+             "flowId": flow_id, "stepId": "S1", "stepNodeId": step1_id,
+             "object": "订单查询", "currentState": "不涉及:只读查询",
+             "nextState": "不涉及:只读查询", "stateChanged": False,
+             "dependency": "无", "dependencyScopeId": None,
+             "failurePropagation": "订单不存在时停留当前页",
+         }},
         {"nodeId": impact_id, "kind": "flow", "scopeId": _FIXTURE_MODULE,
          "title": "订单: 处理中 → 已完成", "status": "original",
          "sources": [impact_src],
          "detail": {
              "category": "stateImpact", "flowTitle": "查看订单详情",
              "flowId": flow_id, "stepId": "S2", "stepNodeId": step2_id,
-             "interactionId": "I2", "interactionNodeId": interaction4_id,
              "object": "订单", "currentState": "处理中",
              "nextState": "已完成", "fromStateId": active_state_id,
              "toStateId": done_state_id,
@@ -3017,10 +3279,6 @@ def _fixture_model():
          "kind": "navigates", "from": interaction1_id, "to": interaction2_id,
          "status": "original", "sources": [interaction_src],
          "detail": {"relation": "interaction-success"}},
-        {"edgeId": f"nav:{interaction3_id}:interaction-success",
-         "kind": "navigates", "from": interaction3_id, "to": interaction4_id,
-         "status": "original", "sources": [interaction_src],
-         "detail": {"relation": "interaction-success"}},
         {"edgeId": f"trace:{interaction1_id}:step", "kind": "traces",
          "from": interaction1_id, "to": step1_id, "status": "original",
          "sources": [interaction_src], "detail": {"relation": "interaction-step"}},
@@ -3032,18 +3290,6 @@ def _fixture_model():
          "sources": [interaction_src], "detail": {"relation": "interaction-step"}},
         {"edgeId": f"trace:{interaction2_id}:page", "kind": "traces",
          "from": interaction2_id, "to": home_id, "status": "original",
-         "sources": [interaction_src], "detail": {"relation": "interaction-page"}},
-        {"edgeId": f"trace:{interaction3_id}:step", "kind": "traces",
-         "from": interaction3_id, "to": step2_id, "status": "original",
-         "sources": [interaction_src], "detail": {"relation": "interaction-step"}},
-        {"edgeId": f"trace:{interaction3_id}:page", "kind": "traces",
-         "from": interaction3_id, "to": probe_id, "status": "original",
-         "sources": [interaction_src], "detail": {"relation": "interaction-page"}},
-        {"edgeId": f"trace:{interaction4_id}:step", "kind": "traces",
-         "from": interaction4_id, "to": step2_id, "status": "original",
-         "sources": [interaction_src], "detail": {"relation": "interaction-step"}},
-        {"edgeId": f"trace:{interaction4_id}:page", "kind": "traces",
-         "from": interaction4_id, "to": probe_id, "status": "original",
          "sources": [interaction_src], "detail": {"relation": "interaction-page"}},
         {"edgeId": f"trace:{page_state_id}:page", "kind": "traces",
          "from": page_state_id, "to": home_id, "status": "original",
@@ -3066,9 +3312,6 @@ def _fixture_model():
         {"edgeId": f"trace:{impact_id}:step", "kind": "traces",
          "from": impact_id, "to": step2_id, "status": "original",
          "sources": [impact_src], "detail": {"relation": "state-impact-step"}},
-        {"edgeId": f"trace:{impact_id}:interaction", "kind": "traces",
-         "from": impact_id, "to": interaction4_id, "status": "original",
-         "sources": [impact_src], "detail": {"relation": "state-impact-interaction"}},
         {"edgeId": f"trace:{impact_id}:from", "kind": "traces",
          "from": impact_id, "to": active_state_id, "status": "original",
          "sources": [impact_src], "detail": {"relation": "state-impact-from"}},
