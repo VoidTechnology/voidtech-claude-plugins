@@ -31,5 +31,15 @@ jobs:
           sudo apt-get install --yes jq ripgrep
           npm install --global @anthropic-ai/claude-code@2.1.220
 
+      - name: Install OMP 17.1.5
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/can1357/oh-my-pi/releases/download/v17.1.5/omp-linux-x64 \
+            --output /tmp/omp
+          echo '35019bfa4d1acae0040ef1f3d91c29c6e7401acfcdbcfeba6ff506a6b103c987  /tmp/omp' \
+            | sha256sum --check
+          sudo install -m 0755 /tmp/omp /usr/local/bin/omp
+          omp --version
+
       - name: Validate portability
         run: scripts/check-portability.sh --install-smoke
