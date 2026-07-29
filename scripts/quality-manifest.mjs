@@ -37,6 +37,7 @@ const manifest = {
       { id: 'repository-contracts', type: 'node-test', directory: 'scripts/__tests__', suffix: '.test.mjs' },
       { id: 'document-facts', type: 'command', command: 'node', args: ['scripts/check-doc-contract.mjs'] },
       { id: 'plugin-version-bumps', type: 'command', command: 'node', args: ['scripts/check-plugin-version-bumps.mjs'] },
+      { id: 'agent-models', type: 'command', command: 'node', args: ['scripts/check-agent-models.mjs'] },
     ],
     unit: [
       {

@@ -1,5 +1,25 @@
 # Changelog
 
+## voidtech-core 0.21.0 / voidtech-product 0.8.0 / voidtech-engineering 0.3.0 - 2026-07-29
+
+两个公开 subagent 固定 `model: fable`，这是插件替用户做的决定，而它有一个用户无法预料的失败模式。
+
+### Fixed
+
+- `architect` 与 `product-manager` 的固定模型由 `fable` 改为 `opus`。三条理由，第一条是硬故障：**Fable 5 要求组织开启 30 天数据保留，配置为零数据保留（ZDR）的组织每个请求都返回 400**，而错误信息不指向真实原因——用户会去查 prompt、网络和 Token，查不到插件锁了一个他的组织不支持的模型；ZDR 在受监管行业是常见配置。其二是成本：Fable 每百万 token $10/$50，是 Opus 5 的两倍，而 frontmatter 的 `model` 会覆盖用户自己的会话选择，一个为控成本特意跑 Sonnet 的用户不会知道自己被切到了最贵档。其三是能力错配：Fable 的安全分类器覆盖大部分网络安全内容，`architect` 评审权限边界、认证与凭据处理时会拿到 `stop_reason: refusal` 而不是方案。Opus 5 正是官方定位的「复杂 agentic coding 与企业工作」主力档，没有这三个问题。
+- 两个 agent 的 description 由「(最强模型)」改为「(深度推理)」。前者今天准确（Fable 5 确实是最强的广泛发布模型），但它是写在用户可见的 agent 选择器里的模型代际断言，会随下一次模型更迭过期，且没有任何契约测试盯着——描述该说这个 agent 干什么，不该替模型排名。
+- 仓库自用的 `loop-security-reviewer` 同样由 `fable` 改为 `opus`。它专审 Shell 逃逸、Git refs、凭据与权限边界，正好落在 Fable 安全分类器的覆盖面上：拒答风险最高的 agent 用了最容易拒答的模型。`plugin-contract-reviewer` 保留 `fable`——它审的是 manifest 与版本契约，不触发分类器，且只在维护者自己的组织里跑。
+- `voidtech-core:research` 的调研分工把 `fable` 和 `haiku` 并列推荐给「资料收集 agent」。同一个仓库对 fable 的定位出现两种互斥说法，这一处是错的：Fable 是最贵最强的档，不是 haiku 的同类。改为只推荐 `haiku`，并写明理由——资料收集的瓶颈是覆盖面而不是推理深度。
+
+### Added
+
+- 契约门禁新增 `scripts/check-agent-models.mjs`：`plugins/*/agents/` 里的 `model` 字段只允许 `opus` / `sonnet` / `haiku` 或 `claude-` 前缀的具体模型 ID，并显式拒绝一份「带环境前置条件的模型」清单（`fable`、`claude-fable-5`、`claude-mythos-5`、`claude-mythos-preview`），错误信息里写明前置条件是什么。省略 `model` 字段合法——那表示继承用户的会话模型。此前 `check-portability.sh` 与 `check-doc-contract.mjs` 都不校验 `model`，`docs/dev-rules/` 里也没有任何关于模型选择的规则，所以这类问题没有任何机制会拦住。
+
+### Notes
+
+拒绝清单是显式维护的，不会自动跟随新模型——新增模型时仍需按「是否存在用户无法预料的环境前置条件」人工评估一次。门禁只覆盖随插件分发的 `plugins/*/agents/`；`.claude/agents/` 是仓库自用、只在维护者组织里运行，不在门禁内（本版对 `loop-security-reviewer` 的修正因此是人工判断，不是门禁产物）。
+
+另一个未覆盖的缺口：无法验证 OMP 是否认识 `opus` / `sonnet` / `haiku` 这些短别名。Claude Code 认（这是它的公开取值），OMP 侧仓库里没有任何验证，`check-portability.sh` 也不检查 `model` 字段的宿主兼容性。
 ## voidtech-product 0.7.0 - 2026-07-29
 
 一个真实项目建完 PRD 工作树后找不到 `logic-atlas.html`，追下去发现三处错位：文档把 Atlas 归给了不生成它的技能、能力何时该置位没有判据、以及验收级硬门漏掉了 Atlas 依赖的四项审计结构。前两项是文档缺陷，第三项让「验收级」可以不含任何权限与字段契约。
