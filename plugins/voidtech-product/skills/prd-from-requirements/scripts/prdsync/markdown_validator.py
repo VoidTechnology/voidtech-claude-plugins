@@ -95,6 +95,11 @@ ANY_COUNT_RE = re.compile(r"(?<![\d.／/-])(\d+)\s*(?:项|类|条|档|种|张|�
 # 表格前导句里的规模声明,必须与紧随其后的表格行数一致
 LEADIN_COUNT_RE = re.compile(r"(?:共|计|合计|现表实数)\s*(\d+)\s*(项|类|条|档|个|种|张|行)")
 
+# 字段表里声明的编号格式正则,如 `^[A-Z]{2,8}-\d{5}$`
+DECLARED_REGEX_RE = re.compile(r"`(\^[^`\n]{4,60}\$)`")
+# 行内代码里的编号字面量,如 `HKSC-00001`
+ID_LITERAL_RE = re.compile(r"`([A-Z][A-Z0-9]{1,7}(?:-[A-Za-z0-9]{1,10})+)`")
+
 # 声明为逐字引用的表列
 VERBATIM_HEADER_RE = re.compile(r"原文\s*[（(]\s*(?:逐字|verbatim)\s*[）)]")
 SOURCE_DIR = "_source"
@@ -376,6 +381,77 @@ def check_counts(rel, text):
     return errors
 
 
+def check_declared_id_format(files, md_files):
+    """已声明的编号格式正则,必须被同段数的编号字面量满足。
+
+    实测漏检成因: 定案会员号格式后只 grep 了 OQ 编号,没 grep 编号字面量,
+    三处 AC 夹具仍留着定案前的旧格式。段数相同才比对——`HKSC-2026-000123`
+    是收据号(三段),不该拿会员号的两段正则去判它。
+    """
+    errors = []
+    declared = []  # (编译后的正则, 段数, 前缀探针, 声明位置)
+    for rel in md_files:
+        text = files[rel].read_text(encoding="utf-8", errors="replace")
+        for lineno, line, in_fence in iter_lines(text):
+            if in_fence:
+                continue
+            for m in DECLARED_REGEX_RE.finditer(line):
+                raw = m.group(1)
+                probe_m = re.match(r"\^(\[A-Z\](?:\{\d+(?:,\d+)?\})?)-", raw)
+                if not probe_m:
+                    continue
+                try:
+                    compiled = re.compile(raw)
+                except re.error:
+                    continue
+                # 数段数前先剥掉字符类: `[A-Z]` 里的 `-` 不是段分隔符
+                separators = re.sub(r"\[[^\]]*\]", "", raw).count("-")
+                declared.append((
+                    compiled, separators + 1,
+                    re.compile("^" + probe_m.group(1) + "-"),
+                    f"{rel}:{lineno}"))
+    if not declared:
+        return errors
+
+    # 收集全树的编号字面量。声明里的 `[A-Z]{2,8}` 是「任意租户前缀」的意思,
+    # 拿它当探针会把 OQ-001、ARC-201 这类编号全部命中。改为自校准: 一条
+    # 正则只管那些「已经有合规实例」的前缀——`HKSC-00001` 合规,于是 HKSC
+    # 归它管,`HKSC-S001` 被判违规; OQ 没有任何实例满足 `\d{5}`,不归它管。
+    literals = []  # (字面量, 前缀, 段数, rel, lineno)
+    for rel in md_files:
+        text = files[rel].read_text(encoding="utf-8", errors="replace")
+        for lineno, line, in_fence in iter_lines(text):
+            if in_fence:
+                continue
+            for m in ID_LITERAL_RE.finditer(line):
+                literal = m.group(1)
+                literals.append((literal, literal.split("-", 1)[0],
+                                 literal.count("-") + 1, rel, lineno))
+
+    governed = []  # 与 declared 同序: 该正则实际管辖的前缀集合
+    for compiled, segments, _, _ in declared:
+        governed.append({
+            entry[1] for entry in literals
+            if entry[2] == segments and compiled.fullmatch(entry[0])
+        })
+
+    seen = set()
+    for literal, prefix, segments, rel, lineno in literals:
+        candidates = [d for i, d in enumerate(declared)
+                      if d[1] == segments and prefix in governed[i]]
+        if not candidates or any(d[0].fullmatch(literal) for d in candidates):
+            continue
+        key = (literal, rel, lineno)
+        if key in seen:
+            continue
+        seen.add(key)
+        errors.append(
+            f"{rel}:{lineno}: 编号字面量「{literal}」不满足已声明的格式"
+            f"「{candidates[0][0].pattern}」(声明处 {candidates[0][3]})"
+        )
+    return errors
+
+
 def check_verbatim(rel, text, source_blob):
     """标为逐字的引文必须能在 _source/ 中原样命中。"""
     errors = []
@@ -582,6 +658,9 @@ def validate(root, files):
                                 f"{rel}:{lineno}: 疑似幽灵状态「{term}」"
                                 "——正文引用了本文件状态机中未定义的状态"
                             )
+
+    errors.extend(check_declared_id_format(
+        files, [r for r in md_files if PurePosixPath(r).parts[:1] != (SOURCE_DIR,)]))
 
     for oq_id, first_ref in sorted(oq_refs.items()):
         if oq_id not in oq_defs:
