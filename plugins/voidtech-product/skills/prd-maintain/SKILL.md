@@ -13,9 +13,9 @@ argument-hint: "PRD 工作树路径与维护意图"
 
 ## 规则单源
 
-质量红线、推断标记规范、期次权威、深度分级定义、汇总生成物与链接重写规则，全部以 `prd-from-requirements` 为准，本技能不复制、不另立。执行前按需读取：
+质量红线、推断标记规范、期次权威、深度分级定义、变更记录四列约定，全部以 `prd-from-requirements` 为准，本技能不复制、不另立。执行前按需读取：
 
-- `${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/SKILL.md` 的「质量红线」「推断标记规范」「深度分级与分期交付」「机械自检」「状态看板」「评审缺陷处置」
+- `${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/SKILL.md` 的「质量红线」「推断标记规范」「深度分级与分期交付」「不生成汇总正文」「变更记录」「机械自检」「状态看板」「评审缺陷处置」
 - 涉及验收标准、状态机时，读同目录 `references/` 对应指南；补写文档时用同目录 `templates/` 对应模板
 
 两处表述冲突时，以 `prd-from-requirements` 为准并回报差异。
@@ -109,12 +109,12 @@ Git 处理（谨慎，不做隐式版本控制代理）：
 **legacy 树（六条不变）：**
 
 1. 只改模块主本与全局主本，不直接改任何生成物。
-2. 重新生成系统汇总与根汇总（按链接重写规则）。
+2. 不产出、不更新汇总正文文档（见 `prd-from-requirements`「不生成汇总正文」）。
 3. 运行机械自检，错误清零：
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/scripts/check-prd-tree.py" <工作树>`
 4. 重新生成状态看板：
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/prd-from-requirements/scripts/generate-dashboard.py" <工作树>`
-5. 受影响文档追加变更记录（日期、变更摘要、原因、影响范围）。
+5. 受影响文档追加变更记录，固定四列 `日期 | 版本 | 主题 | commit`（见 `prd-from-requirements`「变更记录」）。核验结论、打回项与缺陷处置对账写进会话回复或 PR，不进工作树。
 6. Git 仓库时展示 diff 摘要。
 
 **已迁移树**：第 1、5、6 条同上；第 2–4 条改经 operation overlay 走内容门，另加三条：
@@ -129,7 +129,8 @@ Git 处理（谨慎，不做隐式版本控制代理）：
 
 - 不从原始需求生成新工作树，不重走模块划分确认与 PM 协同生成流程。
 - 不覆盖、不重排既有需求编号；不覆盖 `_source/original/`。
-- 不手改汇总 PRD 和状态看板等生成物。
+- 不产出汇总正文文档，不手改状态看板等生成物。
+- 不在交付物里写关于修改本身的声明（数量对账、「已修完」、「更正上一版」、核验轮次）。
 - 不自动 `git init` 或 `git commit`。
 
 ## 最终回复

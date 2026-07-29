@@ -29,16 +29,76 @@ BARE_MARK_RE = re.compile(r"(?<!\[)(推断|推荐默认)(?!\])")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 SOURCE_OQ_RE = re.compile(r"来源[:：][^|｜\n]*开放问题")
 
-# 模板表头等合法出现「推断」的固定短语,不算裸标记
-BARE_MARK_ALLOW = ("是否推断", "推断标记", "标注为推断")
-
-# 被禁止的推断标记变体(SKILL.md「推断标记规范」),命中即警告
-MARK_VARIANT_PATTERNS = (
-    (re.compile(r"派生"), "「派生」"),
-    (re.compile(r"推荐[，,、\s]*待确认"), "「推荐…待确认」"),
-    (re.compile(r"默认[^\n。;；]{0,12}待确认"), "「默认…待确认」"),
-    (re.compile(r"[（(]\s*默认"), "「(默认…)」"),
+# 模板表头等合法出现「推断」「推荐默认」的固定短语,不算裸标记。
+# 「推荐默认方案」是模板固定列名(见 templates/global-open-questions.md、
+# cross-system-dependencies.md),不是漏标的裸标记。
+BARE_MARK_ALLOW = (
+    "是否推断", "推断标记", "标注为推断",
+    "推荐默认方案", "推荐默认值", "推荐默认内容",
 )
+
+# 「推断」「推荐默认」这两个词既是标记,也是谈论标记体系时的普通名词。
+# 「是原文而非推断」「挂推荐默认」「推荐默认是『不可出示』」「见推荐默认栏」
+# 都是后者,不是漏标。漏标的形态是紧贴取值出现,前后不带这些虚词。
+BARE_MARK_SKIP_LEFT = re.compile(
+    r"(?:不是|而非|还是|并非|非|或|和|与|／|/|的|挂|裸|见|按|依|该|条|是|属)\s*$")
+BARE_MARK_SKIP_RIGHT = re.compile(
+    r"^\s*(?:的|是|为|与|和|栏|下|时|方案|内容|机制|取值|标记|规范|一栏)")
+
+# 被禁止的推断标记变体(SKILL.md「推断标记规范」),命中即警告。
+# 不再检「派生」——字段定义表的「来源 = 派生」是合法的第三类取值
+# (由其他字段计算得出),与「把推断写成派生」无法机械区分,按
+# 「写不进 checker 的就别写成规则」删除,规范由 SKILL.md 的正例约束。
+MARK_VARIANT_PATTERNS = (
+    # 表格单元格边界不可跨越: 「[推荐默认] | 待确认」是两格,不是一处变体
+    (re.compile(r"推荐[，,、\s]*待确认"), "「推荐…待确认」"),
+    (re.compile(r"默认[^\n。;；|｜]{0,12}待确认"), "「默认…待确认」"),
+    (re.compile(r"[（(]\s*默认\s*(?:[:：]|[）)]|为|值)"), "「(默认…)」"),
+)
+
+# 汇总正文落盘: 本技能不产出汇总 PRD(SKILL.md「不生成汇总正文」)
+FULL_PRD_NAME_RE = re.compile(r"(?:^|-)full-prd\.md$")
+
+# 变更记录固定四列: 日期 | 版本 | 主题 | commit
+CHANGELOG_HEADING_RE = re.compile(r"^#{2,4}\s*(?:[\d.]+[.、]?\s*)?变更记录\s*$")
+CHANGELOG_COLUMNS = ("日期", "版本", "主题", "commit")
+CHANGELOG_TOPIC_MAX = 80
+
+# 变更记录格内禁止的「关于修改本身的声明」——可判真伪但对实现者零价值,
+# 每条都是新造的、会被下一轮推翻的断言。
+CHANGELOG_BANNED = (
+    (re.compile(r"(?<![\d.])\d+\s*(?:条|项|处|个|类|档)"), "数量对账"),
+    (re.compile(
+        r"虚报|失实|更正上一版|更正 v|已修完|全部采纳|全部落实"
+        r"|逐条核实|已确认修复|漏做|补做"), "关于修改本身的声明"),
+    (re.compile(r"第\s*[一二三四五六七八九十\d]+\s*轮"), "核验轮次"),
+    (re.compile(r"打回|核验"), "核验结论"),
+)
+
+# 跨节数目复述: 同一行既指向别的节、又复述那一节的规模
+SECTION_REF_RE = re.compile(r"第\s*\d+(?:\.\d+)*\s*节|§\s*\d+(?:\.\d+)*")
+CROSS_SECTION_COUNT_RE = re.compile(
+    r"(?<![\d.／/-])(\d+)\s*(?:项|类|条|档|种|张)")
+# 这些都不是表规模复述: 阈值上限、区间端点、序数索引(「第 6 项」)
+THRESHOLD_LEFT_RE = re.compile(
+    r"(?:最多|至多|最少|至少|不超过|不少于|不足|超过|超出|每|满|达|上限|下限"
+    r"|限|第|≤|≥|<=|>=|<|>|~|至)\s*$")
+THRESHOLD_RIGHT_RE = re.compile(r"^\s*(?:以上|以下|以内|起|之内|封顶|为止)")
+# 表规模复述的量级只可能是小数目;三位数以上是业务阈值
+CROSS_SECTION_COUNT_MAX = 100
+# 覆盖率数字的持有点就是追溯矩阵自己,它写出各模块分布不算复述
+COUNT_RULE_EXEMPT = ("requirement-traceability-matrix.md",)
+# 治理文档只给指针不给数目: 它登记的每个数目都由别的文档持有,必然先过期
+COUNT_FREE_DOCS = ("deepening-backlog.md",)
+ANY_COUNT_RE = re.compile(r"(?<![\d.／/-])(\d+)\s*(?:项|类|条|档|种|张|个|份)")
+
+# 表格前导句里的规模声明,必须与紧随其后的表格行数一致
+LEADIN_COUNT_RE = re.compile(r"(?:共|计|合计|现表实数)\s*(\d+)\s*(项|类|条|档|个|种|张|行)")
+
+# 声明为逐字引用的表列
+VERBATIM_HEADER_RE = re.compile(r"原文\s*[（(]\s*(?:逐字|verbatim)\s*[）)]")
+SOURCE_DIR = "_source"
+TABLE_SEP_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$")
 
 # 头部深度声明必须是列表行,如「- **深度**：验收级」或「- 深度:骨架级」
 DEPTH_LINE_RE = re.compile(r"^\s*-\s*\*{0,2}深度\*{0,2}\s*[:：]", re.M)
@@ -121,7 +181,7 @@ def acceptance_section_has_content(text, marker):
 def needs_depth_header(rel: PurePosixPath):
     """按文档角色匹配,而非精确文件名——改名(如 feature-permission-matrix)不豁免。"""
     name = rel.name
-    if name == "prd.md" or name.endswith("full-prd.md"):
+    if name == "prd.md":
         return True
     if name.endswith("-matrix.md"):
         return True
@@ -157,6 +217,189 @@ def state_defined(term, states):
     return any(term in s or s in term for s in states)
 
 
+def split_row(line):
+    """把 markdown 表格行拆成格;转义竖线 `\\|` 不当分隔符。"""
+    body = line.strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|") and not body.endswith("\\|"):
+        body = body[:-1]
+    cells = re.split(r"(?<!\\)\|", body)
+    return [c.strip() for c in cells]
+
+
+def iter_tables(text):
+    """产出 (表头行号, 表头格列表, [(数据行号, 数据格列表)])。围栏内不算表。"""
+    lines = text.splitlines()
+    in_fence = False
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            index += 1
+            continue
+        if in_fence or not stripped.startswith("|"):
+            index += 1
+            continue
+        if index + 1 >= len(lines) or not TABLE_SEP_RE.match(lines[index + 1].strip()):
+            index += 1
+            continue
+        header = split_row(lines[index])
+        rows = []
+        cursor = index + 2
+        while cursor < len(lines) and lines[cursor].strip().startswith("|"):
+            rows.append((cursor + 1, split_row(lines[cursor])))
+            cursor += 1
+        yield index + 1, header, rows
+        index = cursor
+
+
+def normalize_quote(value):
+    """逐字引文比对前的归一化: 去 markdown 强调、行内代码、转义与空白差异。"""
+    text = value.replace("\\|", "|")
+    text = re.sub(r"\*\*|__|`", "", text)
+    text = re.sub(r"<br\s*/?>", "", text)
+    return re.sub(r"\s+", "", text)
+
+
+def changelog_section(text):
+    """返回 (小节起始行号, 小节文本);无变更记录小节时返回 (None, "")。"""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        heading = re.match(r"^(#+)", line.strip())
+        if not heading or not CHANGELOG_HEADING_RE.match(line.strip()):
+            continue
+        level = len(heading.group(1))
+        end = len(lines)
+        for cursor in range(index + 1, len(lines)):
+            head = re.match(r"^(#{1,6})\s+", lines[cursor].strip())
+            if head and len(head.group(1)) <= level:
+                end = cursor
+                break
+        return index + 1, "\n".join(lines[index + 1:end])
+    return None, ""
+
+
+def check_changelog(rel, text):
+    """变更记录必须是固定四列,且格内不写关于修改本身的声明。"""
+    errors = []
+    start, section = changelog_section(text)
+    if start is None:
+        return errors
+    tables = list(iter_tables(section))
+    if not tables:
+        return errors
+    header_offset, header, rows = tables[0]
+    lineno = start + header_offset
+    if len(header) != len(CHANGELOG_COLUMNS) or not all(
+            want.lower() in got.lower()
+            for want, got in zip(CHANGELOG_COLUMNS, header)):
+        errors.append(
+            f"{rel}:{lineno}: 变更记录表头必须是固定四列"
+            f"「{' | '.join(CHANGELOG_COLUMNS)}」,实际为「{' | '.join(header)}」"
+            "——变更历史由 git 回答,正文不自证修改史"
+        )
+        return errors
+    for row_offset, cells in rows:
+        row_lineno = start + row_offset
+        joined = " ".join(cells)
+        for pattern, label in CHANGELOG_BANNED:
+            hit = pattern.search(joined)
+            if hit:
+                errors.append(
+                    f"{rel}:{row_lineno}: 变更记录禁止写{label}"
+                    f"(命中「{hit.group(0)}」)——这类断言由 git diff 与 PR 承担"
+                )
+        if len(cells) >= 3 and len(cells[2]) > CHANGELOG_TOPIC_MAX:
+            errors.append(
+                f"{rel}:{row_lineno}: 变更记录主题超过 {CHANGELOG_TOPIC_MAX} 字"
+                f"(实际 {len(cells[2])} 字),只允许一句话主题"
+            )
+    return errors
+
+
+def _real_count(plain, hit):
+    """排除阈值、区间端点与序数索引后,才算一处「写死的数目」。"""
+    if THRESHOLD_LEFT_RE.search(plain[:hit.start()]):
+        return False
+    return not THRESHOLD_RIGHT_RE.match(plain[hit.end():])
+
+
+def check_counts(rel, text):
+    """数目失准的三种可机械判定形态。"""
+    errors = []
+    lines = text.splitlines()
+    count_free = rel.name in COUNT_FREE_DOCS
+    exempt = rel.name in COUNT_RULE_EXEMPT
+    for lineno, line, in_fence in iter_lines(text):
+        if in_fence:
+            continue
+        plain = INLINE_CODE_RE.sub("", line)
+        if count_free:
+            for hit in ANY_COUNT_RE.finditer(plain):
+                if not _real_count(plain, hit):
+                    continue
+                errors.append(
+                    f"{rel}:{lineno}: 治理文档不写数目「{hit.group(0).strip()}」"
+                    "——这里登记的每个数目都由别的文档持有,只给指针"
+                )
+                break
+        elif not exempt and SECTION_REF_RE.search(plain):
+            for hit in CROSS_SECTION_COUNT_RE.finditer(plain):
+                value = int(hit.group(1))
+                if value <= 1 or value >= CROSS_SECTION_COUNT_MAX:
+                    continue
+                if not _real_count(plain, hit):
+                    continue
+                errors.append(
+                    f"{rel}:{lineno}: 同一行既指向别处、又写死数目"
+                    f"「{hit.group(0).strip()}」——数目只由持有那张表的位置自持,"
+                    "引用方给指针不给数字"
+                )
+                break
+    for header_lineno, _, rows in iter_tables(text):
+        for back in range(1, 4):
+            probe = header_lineno - 1 - back
+            if probe < 0:
+                break
+            candidate = lines[probe]
+            if not candidate.strip():
+                continue
+            hit = LEADIN_COUNT_RE.search(INLINE_CODE_RE.sub("", candidate))
+            if hit and int(hit.group(1)) != len(rows):
+                errors.append(
+                    f"{rel}:{probe + 1}: 声明「{hit.group(0)}」"
+                    f"与紧随表格的实际行数 {len(rows)} 不符"
+                )
+            break
+    return errors
+
+
+def check_verbatim(rel, text, source_blob):
+    """标为逐字的引文必须能在 _source/ 中原样命中。"""
+    errors = []
+    if not source_blob:
+        return errors
+    for _, header, rows in iter_tables(text):
+        columns = [i for i, cell in enumerate(header) if VERBATIM_HEADER_RE.search(cell)]
+        if not columns:
+            continue
+        for lineno, cells in rows:
+            for column in columns:
+                if column >= len(cells):
+                    continue
+                quote = normalize_quote(cells[column])
+                if len(quote) < 8 or quote in ("—", "-"):
+                    continue
+                if quote not in source_blob:
+                    errors.append(
+                        f"{rel}:{lineno}: 标为逐字的引文在 {SOURCE_DIR}/ 中找不到原样出处"
+                        f"(「{cells[column][:40]}…」)——逐字声明必须逐字成立"
+                    )
+    return errors
+
+
 def _link_exists(root: Path, rel: PurePosixPath, target: str, files: dict) -> bool:
     """按逻辑位置解析相对链接：树内看逻辑映射（staging/删除生效），树外回退文件系统。"""
     logical = posixpath.normpath(posixpath.join(str(rel.parent), target))
@@ -183,6 +426,22 @@ def validate(root, files):
         if rel.endswith(".md")
         and "__pycache__" not in PurePosixPath(rel).parts
         and PurePosixPath(rel).name != "status-dashboard.md"
+    )
+
+    # 汇总正文不得落盘(SKILL.md「不生成汇总正文」)。没有生成器的「生成物」
+    # 声明只能靠记性执行,而每处改动被手抄多份必然产生偏差。
+    for rel in sorted(files):
+        if FULL_PRD_NAME_RE.search(PurePosixPath(rel).name):
+            errors.append(
+                f"{rel}: 汇总正文不得落盘——模块 prd.md 是正文唯一存放处,"
+                "整树导航写进 README.md 索引表与 status-dashboard.md"
+            )
+
+    # 逐字引文比对的底本: _source/ 全量正文归一化后拼接
+    source_blob = "".join(
+        normalize_quote(files[rel].read_text(encoding="utf-8", errors="replace"))
+        for rel in sorted(files)
+        if rel.endswith(".md") and PurePosixPath(rel).parts[:1] == (SOURCE_DIR,)
     )
 
     # 文件名与目录名中的占位符残留(目录名由逻辑文件路径推导)
@@ -218,7 +477,7 @@ def validate(root, files):
         if needs_depth_header(rel) and not DEPTH_LINE_RE.search(head):
             errors.append(f"{rel}: 头部缺少「深度」声明(骨架级/验收级)")
         depth_m = DEPTH_VALUE_RE.search(head)
-        if depth_m and depth_m.group(1).startswith("验收级") and not rel.name.endswith("full-prd.md"):
+        if depth_m and depth_m.group(1).startswith("验收级"):
             acceptance_docs.append(rel)
             if rel.name == "prd.md" and len(rel.parts) >= 3:
                 for marker in ACCEPTANCE_LOGIC_MARKERS:
@@ -229,8 +488,11 @@ def validate(root, files):
                         errors.append(
                             f"{rel}: 验收级模块审计结构没有数据行"
                             f"且未声明不涉及「{marker}」")
-        if rel.name.endswith("full-prd.md") and "生成物" not in head:
-            errors.append(f"{rel}: 汇总 PRD 头部缺少「生成物」声明")
+        # _source/ 是权威源的转换产物,不是交付物,不受交付物的写法约束
+        if rel.parts[:1] != (SOURCE_DIR,):
+            errors.extend(check_changelog(rel, text))
+            errors.extend(check_counts(rel, text))
+            errors.extend(check_verbatim(rel, text, source_blob))
 
         file_states = mermaid_states(text)
 
@@ -268,6 +530,10 @@ def validate(root, files):
             for m in BARE_MARK_RE.finditer(plain):
                 span = plain[max(0, m.start() - 6): m.end() + 6]
                 if any(allow in span for allow in BARE_MARK_ALLOW):
+                    continue
+                if BARE_MARK_SKIP_LEFT.search(plain[:m.start()]):
+                    continue
+                if BARE_MARK_SKIP_RIGHT.match(plain[m.end():]):
                     continue
                 warnings.append(
                     f"{rel}:{lineno}: 裸「{m.group(1)}」用法,应写作 [推断] 或 [推荐默认] 以便审计"
