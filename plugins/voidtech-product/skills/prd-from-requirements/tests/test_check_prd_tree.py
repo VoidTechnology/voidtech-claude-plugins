@@ -7,6 +7,8 @@
 - `--operation-id` 模式经 overlay resolver 看到 staging 版本,且同一逻辑
   文件只出现一次。
 - Logic Atlas 能力开启后带外改主本 → 检查失败并报 stale（§10）。
+- 已声明的编号格式正则,必须被同段数的编号字面量满足;自校准的不误报范围
+  与已知盲区一并固化。
 """
 
 import json
@@ -267,6 +269,70 @@ class CountConsistencyTest(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("与紧随表格的实际行数 2 不符", proc.stdout)
+
+
+class DeclaredIdFormatTest(unittest.TestCase):
+    """已声明的编号格式正则,必须被同段数的编号字面量满足。
+
+    规则靠自校准控制假阳性(一条正则只管「已经有合规实例」的前缀),因此
+    正例、假阳性例和自校准换来的盲区都要固化——盲区一旦被无意「修掉」,
+    换回来的是朴素版本上千条的假阳性。
+    """
+
+    DECLARED = "| 会员号 | string | 格式 `^[A-Z]{2,8}-\\d{5}$` |"
+
+    def write_module(self, body):
+        root = clean_legacy_worktree(self)
+        (root / MODULE_A_PRD_RELPATH).write_text(
+            f"# 模块甲\n\n- 深度:骨架级\n\n{self.DECLARED}\n\n{body}\n",
+            encoding="utf-8")
+        return root
+
+    def test_stale_id_literal_is_rejected(self):
+        """真实漏检成因: 定案格式后没回扫编号字面量,AC 夹具留着旧形态。"""
+        root = self.write_module(
+            "验收: 旧号 `HKSC-00042` 迁移后新号不等于 `HKSC-S001`。")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("编号字面量「HKSC-S001」不满足已声明的格式", proc.stdout)
+
+    def test_conforming_literals_pass(self):
+        root = self.write_module("验收: 旧号 `HKSC-00042` 迁移为 `HKSC-00043`。")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_other_prefixes_are_not_governed(self):
+        """声明里的 `[A-Z]{2,8}` 是「任意租户前缀」,不是「任意编号」。"""
+        root = self.write_module(
+            "会员 `HKSC-00042`;架构决策 `ARC-201`;需求 `P1B-0003`。")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_different_segment_count_is_out_of_scope(self):
+        """收据号三段,不该拿会员号的两段正则去判它。"""
+        root = self.write_module("会员 `HKSC-00042` 的收据号 `HKSC-2026-000123`。")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_prefix_without_conforming_instance_is_blind_spot(self):
+        """已知盲区: 某前缀下全部字面量都是旧形态时,规则不认领该前缀。
+
+        自校准的代价——没有合规实例就无从判断该前缀归哪条正则管。本规则
+        只覆盖「新旧共存」,不覆盖「全量陈旧」;后者仍要靠定案时的回扫。
+        """
+        root = self.write_module("验收: 新号 `HKSC-S001`。")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
 
 class VerbatimQuoteTest(unittest.TestCase):
