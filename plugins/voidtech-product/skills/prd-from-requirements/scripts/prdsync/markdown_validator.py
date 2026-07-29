@@ -110,13 +110,22 @@ DEPTH_LINE_RE = re.compile(r"^\s*-\s*\*{0,2}深度\*{0,2}\s*[:：]", re.M)
 DEPTH_VALUE_RE = re.compile(r"^\s*-\s*\*{0,2}深度\*{0,2}\s*[:：]\s*(\S+)", re.M)
 DEPTH_HEAD_LINES = 15
 REVIEW_SECTION_RE = re.compile(r"^#{2,3}\s*.*验收级核验记录.*$", re.M)
+# 验收级模块必须齐备的审计结构。字面值与 atlas.py 的 marker 常量一致：这里放行
+# 什么，Atlas 编译时就只能把什么记成 gap，「验收级」会退化为自报深度。
+# 未纳入 §7.0「数据读写（机器可解析）」：它是 §7.0.1「页面数据读写（机器可解析）」
+# 的子串，按 `marker in text` 判定会被 §7.0.1 的标题假命中，需要先把判定改成
+# 标题级精确匹配才能纳入（独立缺陷，不在本次范围）。
 ACCEPTANCE_LOGIC_MARKERS = (
+    "模块交互（机器可解析）",
     "页面契约（机器可解析）",
     "核心流程（机器可解析）",
     "流程状态影响（机器可解析）",
     "页面交互（机器可解析）",
+    "步骤权限合同（机器可解析）",
     "状态机与状态流转",
     "页面数据读写（机器可解析）",
+    "字段定义（机器可解析）",
+    "权限矩阵",
 )
 
 # 需求/开放问题编号,用于零填充一致性检查
@@ -148,7 +157,12 @@ def iter_lines(text):
 
 
 def acceptance_section_has_content(text, marker):
-    """验收级审计章节必须有数据行，或明确声明「不涉及：原因」。"""
+    """验收级审计章节必须有数据行，或明确声明「不涉及：原因」。
+
+    「不涉及」只认正文与表格行，不认引用块：`§5.0.4`、`§7.0.1` 的模板说明
+    blockquote 自带「不涉及：{原因}」示例句，若连引用块一起搜，照模板生成的
+    文档只要保留说明、删掉整张表就被判成已声明不涉及——硬门形同虚设。
+    """
     lines = text.splitlines()
     for index, line in enumerate(lines):
         heading = re.match(r"^(#{1,6})\s+.*$", line.strip())
@@ -163,7 +177,8 @@ def acceptance_section_has_content(text, marker):
                 end = cursor
                 break
         section = lines[index + 1:end]
-        if re.search(r"不涉及\s*[:：]\s*\S+", "\n".join(section)):
+        prose = [row for row in section if not row.lstrip().startswith(">")]
+        if re.search(r"不涉及\s*[:：]\s*\S+", "\n".join(prose)):
             return True
         for cursor in range(len(section) - 2):
             if not section[cursor].strip().startswith("|"):

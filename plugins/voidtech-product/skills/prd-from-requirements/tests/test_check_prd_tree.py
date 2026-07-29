@@ -25,6 +25,7 @@ from legacy_fixture import (
 from worktree_fixture import SKILL_ROOT
 
 from prdsync import atlas, migration
+from prdsync.markdown_validator import ACCEPTANCE_LOGIC_MARKERS
 from prdsync.writer_lock import OPERATIONS_RELPATH
 
 CHECKER = SKILL_ROOT / "scripts" / "check-prd-tree.py"
@@ -102,6 +103,58 @@ class AcceptanceStructureTest(unittest.TestCase):
         self.assertIn("页面数据读写（机器可解析）", proc.stdout)
 
 
+    def test_acceptance_module_requires_permission_and_field_contracts(self):
+        """权限与字段契约同属 Atlas 编译依赖（atlas.py 的 marker 常量为准）。
+
+        只查流程侧六项、放行权限与字段，会让模块合法标成「验收级」并通过机械
+        自检，而 Atlas 编译时 requiredActions.permissionRefs 与字段示例全进
+        gaps——「验收级」由此变成自报深度，不是可验证事实。
+        """
+        root = clean_legacy_worktree(self)
+        module = root / MODULE_A_PRD_RELPATH
+        sections = "\n\n".join(
+            f"## {marker}\n\n| 列甲 | 列乙 |\n|---|---|\n| 数据 | 行 |"
+            for marker in (
+                "页面契约（机器可解析）",
+                "核心流程（机器可解析）",
+                "流程状态影响（机器可解析）",
+                "页面交互（机器可解析）",
+                "状态机与状态流转",
+                "页面数据读写（机器可解析）"))
+        module.write_text(
+            f"# 模块甲\n\n- 深度:验收级\n\n{sections}\n", encoding="utf-8")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        for marker in ("模块交互（机器可解析）", "步骤权限合同（机器可解析）",
+                       "字段定义（机器可解析）", "权限矩阵"):
+            self.assertIn(
+                f"验收级模块缺少审计结构「{marker}」", proc.stdout)
+
+
+    def test_template_blockquote_does_not_satisfy_not_applicable(self):
+        """模板说明里的「不涉及：…」示例不算声明——否则硬门形同虚设。
+
+        `§5.0.4`、`§7.0.1` 的模板说明 blockquote 自带「不涉及：{原因}」示例
+        句。豁免检测若搜整个章节，照模板生成的文档只要保留说明、删掉整张表，
+        就被判成「已声明不涉及」。真实声明写在表格行或正文，不写在引用块里。
+        """
+        root = clean_legacy_worktree(self)
+        module = root / MODULE_A_PRD_RELPATH
+        sections = "\n\n".join(
+            f"## {marker}\n\n> 本表按模块条件适用。无角色差异时写一行"
+            f"「不涉及：本模块无角色差异」即可，不逐步骤铺表。"
+            for marker in ACCEPTANCE_LOGIC_MARKERS)
+        module.write_text(
+            f"# 模块甲\n\n- 深度:验收级\n\n{sections}\n", encoding="utf-8")
+
+        proc = run_checker(root)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("审计结构没有数据行", proc.stdout)
+
+
     def test_navigation_label_is_not_a_business_state(self):
         root = clean_legacy_worktree(self)
         module = root / MODULE_A_PRD_RELPATH
@@ -131,12 +184,16 @@ stateDiagram-v2
         sections = "\n\n".join(
             f"## {marker}\n\n| 占位列 |\n|---|"
             for marker in (
+                "模块交互（机器可解析）",
                 "页面契约（机器可解析）",
                 "核心流程（机器可解析）",
                 "流程状态影响（机器可解析）",
                 "页面交互（机器可解析）",
+                "步骤权限合同（机器可解析）",
                 "状态机与状态流转",
-                "页面数据读写（机器可解析）"))
+                "页面数据读写（机器可解析）",
+                "字段定义（机器可解析）",
+                "权限矩阵"))
         module.write_text(
             f"# 模块甲\n\n- 深度:验收级\n\n{sections}\n",
             encoding="utf-8")
