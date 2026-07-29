@@ -93,13 +93,32 @@ def read(path):
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+CHANGELOG_HEADING_RE = re.compile(r"^#{2,4}\s*(?:[\d.]+[.、]?\s*)?变更记录\s*$")
+
+
+def read_data_only(path):
+    """读到「变更记录」小节为止。
+
+    变更记录是修改史,不是数据源。曾经出现过实际后果: 追溯矩阵的区间解析
+    把变更记录表的行也当映射读进去,凭正文里顺带出现的编号与模块名造出
+    `OQ-031 → 01-site-rendering` 之类的假映射,端到端路径视图靠它才「解析
+    成功」。生成物不能依赖叙述性文本。
+    """
+    lines = []
+    for line in read(path).splitlines():
+        if CHANGELOG_HEADING_RE.match(line.strip()):
+            break
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def parse_matrix_ranges(root):
     """从追溯矩阵提取 (前缀, 起, 止, 模块 slug) 映射。"""
     matrix = root / "00-global" / "requirement-traceability-matrix.md"
     ranges = []
     if not matrix.exists():
         return ranges
-    for line in read(matrix).splitlines():
+    for line in read_data_only(matrix).splitlines():
         if not line.strip().startswith("|"):
             continue
         id_m = REQ_RANGE_RE.search(line)
@@ -117,7 +136,7 @@ def parse_oq_catalog(root):
     catalog = {}
     if not path.exists():
         return catalog
-    for line in read(path).splitlines():
+    for line in read_data_only(path).splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) < 2:
             continue
@@ -137,7 +156,7 @@ def parse_backlog_order(root):
     order = {}
     if not path.exists():
         return order
-    for line in read(path).splitlines():
+    for line in read_data_only(path).splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) < 4 or cells[0] in ("模块", "领域规格", "文档", "---"):
             continue
@@ -315,6 +334,19 @@ def main():
     root = Path(sys.argv[1]).resolve()
     if not root.is_dir():
         print(f"错误: 目录不存在: {root}")
+        return 2
+
+    # 目标必须是 PRD 工作树根目录。本脚本会写 <root>/00-global/status-dashboard.*,
+    # 在错误目录下运行时会凭空造出一份「幽灵看板」——已实际发生过一次
+    # (模块目录下多出 02-account-auth/00-global/status-dashboard.*)。
+    # 因此 00-global/ 必须已存在,不由本脚本创建;模块目录(自带 prd.md)一律拒绝。
+    if (root / "prd.md").is_file():
+        print(f"错误: {root} 是模块目录(含 prd.md),不是工作树根目录")
+        print("提示: 传入 PRD 工作树根目录(含 00-global/ 的那一层)")
+        return 2
+    if not (root / "00-global").is_dir():
+        print(f"错误: {root} 下没有 00-global/,不像 PRD 工作树根目录")
+        print("提示: 本脚本不创建 00-global/,以免在错误目录下生成幽灵看板")
         return 2
 
     modules, specs, system_names = collect_modules(root)

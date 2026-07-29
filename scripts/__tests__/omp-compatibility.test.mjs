@@ -167,6 +167,9 @@ test('Product OMP runtime launches every bundled CLI and generates Dashboard out
 
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), 'voidtech-omp-dashboard-'));
   t.after(() => fs.rmSync(worktree, { recursive: true, force: true }));
+  // generate-dashboard 只接受 PRD 工作树根目录（含 00-global/），且不自行创建它——
+  // 否则在任意目录下运行会留下一份没人维护的幽灵看板。
+  fs.mkdirSync(path.join(worktree, '00-global'), { recursive: true });
   const dashboard = await tool.execute(
     'dashboard',
     { script: 'generate-dashboard', args: [worktree] },
