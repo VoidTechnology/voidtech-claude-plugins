@@ -6,14 +6,15 @@
 
 ### Fixed
 
-- `architect` 与 `product-manager` 的固定模型由 `fable` 改为 `opus`。三条理由，第一条是硬故障：**Fable 5 要求组织开启 30 天数据保留，配置为零数据保留（ZDR）的组织每个请求都返回 400**，而错误信息不指向真实原因——用户会去查 prompt、网络和 Token，查不到插件锁了一个他的组织不支持的模型；ZDR 在受监管行业是常见配置。其二是成本：Fable 每百万 token $10/$50，是 Opus 5 的两倍，而 frontmatter 的 `model` 会覆盖用户自己的会话选择，一个为控成本特意跑 Sonnet 的用户不会知道自己被切到了最贵档。其三是能力错配：Fable 的安全分类器覆盖大部分网络安全内容，`architect` 评审权限边界、认证与凭据处理时会拿到 `stop_reason: refusal` 而不是方案。Opus 5 正是官方定位的「复杂 agentic coding 与企业工作」主力档，没有这三个问题。
+- `architect` 与 `product-manager` 的固定模型由 `fable` 改为 `opus`。三条理由，第一条是硬故障：**Fable 5 要求组织开启 30 天数据保留，配置为零数据保留（ZDR）的组织每个请求都返回 400**，而错误信息不指向真实原因——用户会去查 prompt、网络和 Token，查不到插件锁了一个他的组织不支持的模型；ZDR 在受监管行业是常见配置。其二是成本：Fable 每百万 token $10/$50，是 Opus 5 的两倍，而 frontmatter 的 `model` 会覆盖用户自己的会话选择，一个为控成本特意跑 Sonnet 的用户不会知道自己被切到了最贵档。其三是拒答概率：Fable 的安全分类器有 `cyber` 分类，官方文档写明「benign cybersecurity work 也会触发」，而 `architect` 评审权限边界、认证与凭据处理正落在这个面上，拿到的是 `stop_reason: "refusal"`（HTTP 200，不是错误）而不是方案。Opus 5 是官方定位的「复杂 agentic coding 与企业工作」主力档，前两个问题都没有；**分类器它也有**，安全类评审仍可能被拒答，只是安全阈值按模型能力分档设置，Opus 5 这一档更宽——这一条是降低概率，不是消除。受 ZDR 影响的组织另有官方解法：给单个 workspace 开 30 天保留即可用回 Fable，但那是组织管理员的决定，不该由插件替他做。
 - 两个 agent 的 description 由「(最强模型)」改为「(深度推理)」。前者今天准确（Fable 5 确实是最强的广泛发布模型），但它是写在用户可见的 agent 选择器里的模型代际断言，会随下一次模型更迭过期，且没有任何契约测试盯着——描述该说这个 agent 干什么，不该替模型排名。
-- 仓库自用的 `loop-security-reviewer` 同样由 `fable` 改为 `opus`。它专审 Shell 逃逸、Git refs、凭据与权限边界，正好落在 Fable 安全分类器的覆盖面上：拒答风险最高的 agent 用了最容易拒答的模型。`plugin-contract-reviewer` 保留 `fable`——它审的是 manifest 与版本契约，不触发分类器，且只在维护者自己的组织里跑。
+- 仓库自用的 `loop-security-reviewer` 同样由 `fable` 改为 `opus`。它专审 Shell 逃逸、Git refs、凭据与权限边界，正好落在 `cyber` 分类的面上：拒答风险最高的 agent 用了阈值最紧的模型。Opus 5 同样可能拒答，所以这是降低概率而不是解决问题——真被拒答时换模型重试。`plugin-contract-reviewer` 保留 `fable`——它审的是 manifest 与版本契约，不落在分类器覆盖面上，且只在维护者自己的组织里跑。
 - `voidtech-core:research` 的调研分工把 `fable` 和 `haiku` 并列推荐给「资料收集 agent」。同一个仓库对 fable 的定位出现两种互斥说法，这一处是错的：Fable 是最贵最强的档，不是 haiku 的同类。改为只推荐 `haiku`，并写明理由——资料收集的瓶颈是覆盖面而不是推理深度。
 
 ### Added
 
-- 契约门禁新增 `scripts/check-agent-models.mjs`：`plugins/*/agents/` 里的 `model` 字段只允许 `opus` / `sonnet` / `haiku` 或 `claude-` 前缀的具体模型 ID，并显式拒绝一份「带环境前置条件的模型」清单（`fable`、`claude-fable-5`、`claude-mythos-5`、`claude-mythos-preview`），错误信息里写明前置条件是什么。省略 `model` 字段合法——那表示继承用户的会话模型。此前 `check-portability.sh` 与 `check-doc-contract.mjs` 都不校验 `model`，`docs/dev-rules/` 里也没有任何关于模型选择的规则，所以这类问题没有任何机制会拦住。
+- 契约门禁新增 `scripts/check-agent-models.mjs`：`plugins/*/agents/` 里的 `model` 字段只允许 `opus` / `sonnet` / `haiku` / `inherit` 或 `claude-` 前缀的具体模型 ID，并显式拒绝一份「带环境前置条件的模型」清单（`fable`、`claude-fable-5`、`claude-mythos-5`、`claude-mythos-preview`），错误信息里写明前置条件是什么。省略 `model` 字段合法，`inherit` 是同一件事的显式写法——两者都表示继承用户的会话模型。此前 `check-portability.sh` 与 `check-doc-contract.mjs` 都不校验 `model`，`docs/dev-rules/` 里也没有任何关于模型选择的规则，所以这类问题没有任何机制会拦住。
+- 门禁按 YAML 取值而不是「行尾必须紧跟值」：`model: fable # 说明` 这类带行内注释的写法此前匹配不上，会退回「未声明」分支静默放行——一句注释就能绕过这个门禁。同时把带引号的标量按裸值处理，并对「有 `model` 行但值为空」报错而不是当成未声明。三种情况都有回归测试。
 
 ### Notes
 
