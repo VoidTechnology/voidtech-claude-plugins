@@ -12,6 +12,7 @@
 """
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,7 +26,9 @@ from legacy_fixture import (
 from worktree_fixture import SKILL_ROOT
 
 from prdsync import atlas, migration
-from prdsync.markdown_validator import ACCEPTANCE_LOGIC_MARKERS
+from prdsync.markdown_validator import (
+    ACCEPTANCE_LOGIC_MARKERS, acceptance_section_has_content,
+)
 from prdsync.writer_lock import OPERATIONS_RELPATH
 
 CHECKER = SKILL_ROOT / "scripts" / "check-prd-tree.py"
@@ -56,6 +59,22 @@ def full_snapshot(root):
             stat = path.stat()
             result[path.relative_to(root).as_posix()] = (stat.st_mtime_ns, path.read_bytes())
     return result
+
+
+def template_section(text, marker):
+    """取含 marker 的标题到下一个同级或更高级标题之间的正文。"""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        heading = re.match(r"^(#{1,6})\s+", line.strip())
+        if not heading or marker not in line:
+            continue
+        level = len(heading.group(1))
+        for cursor in range(index + 1, len(lines)):
+            following = re.match(r"^(#{1,6})\s+", lines[cursor].strip())
+            if following and len(following.group(1)) <= level:
+                return "\n".join(lines[index + 1:cursor])
+        return "\n".join(lines[index + 1:])
+    return ""
 
 
 def write_operation_manifest(root, op_id, phase, files=()):
@@ -154,6 +173,46 @@ class AcceptanceStructureTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("审计结构没有数据行", proc.stdout)
 
+
+    def test_shipped_template_satisfies_every_gated_marker(self):
+        """模板必须自带全部受硬门约束的章节与数据行。
+
+        硬门、`atlas.py` 的 marker 常量与模板三方对齐，靠这条锁：任一侧改了
+        标题字面或删了表，模板产出的文档就会被自己的硬门判错，而这种漂移只有
+        用户建树时才发现。
+        """
+        template = (SKILL_ROOT / "templates" / "module-prd.md").read_text(
+            encoding="utf-8")
+        for marker in ACCEPTANCE_LOGIC_MARKERS:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, template)
+                self.assertTrue(
+                    acceptance_section_has_content(template, marker),
+                    f"模板的「{marker}」章节过不了硬门")
+
+    def test_template_exemption_wording_passes_the_gate(self):
+        """模板教作者写的清空写法，必须是硬门认的写法。
+
+        §3.4 曾写「无跨模块交互写「无」并删除表格」：照做的独立模块标验收级后
+        拿到一个模板里找不到解法的硬错误——豁免只认「不涉及：原因」。这里只取
+        允许清空本节的句子（提到删除表格/整节/不逐步骤铺表），不管列取值约定。
+        """
+        template = (SKILL_ROOT / "templates" / "module-prd.md").read_text(
+            encoding="utf-8")
+        checked = 0
+        for marker in ACCEPTANCE_LOGIC_MARKERS:
+            for sentence in re.split(r"[。\n]", template_section(template, marker)):
+                if not any(hint in sentence for hint in
+                           ("删除表格", "整节", "不逐步骤铺表")):
+                    continue
+                for literal in re.findall(r"[「『]([^」』]+)[」』]", sentence):
+                    checked += 1
+                    with self.subTest(marker=marker, literal=literal):
+                        self.assertTrue(
+                            acceptance_section_has_content(
+                                f"## {marker}\n\n{literal}\n", marker),
+                            f"「{marker}」章节的清空写法「{literal}」过不了硬门")
+        self.assertGreaterEqual(checked, 3, "模板的清空写法句子没被取到，检查提示词")
 
     def test_navigation_label_is_not_a_business_state(self):
         root = clean_legacy_worktree(self)
