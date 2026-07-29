@@ -2,8 +2,9 @@
 name: loop-security-reviewer
 description: 对抗性审查 voidtech-loop 的 Shell、Git refs、worktree、路径、状态、锁、审批和 eval 边界，只报告可复现的 P0/P1 问题。
 tools: Read, Grep, Glob, Bash
-# fable 的安全分类器覆盖大部分网络安全内容，正是这个 agent 的工作面：
-# 审 Shell 逃逸、凭据处理和权限边界时会拿到 stop_reason: refusal 而不是审查结论。
+# 不用 fable：它的分类器有 cyber 分类，而审 Shell 逃逸、凭据处理和权限边界
+# 正落在这个面上，拿到的会是 stop_reason: refusal 而不是审查结论。
+# opus 同样有分类器，阈值更宽而已——真被拒答时换模型重试，不要改结论。
 model: opus
 effort: high
 maxTurns: 24

@@ -72,6 +72,49 @@ test('frontmatter 里的注释行不被当成 model 声明', () => {
   assert.equal(model, 'opus');
 });
 
+test('行内注释不能让 model 值躲过门禁', () => {
+  // `(\S+)$` 式的取值遇到 `model: fable # 说明` 会匹配失败，退回「未声明」
+  // 分支静默放行——加一句注释就绕过了这个门禁。
+  const { declared, model } = readAgentModel(
+    frontmatter('name: sneaky\nmodel: fable # 这里解释一下为什么'),
+  );
+
+  assert.equal(declared, true);
+  assert.equal(model, 'fable');
+  assert.equal(
+    evaluateAgentModels([
+      { file: 'plugins/demo/agents/sneaky.md', declared, model },
+    ]).length,
+    1,
+  );
+});
+
+test('inherit 是合法取值：它就是「用用户的会话模型」的显式写法', () => {
+  assert.deepEqual(
+    evaluateAgentModels([{ file: 'a.md', declared: true, model: 'inherit' }]),
+    [],
+  );
+});
+
+test('带引号的标量与裸值同义', () => {
+  assert.equal(readAgentModel(frontmatter('name: quoted\nmodel: "opus"')).model, 'opus');
+  assert.deepEqual(
+    evaluateAgentModels([{ file: 'a.md', declared: true, model: 'opus' }]),
+    [],
+  );
+});
+
+test('有 model 行但值为空要报错，不算「未声明」', () => {
+  const { declared, model } = readAgentModel(frontmatter('name: empty\nmodel:'));
+
+  assert.equal(declared, true);
+  assert.equal(model, '');
+  assert.match(
+    evaluateAgentModels([{ file: 'a.md', declared, model }])[0],
+    /model 字段为空/,
+  );
+});
+
 test('只扫描 plugins/*/agents/：仓库自用的 .claude/agents/ 不在门禁内', () => {
   const root = makeFixture({ demo: { one: frontmatter('name: one\nmodel: opus') } });
   const internal = path.join(root, '.claude', 'agents');
