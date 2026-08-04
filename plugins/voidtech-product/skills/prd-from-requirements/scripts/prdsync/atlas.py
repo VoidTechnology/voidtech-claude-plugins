@@ -37,7 +37,7 @@ from .canonical_store import (
     sha256_of_bytes,
 )
 
-GENERATOR_VERSION = "1.8.0"
+GENERATOR_VERSION = "1.9.0"
 LOGIC_MODEL_SCHEMA_VERSION = 2
 
 WORKTREE_MANIFEST_RELPATH = "prd-worktree.json"
@@ -171,41 +171,174 @@ def _is_separator(cells):
     return all(set(cell) <= set("-: ") and "-" in cell for cell in cells)
 
 
-def _table_after(lines, start):
-    """从 start 行起扫描：跳过空行与引用块，返回第一张连续 markdown 表的
-    (header, data_rows)；下一个标题前无表返回 (None, [])。"""
-    i = start
+def _table_blocks(lines):
+    """连续 `|` 行为一块，返回按文档顺序的原始块（每块为若干 cells 列表）。"""
+    blocks = []
+    i = 0
     while i < len(lines):
-        stripped = lines[i].strip()
-        if stripped.startswith("#"):
-            return None, []
-        if stripped.startswith("|"):
-            rows = []
-            while i < len(lines) and lines[i].strip().startswith("|"):
-                rows.append(_cells(lines[i]))
-                i += 1
-            if not rows:
-                return None, []
-            header = rows[0]
-            data = [row for row in rows[1:] if not _is_separator(row)]
-            return header, data
-        i += 1
-    return None, []
+        if not lines[i].strip().startswith("|"):
+            i += 1
+            continue
+        rows = []
+        while i < len(lines) and lines[i].strip().startswith("|"):
+            rows.append(_cells(lines[i]))
+            i += 1
+        if rows:
+            blocks.append(rows)
+    return blocks
 
 
-def _find_section_table(text, marker):
+def _merge_table_blocks(blocks):
+    """把原始块合并成 [(header, rows)]。
+
+    没有 `|---|` 分隔行的块在 markdown 里根本不是一张新表，而是作者用空行给
+    上一张表分组留下的续表行——列数与上表表头一致时并入上表。列数不一致时
+    不并（避免按位置错位造数据），原样留作独立表，由调用方记成缺口。"""
+    tables = []
+    for rows in blocks:
+        if not rows:
+            continue
+        has_separator = any(_is_separator(row) for row in rows)
+        if (not has_separator and tables
+                and all(len(row) == len(tables[-1][0]) for row in rows)):
+            tables[-1][1].extend(rows)
+            continue
+        tables.append([
+            rows[0], [row for row in rows[1:] if not _is_separator(row)]])
+    return [(header, rows) for header, rows in tables]
+
+
+def _table_after(lines, start):
+    """从 start 行起扫描：跳过空行与引用块，返回第一张 markdown 表的
+    (header, data_rows)（含空行分组的续表行）；下一个标题前无表返回 (None, [])。"""
+    end = start
+    while end < len(lines) and not lines[end].strip().startswith("#"):
+        end += 1
+    tables = _merge_table_blocks(_table_blocks(lines[start:end]))
+    if not tables:
+        return None, []
+    return tables[0]
+
+
+# 全部机器可解析章节标记：章节切分要靠它判断「下一个标题是不是别人的章节」。
+_SECTION_MARKERS = (
+    _PAGE_MARKER, _FLOW_MARKER, _IMPACT_MARKER, _INTERACTION_MARKER,
+    _STEP_PERMISSION_MARKER, _BOUNDARY_MARKER, _STATE_MARKER, _DATA_MARKER,
+    _PAGE_DATA_MARKER, _FIELD_MARKER, _PERMISSION_MARKER, _INTERACT_MARKER,
+)
+
+_HEADING_RE = re.compile(r"^(#{1,6})\s+")
+# 「不涉及：{原因}」的豁免判定与 markdown_validator.acceptance_section_has_content
+# 保持一致：只认正文，不认引用块（模板说明里自带示例句）。
+_NOT_APPLICABLE_RE = re.compile(r"不涉及\s*[:：]\s*\S+")
+
+
+def _heading_marker(line):
+    """标题行归属的机器可解析章节标记；非标题或不含标记返回 None。
+
+    必须取最长匹配：「数据读写（机器可解析）」是「页面数据读写（机器可解析）」的
+    子串，按「包含即命中」会让 §7.0 认领 §7.0.1 的标题。"""
+    if not line.lstrip().startswith("#"):
+        return None
+    best = None
+    for marker in _SECTION_MARKERS:
+        if marker in line and (best is None or len(marker) > len(best)):
+            best = marker
+    return best
+
+
+def _section_body(text, marker):
+    """含 marker 的章节正文行（不含标题行）；章节缺失返回 None。
+
+    章节止于同级或更高标题，或任何归属其它标记的标题——后者防止 §7.0
+    「数据读写」把跨级书写的 §7.0.1「页面数据读写」并进来。"""
+    lines = text.splitlines()
+    start = None
+    level = 6
+    for index, line in enumerate(lines):
+        if _heading_marker(line) == marker:
+            stripped = line.lstrip()
+            start = index
+            level = len(stripped) - len(stripped.lstrip("#"))
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        heading = _HEADING_RE.match(lines[index].strip())
+        if not heading:
+            continue
+        owner = _heading_marker(lines[index])
+        if (len(heading.group(1)) <= level
+                or (owner is not None and owner != marker)):
+            end = index
+            break
+    return lines[start + 1:end]
+
+
+def _section_tables(text, marker):
+    """章节内全部 markdown 表（按文档顺序），跨子标题。
+
+    返回 (status, tables)：
+    - "absent"：章节缺失；
+    - "na"：章节在，正文显式声明「不涉及：{原因}」，且确无表；
+    - "empty"：章节在但一张表都没有——调用方必须记成缺口，绝不静默丢弃；
+    - "ok"：tables 为 [(header, rows), ...]。
+
+    跨子标题是必需的：真实 PRD 常按分组写「子标题 + 一张表」，只扫到第一个标题
+    为止会把整章的表全部丢掉（且旧实现丢得无声无息）。"""
+    body = _section_body(text, marker)
+    if body is None:
+        return "absent", []
+    tables = _all_markdown_tables("\n".join(body))
+    if tables:
+        return "ok", tables
+    prose = [line for line in body if not line.lstrip().startswith(">")]
+    if _NOT_APPLICABLE_RE.search("\n".join(prose)):
+        return "na", []
+    return "empty", []
+
+
+def _find_section_table(text, marker, expected=None):
     """定位含 marker 的机器可解析章节的表。
 
-    返回 ("absent", None, [])：章节缺失；("ok", header, data)：找到表；
-    ("empty", None, [])：章节在但显式写「无」（无表）。"""
-    lines = text.splitlines()
-    for i, line in enumerate(lines):
-        if line.lstrip().startswith("#") and marker in line:
-            header, data = _table_after(lines, i + 1)
-            if header is None:
-                return "empty", None, []
-            return "ok", header, data
-    return "absent", None, []
+    返回 (status, header, rows, extras)：status 同 `_section_tables`；同表头的多张
+    表按文档顺序合并成一份 rows（支持「一个分组一张表」的写法）；extras 是章节内
+    表头不同、未被消费的表头列表，调用方据此记 unparsed 缺口。expected 给出可接受
+    的表头时优先选中它，否则以首表表头为准（让表头违规仍报得出实际表头）。"""
+    status, tables = _section_tables(text, marker)
+    if status != "ok":
+        return status, None, [], []
+    primary = tables[0][0]
+    if expected:
+        for header, _rows in tables:
+            if header in expected:
+                primary = header
+                break
+    rows = [row
+            for header, table_rows in tables if header == primary
+            for row in table_rows]
+    extras = [header for header, _rows in tables if header != primary]
+    return "ok", primary, rows, extras
+
+
+def _headers_digest(headers, limit=3):
+    """缺口文案里只列表头前几列与表数量，避免把整表内容灌进 detail。"""
+    shown = [
+        "[" + " | ".join(header[:4]) + ("…]" if len(header) > 4 else "]")
+        for header in headers[:limit]
+    ]
+    if len(headers) > limit:
+        shown.append(f"…等 {len(headers)} 张")
+    return "，".join(shown)
+
+
+def _missing_section_detail(status, marker, consequence):
+    """章节缺失与「章节在但没有机器可解析表」用同一缺口、不同事实描述。"""
+    if status == "empty":
+        return (f"「{marker}」章节没有机器可解析表，也未声明"
+                f"「不涉及：{{原因}}」，{consequence}")
+    return f"模块缺少「{marker}」章节，{consequence}"
 
 def _page_state_tables(text):
     """提取各核心路径小节内的「边缘状态」表，保留所属路径标题。"""
@@ -223,29 +356,18 @@ def _page_state_tables(text):
     return found
 
 def _all_markdown_tables(text):
-    """按文档顺序返回全部 markdown 表。"""
-    lines = text.splitlines()
-    tables = []
-    i = 0
-    while i < len(lines):
-        if not lines[i].strip().startswith("|"):
-            i += 1
-            continue
-        rows = []
-        while i < len(lines) and lines[i].strip().startswith("|"):
-            rows.append(_cells(lines[i]))
-            i += 1
-        if rows:
-            tables.append((
-                rows[0],
-                [row for row in rows[1:] if not _is_separator(row)],
-            ))
-    return tables
+    """按文档顺序返回全部 markdown 表（空行分组的续表行并入上一张表）。"""
+    return _merge_table_blocks(_table_blocks(text.splitlines()))
 
 
 def _section_text_for_reference(text, reference):
-    """切出 `§x.y` 指向的小节文本；无节号时返回全文；找不到小节返回空串(fail closed)。"""
-    match = re.search(r"§\s*(\d+(?:\.\d+)*)", reference or "")
+    """切出 `§x.y` / `第 x 节` 指向的小节文本；无节号时返回全文；找不到小节返回
+    空串(fail closed)。
+
+    节号后的句点必须可选：templates/domain-spec.md 自己写的是 `## 2. 状态机`，
+    要求节号后紧跟空白会让「照模板写」必然切片失败。"""
+    match = (re.search(r"§\s*(\d+(?:\.\d+)*)", reference or "")
+             or re.search(r"第\s*(\d+(?:\.\d+)*)\s*节", reference or ""))
     if not match:
         return text
     section = match.group(1)
@@ -253,7 +375,7 @@ def _section_text_for_reference(text, reference):
     start = None
     level = None
     heading_re = re.compile(
-        rf"^(#{{1,6}})\s+{re.escape(section)}(?:\s|$)")
+        rf"^(#{{1,6}})\s+{re.escape(section)}\.?(?:\s|$)")
     for index, line in enumerate(lines):
         heading = heading_re.match(line.strip())
         if heading:
@@ -546,8 +668,8 @@ def _build_page_catalog(module_prds):
     """预索引结构化页面，供前向及跨模块限定引用确定性解析。"""
     catalog = {}
     for module_scope, _system_scope, path in module_prds:
-        status, header, rows = _find_section_table(
-            path.read_text(encoding="utf-8"), _PAGE_MARKER)
+        status, header, rows, _extras = _find_section_table(
+            path.read_text(encoding="utf-8"), _PAGE_MARKER, (_PAGE_HEADER,))
         titles = set()
         if status == "ok" and header == _PAGE_HEADER:
             titles = {
@@ -723,6 +845,21 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
         seen_edge_ids.add(edge["edgeId"])
         edges.append(edge)
 
+    def _read_section(marker, expected=None, gap_id=None):
+        """读章节表；章节内未被消费的表一律记成缺口——静默丢弃是本模块最危险的
+        失败模式（表头违规至少留一条 unparsed，静默丢弃连信号都没有）。"""
+        status, header, rows, extras = _find_section_table(
+            text, marker, expected)
+        if extras and gap_id:
+            gaps.append({
+                "gapId": f"{gap_id}:extra-tables",
+                "scopeId": module_scope, "kind": "unparsed",
+                "detail": (
+                    f"「{marker}」章节内另有 {len(extras)} 张表，表头与已消费表"
+                    f"不一致，未纳入编译: {_headers_digest(extras)}"),
+                "backlogRef": None})
+        return status, header, rows
+
     def _ensure_business_state(object_name, state_name, sources, detail):
         node_id = f"state:{module_scope}:{object_name}:{state_name}"
         existing = business_state_nodes.get(node_id)
@@ -854,11 +991,13 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
         gaps.append({"gapId": gap_id, "scopeId": module_scope,
                      "kind": kind, "detail": detail, "backlogRef": None})
 
-    status, header, rows = _find_section_table(text, _PAGE_MARKER)
-    if status == "absent":
+    status, header, rows = _read_section(
+        _PAGE_MARKER, (_PAGE_HEADER,), f"gap:{module_scope}:page-contract")
+    if status in {"absent", "empty"}:
         gaps.append({"gapId": f"gap:{module_scope}:page-contract",
                      "scopeId": module_scope, "kind": "missing-section",
-                     "detail": "模块缺少「页面契约（机器可解析）」章节，页面关系待深化",
+                     "detail": _missing_section_detail(
+                         status, _PAGE_MARKER, "页面关系待深化"),
                      "backlogRef": None})
     elif status == "ok" and header != _PAGE_HEADER:
         gaps.append({"gapId": f"gap:{module_scope}:page-contract",
@@ -921,11 +1060,13 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "to": page_titles[title], "status": "original",
                     "sources": [source], "detail": None})
 
-    status, header, rows = _find_section_table(text, _FLOW_MARKER)
-    if status == "absent":
+    status, header, rows = _read_section(
+        _FLOW_MARKER, (_FLOW_HEADER,), f"gap:{module_scope}:core-flow")
+    if status in {"absent", "empty"}:
         gaps.append({"gapId": f"gap:{module_scope}:core-flow",
                      "scopeId": module_scope, "kind": "missing-section",
-                     "detail": "模块缺少「核心流程（机器可解析）」章节，页面跳转与分支待深化",
+                     "detail": _missing_section_detail(
+                         status, _FLOW_MARKER, "页面跳转与分支待深化"),
                      "backlogRef": None})
     elif status == "ok" and header != _FLOW_HEADER:
         gaps.append({"gapId": f"gap:{module_scope}:core-flow",
@@ -1064,9 +1205,17 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         "to": failure_id, "status": "original",
                         "sources": [source],
                         "detail": {"branch": "failure"}})
-    interaction_status, interaction_header, interaction_rows = (
-        _find_section_table(text, _INTERACTION_MARKER))
-    if (interaction_status == "ok"
+    interaction_status, interaction_header, interaction_rows = _read_section(
+        _INTERACTION_MARKER, (_INTERACTION_HEADER,),
+        f"gap:{module_scope}:page-interactions")
+    if interaction_status == "empty":
+        gaps.append({
+            "gapId": f"gap:{module_scope}:page-interactions",
+            "scopeId": module_scope, "kind": "missing-section",
+            "detail": _missing_section_detail(
+                interaction_status, _INTERACTION_MARKER, "页面级交互待深化"),
+            "backlogRef": None})
+    elif (interaction_status == "ok"
             and interaction_header != _INTERACTION_HEADER):
         gaps.append({
             "gapId": f"gap:{module_scope}:page-interactions",
@@ -1411,13 +1560,14 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         "detail": (
                             f"流程「{flow_title}」边缘状态{page_error}"),
                         "backlogRef": None})
-    boundary_status, boundary_header, boundary_rows = _find_section_table(
-        text, _BOUNDARY_MARKER)
-    if boundary_status == "absent":
+    boundary_status, boundary_header, boundary_rows = _read_section(
+        _BOUNDARY_MARKER, (_BOUNDARY_HEADER,), f"gap:{module_scope}:boundaries")
+    if boundary_status in {"absent", "empty"}:
         gaps.append({
             "gapId": f"gap:{module_scope}:boundaries",
             "scopeId": module_scope, "kind": "missing-section",
-            "detail": "模块缺少「模块边界」章节，职责与依赖边界待深化",
+            "detail": _missing_section_detail(
+                boundary_status, _BOUNDARY_MARKER, "职责与依赖边界待深化"),
             "backlogRef": None})
     elif boundary_status == "ok" and boundary_header != _BOUNDARY_HEADER:
         gaps.append({
@@ -1440,20 +1590,56 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "excluded": row[2], "dependency": row[3],
                 }})
 
-    state_status, state_header, state_rows = _find_section_table(
-        text, _STATE_MARKER)
-    if state_status == "absent":
+    # 状态机章节同时承载两类内容：引用领域规格（3 列）与本模块独有对象（9 列）。
+    # 只取首表会让同时持有两类的模块二选一（领域规格自身不是 scope，被牺牲的只
+    # 能是本地对象），因此这里按表头分派，两类都消费。
+    _REFERENCE_STATE_HEADERS = (
+        _STATE_REFERENCE_HEADER, _STATE_REFERENCE_HEADER_GENERIC)
+    state_status, state_tables = _section_tables(text, _STATE_MARKER)
+    local_state_rows = [
+        row for header, rows in state_tables
+        if header == _LOCAL_STATE_HEADER for row in rows]
+    reference_state_tables = [
+        (header, rows) for header, rows in state_tables
+        if header in _REFERENCE_STATE_HEADERS]
+    unknown_state_headers = [
+        header for header, _rows in state_tables
+        if header != _LOCAL_STATE_HEADER
+        and header not in _REFERENCE_STATE_HEADERS]
+    if state_status in {"absent", "empty"}:
         gaps.append({
             "gapId": f"gap:{module_scope}:business-states",
             "scopeId": module_scope, "kind": "missing-section",
-            "detail": "模块缺少「状态机与状态流转」章节，业务生命周期待深化",
+            "detail": _missing_section_detail(
+                state_status, _STATE_MARKER, "业务生命周期待深化"),
             "backlogRef": None})
-    elif state_status == "ok" and state_header == _LOCAL_STATE_HEADER:
-        for row in state_rows:
+    elif unknown_state_headers and not (
+            local_state_rows or reference_state_tables):
+        gaps.append({
+            "gapId": f"gap:{module_scope}:business-states",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": (
+                "状态机表头列序不符，无法机械解析: "
+                f"{unknown_state_headers[0]}"),
+            "backlogRef": None})
+    elif unknown_state_headers:
+        gaps.append({
+            "gapId": f"gap:{module_scope}:business-states:extra-tables",
+            "scopeId": module_scope, "kind": "unparsed",
+            "detail": (
+                f"「{_STATE_MARKER}」章节内另有 {len(unknown_state_headers)} "
+                f"张表，表头既非本模块状态表也非领域规格引用表，未纳入编译: "
+                f"{_headers_digest(unknown_state_headers)}"),
+            "backlogRef": None})
+    if local_state_rows:
+        local_state_objects = []
+        for row in local_state_rows:
             if len(row) < len(_LOCAL_STATE_HEADER) or not row[0] or not row[1]:
                 continue
             source = _source_with_requirements(
                 module_scope, _STATE_MARKER, " ".join(row))
+            if row[0] not in local_state_objects:
+                local_state_objects.append(row[0])
             _add_state_nodes({
                 "object": row[0], "current": row[1], "meaning": row[2],
                 "entryCondition": row[3], "actions": row[4],
@@ -1463,7 +1649,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
         diagrams = _mermaid_state_diagrams(
             _section_text(text, _STATE_MARKER))
         mermaid_source = _module_source(module_scope, _STATE_MARKER)
-        for object_name in sorted(state_object_meta):
+        for object_name in sorted(local_state_objects):
             meta = state_object_meta[object_name]
             index = _match_state_diagram(meta["states"], diagrams)
             if index is None:
@@ -1479,12 +1665,11 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 continue
             _emit_diagram_transitions(
                 object_name, diagram, [mermaid_source])
-    elif (state_status == "ok"
-          and state_header in (
-              _STATE_REFERENCE_HEADER, _STATE_REFERENCE_HEADER_GENERIC)):
-        assert state_header is not None
-        for reference_index, row in enumerate(state_rows, 1):
-            if len(row) < len(state_header) or not row[0] or not row[1]:
+    reference_index = 0
+    for reference_header, reference_rows in reference_state_tables:
+        for row in reference_rows:
+            reference_index += 1
+            if len(row) < len(reference_header) or not row[0] or not row[1]:
                 continue
             spec_path = _resolve_domain_spec(root, module_scope, row[1])
             if spec_path is None:
@@ -1501,7 +1686,7 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 module_scope, _STATE_MARKER, row[2])
             spec_text = spec_path.read_text(encoding="utf-8")
             section_text = _section_text_for_reference(spec_text, row[1])
-            state_tables = [
+            domain_state_tables = [
                 (domain_header, domain_rows)
                 for domain_header, domain_rows
                 in _all_markdown_tables(section_text)
@@ -1509,15 +1694,16 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             ]
             matched_rows = [
                 domain_row
-                for _domain_header, domain_rows in state_tables
+                for _domain_header, domain_rows in domain_state_tables
                 for domain_row in domain_rows
                 if len(domain_row) >= 8
                 and _object_matches(row[0], domain_row[0])
             ]
-            alias_fallback = not matched_rows and len(state_tables) == 1
+            alias_fallback = (
+                not matched_rows and len(domain_state_tables) == 1)
             if alias_fallback:
                 matched_rows = [
-                    domain_row for domain_row in state_tables[0][1]
+                    domain_row for domain_row in domain_state_tables[0][1]
                     if len(domain_row) >= 8
                 ]
             row_objects = []
@@ -1574,12 +1760,6 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 _emit_diagram_transitions(
                     object_name, diagram,
                     [edge_domain_source, module_source])
-    elif state_status == "ok":
-        gaps.append({
-            "gapId": f"gap:{module_scope}:business-states",
-            "scopeId": module_scope, "kind": "unparsed",
-            "detail": f"状态机表头列序不符，无法机械解析: {state_header}",
-            "backlogRef": None})
     for state_node in business_state_nodes.values():
         detail_obj = state_node["detail"]
         if not detail_obj.get("declaredAsTargetOnly"):
@@ -1596,13 +1776,16 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                 "不能据此判定生命周期已结束"),
             "backlogRef": None})
 
-    impact_status, impact_header, impact_rows = _find_section_table(
-        text, _IMPACT_MARKER)
-    if impact_status == "absent" and flow_ids_by_title:
+    impact_status, impact_header, impact_rows = _read_section(
+        _IMPACT_MARKER, (_IMPACT_HEADER, _LEGACY_IMPACT_HEADER),
+        f"gap:{module_scope}:state-impacts")
+    if impact_status in {"absent", "empty"} and flow_ids_by_title:
         gaps.append({
             "gapId": f"gap:{module_scope}:state-impacts",
             "scopeId": module_scope, "kind": "missing-section",
-            "detail": "模块缺少「流程状态影响（机器可解析）」表，流程步骤与业务状态变化尚未关联",
+            "detail": _missing_section_detail(
+                impact_status, _IMPACT_MARKER,
+                "流程步骤与业务状态变化尚未关联"),
             "backlogRef": None})
     elif (impact_status == "ok"
           and impact_header not in (_IMPACT_HEADER, _LEGACY_IMPACT_HEADER)):
@@ -1778,12 +1961,14 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
 
     seen_objects = {}
     data_contracts = {}
-    status, header, rows = _find_section_table(text, _DATA_MARKER)
-    if status == "absent":
+    status, header, rows = _read_section(
+        _DATA_MARKER, (_DATA_HEADER,), f"gap:{module_scope}:data-rw")
+    if status in {"absent", "empty"}:
         gaps.append({
             "gapId": f"gap:{module_scope}:data-rw",
             "scopeId": module_scope, "kind": "missing-section",
-            "detail": "模块缺少「数据读写（机器可解析）」章节，数据流待深化",
+            "detail": _missing_section_detail(
+                status, _DATA_MARKER, "数据流待深化"),
             "backlogRef": None})
     elif status == "ok" and header != _DATA_HEADER:
         gaps.append({
@@ -1836,8 +2021,8 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "status": "original", "sources": [source],
                     "detail": detail})
 
-    field_status, field_header, field_rows = _find_section_table(
-        text, _FIELD_MARKER)
+    field_status, field_header, field_rows = _read_section(
+        _FIELD_MARKER, (_FIELD_HEADER,), f"gap:{module_scope}:fields")
     field_tables = []
     if seen_objects and field_status in {"absent", "empty"}:
         gaps.append({
@@ -1939,8 +2124,8 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         f"字段「{obj}.{field_name}」引用未声明数据对象"),
                     "backlogRef": None})
 
-    permission_status, permission_header, permission_rows = (
-        _find_section_table(text, _PERMISSION_MARKER))
+    permission_status, permission_header, permission_rows = _read_section(
+        _PERMISSION_MARKER, None, f"gap:{module_scope}:permissions")
     structured_module = bool(
         page_titles or seen_objects or flow_ids_by_title or business_state_nodes)
     if structured_module and permission_status in {"absent", "empty"}:
@@ -2081,8 +2266,18 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
             if permission_id not in conflicted_permissions)
 
     step_permission_status, step_permission_header, step_permission_rows = (
-        _find_section_table(text, _STEP_PERMISSION_MARKER))
-    if (step_permission_status == "ok"
+        _read_section(
+            _STEP_PERMISSION_MARKER, (_STEP_PERMISSION_HEADER,),
+            f"gap:{module_scope}:step-permissions"))
+    if step_permission_status == "empty":
+        gaps.append({
+            "gapId": f"gap:{module_scope}:step-permissions",
+            "scopeId": module_scope, "kind": "missing-section",
+            "detail": _missing_section_detail(
+                step_permission_status, _STEP_PERMISSION_MARKER,
+                "步骤与权限矩阵的绑定待声明"),
+            "backlogRef": None})
+    elif (step_permission_status == "ok"
             and step_permission_header != _STEP_PERMISSION_HEADER):
         gaps.append({
             "gapId": f"gap:{module_scope}:step-permissions",
@@ -2233,8 +2428,9 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                         failure_detail["handoffRole"] = declared_handoff
                     if source not in failure_node["sources"]:
                         failure_node["sources"].append(source)
-    mapping_status, mapping_header, mapping_rows = _find_section_table(
-        text, _PAGE_DATA_MARKER)
+    mapping_status, mapping_header, mapping_rows = _read_section(
+        _PAGE_DATA_MARKER, (_PAGE_DATA_HEADER,),
+        f"gap:{module_scope}:page-data-rw")
     if page_titles and mapping_status in {"absent", "empty"}:
         gaps.append({
             "gapId": f"gap:{module_scope}:page-data-rw",
@@ -2423,11 +2619,14 @@ def _compile_module(root, module_scope, text, module_scopes, page_catalog,
                     "pageTitle": page_title,
                     "flowTitle": None}})
 
-    status, header, rows = _find_section_table(text, _INTERACT_MARKER)
-    if status == "absent":
+    status, header, rows = _read_section(
+        _INTERACT_MARKER, (_INTERACT_HEADER,),
+        f"gap:{module_scope}:module-interaction")
+    if status in {"absent", "empty"}:
         gaps.append({"gapId": f"gap:{module_scope}:module-interaction",
                      "scopeId": module_scope, "kind": "missing-section",
-                     "detail": "模块缺少「模块交互（机器可解析）」章节，跨模块关系待深化",
+                     "detail": _missing_section_detail(
+                         status, _INTERACT_MARKER, "跨模块关系待深化"),
                      "backlogRef": None})
     elif status == "ok" and header != _INTERACT_HEADER:
         gaps.append({"gapId": f"gap:{module_scope}:module-interaction",
