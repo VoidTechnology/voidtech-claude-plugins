@@ -180,6 +180,8 @@ Design Workspace 保存并复用：
 - page archetypes。
 - component registry。
 
+独立公开技能 `create-design-md` 可以从当前项目事实创建或修订符合 Google specification 的 `DESIGN.md`，作为上述 Foundation 的人工可读、可 lint 表达；它不建立 `accepted` flow，不写 Product Workspace，也不绕过本 ADR 的 readiness、trace、双审查与 Design Decision 审批。
+
 后续 flow 必须优先组合既有 archetype 和组件。新增组件需要记录适用范围和无法复用既有组件的原因。
 
 外部 `design-consultation` 可以协助产生候选，但不能成为插件硬依赖；Foundation Schema 才是稳定接口。
@@ -342,3 +344,4 @@ in-scope 需求总数
 |---|---|---|
 | 2026-07-24 | 初版：Design Workspace、flow readiness、Design Packet、共享原型、Design Decision 与 trace 门禁 | 将验收级 PRD 转换为可持续、可追溯的设计生产线 |
 | 2026-07-24 | 按 ADR-0007 将 `design-from-prd` 从 Core 调整到 `voidtech-design`；输入改为 Core Atlas 中的 Product Fragment，输出 Design Fragment；跨领域 coverage、freshness 与 change impact 统一由 Core Atlas Engine 负责 | Core 收敛为共享契约/Atlas/Archify 内核，Design 拥有设计写模型但不拥有跨领域关系引擎 |
+| 2026-08-04 | 补充 `create-design-md` 与 Design Workspace 的边界 | 允许独立维护标准 Design Foundation 文档，但不让单文件工作流冒充 flow readiness、trace 或 accepted 生命周期 |

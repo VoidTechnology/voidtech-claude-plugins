@@ -1,6 +1,6 @@
 # VoidTech 插件使用指南
 
-本指南覆盖 Core、Product、Design、Engineering 的 27 个现有技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前四者同时支持 Claude Code 与 OMP，后者只支持 Claude Code，并只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南覆盖 Core、Product、Design、Engineering 的 28 个现有技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前四者同时支持 Claude Code 与 OMP，后者只支持 Claude Code，并只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -39,6 +39,7 @@
 ```text
 /voidtech-core:handoff 下个会话继续做支付回调
 /voidtech-product:prd-sync 导入新版 requirements.xlsx
+/voidtech-design:create-design-md 读取 PRD 与实现，为官网创建 design/DESIGN-public-site.md
 /voidtech-design:ui-prototype 比较三个仪表盘布局
 /voidtech-engineering:debug 支付回调偶发重复入账
 ```
@@ -80,6 +81,7 @@
 | `voidtech-product:prd-from-requirements` | 从原始需求、整理稿、访谈纪要或旧 PRD 生成模块化 PRD 工作树 | 模块 PRD、全局文档、追溯矩阵、开放问题清单、状态看板 |
 | `voidtech-product:prd-maintain` | 维护既有 PRD 工作树：深化模块、合入需求变更、定案开放问题、落实评审修订 | 修订后的主本、重生成的汇总与状态看板、变更记录 |
 | `voidtech-product:prd-sync` | 向既有 PRD 工作树导入外部需求源新版本：存量迁移、只读同步、三方归并出可审阅变更集、人工裁决落 journal | 不可变 revision、变更集/歧义/撤回候选、裁决记录；已确认变更集交 `prd-maintain` 合入 |
+| `voidtech-design:create-design-md` | 从 PRD、实现与设计资产创建或修订标准 `DESIGN.md`，生成临时预览并执行零 warning 校验 | 长期维护的设计系统合同；严格 lint 需 Node.js 18+ 与 `npm` |
 | `voidtech-design:to-design-brief` | 把设计语言文档与 PRD 合成自包含设计 brief，供 claude.ai/design 逐页生成 UI | `claude-design-brief.md` |
 | `voidtech-engineering:to-issues` | 把计划/PRD 拆成端到端垂直切片 | 可独立认领验证的 issue 列表 |
 | `voidtech-engineering:prepare-issue` | 按分类+状态整理 issue/PR，验证主张，补信息 | agent 可直接执行的实现说明 |
@@ -137,6 +139,8 @@
 | 没有 PRD/issue，但要用测试先行实现一个范围明确的行为 | `voidtech-engineering:tdd` | 先写完全部测试，或跳过接口与行为确认 |
 | 已有 PRD 或一组 issue，需要完成实现、验收核对和交付检查 | `voidtech-engineering:implement` | 接任意一段模糊对话直接开工 |
 | 现有行为出错、变慢或偶发失败 | `voidtech-engineering:debug` | 先猜原因再改代码 |
+| 需要建立或修订项目内长期维护、可 lint 的设计系统合同 | `voidtech-design:create-design-md` | 一次性设计工具输入、完整 Design Workspace 或生产 UI |
+| 已有设计语言与 PRD，需要生成可独立粘贴给设计工具的输入 | `voidtech-design:to-design-brief` | 项目内长期设计规范 |
 | 有一个明确但纸面难以回答的 UI 结构问题 | `voidtech-design:ui-prototype` | 生产实现、视觉精修或长期保留的实验分支 |
 | 有一个明确但纸面难以回答的状态、逻辑或数据结构问题 | `voidtech-engineering:logic-spike` | 生产实现或长期保留的终端外壳 |
 | 对话中已经确认了新业务术语、概念边界或重要决策，需要写回项目上下文 | `voidtech-engineering:feature-context` | 新项目初始化必跑，或把 `CONTEXT.md` 当规格文档 |
@@ -189,6 +193,7 @@
 
 - 需要核实外部事实、版本、政策、价格或竞品信息时，用 `voidtech-core:research`。
 - 已知模块但 interface、seam 或测试面需要设计时，用 `voidtech-engineering:codebase-design`；要先扫描全仓寻找候选项时，用 `voidtech-engineering:architecture-review`。
+- 需要从项目事实建立或修订长期维护的设计系统合同时，用 `voidtech-design:create-design-md`。它把产品事实、设计推导和待批准候选分开，并以官方 lint 零 warning 为格式门；它不建立 `design-from-prd` 规划中的完整 Design Workspace。
 - 有一个明确的 UI 结构问题且文档难以回答时，用 `voidtech-design:ui-prototype`；状态、逻辑或数据结构问题则用 `voidtech-engineering:logic-spike`。得到答案后记录结论并清理临时代码。
 - 已有 PRD 与设计语言文档，需要生成给 claude.ai/design 的自包含输入时，用 `voidtech-design:to-design-brief`。
 - 方案存在关键约束、依赖或未经验证的假设时，在实现前用 `voidtech-core:plan-review`；还需要同步已确认的业务词汇或 ADR 时改用 `voidtech-core:plan-review-docs`。
@@ -250,6 +255,7 @@ prd-from-requirements ───────▶ product-manager subagent
 prd-maintain ──规则与脚本单源──▶ prd-from-requirements（红线/模板/自检脚本/看板生成器）
 prd-sync ──已确认变更集───────▶ prd-maintain（工况 2 合入 / 工况 5 生命周期）
         └──规则单源──────────▶ prd-from-requirements
+create-design-md ──产出设计语言文档后可手动交给──▶ to-design-brief
 to-issues ──────轻量自审文案────▶ text-naturalizer
 
 plan-review ────────────────▶ plan-review-core
@@ -277,6 +283,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 | 从原始需求、Excel 整理稿或访谈纪要生成模块化 PRD 工作树 | `voidtech-product:prd-from-requirements` |
 | 维护既有 PRD 工作树（深化到验收级、合入需求变更、定案开放问题、落实评审意见） | `voidtech-product:prd-maintain` |
 | 把新版 Excel/需求源导入既有工作树，得到可审阅变更集并裁决归并 | `voidtech-product:prd-sync` |
+| 从 PRD、实现与设计资产创建项目内标准 DESIGN.md | `voidtech-design:create-design-md` |
 | 拿 PRD 和设计语言文档生成给 claude.ai/design 用的设计 brief | `voidtech-design:to-design-brief` |
 | 比较多个一次性 UI 结构方案 | `voidtech-design:ui-prototype` |
 | 用终端程序推演状态、逻辑或数据结构 | `voidtech-engineering:logic-spike` |

@@ -90,11 +90,14 @@ Core 不直接读取 PRD、Design Workspace、源码实现或 QA Evidence，不�
 归属技能：
 
 - `design-from-prd`
+- `create-design-md`
 - `to-design-brief`
 - 从现有 `prototype` 拆出的 UI prototype
 - Designer Agent 与 Design Reviewer
 
 Design 可以读取 Product Artifact，但不能直接调用 Product Skill，也不能修改 Product Workspace。
+
+`create-design-md` 从当前项目已有的 PRD、实现与设计资产建立或修订标准 `DESIGN.md`，持有 Design Foundation 的可执行 token 与组件表达；它不建立 Product 事实、不把 `DD-CANDIDATE` 当成已批准决定，也不替代 `design-from-prd` 的 readiness、trace、Design Workspace 与 accepted 生命周期。
 
 ### 5. Engineering 拥有工程交付和代码实现
 
