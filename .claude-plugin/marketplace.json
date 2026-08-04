@@ -17,7 +17,7 @@
     {
       "name": "voidtech-design",
       "source": "./plugins/voidtech-design",
-      "description": "设计工作流：标准 DESIGN.md、设计 brief 与一次性 UI 原型验证",
+      "description": "设计工作流：标准 DESIGN.md、设计 brief、一次性 UI 原型与独立设计审查",
       "defaultEnabled": true
     },
     {

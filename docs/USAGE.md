@@ -1,6 +1,6 @@
 # VoidTech 插件使用指南
 
-本指南覆盖 Core、Product、Design、Engineering 的 28 个现有技能、2 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前四者同时支持 Claude Code 与 OMP，后者只支持 Claude Code，并只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
+本指南覆盖 Core、Product、Design、Engineering 的 28 个现有技能、3 个专业 subagent，以及 `voidtech-loop` 的 3 个工程内循环技能。前四者同时支持 Claude Code 与 OMP，后者只支持 Claude Code，并只用于完成条件可由命令退出码判定的无人值守任务。安装见 [ONBOARDING.md](../ONBOARDING.md)，发布约束见 [README.md](../README.md)。
 
 ## 1. 整体思路
 
@@ -19,7 +19,7 @@
 - **清晰归属**：技能资源随所属插件发布；Product 的 Logic Atlas 通过已安装的 Core 使用唯一一份共享 Archify Runtime，不复制 vendor。
 - **业务词汇按需维护**：Engineering 技能会读取已有 `CONTEXT.md` 与 ADR。确认新术语、澄清概念边界或形成值得记录的决策后，再用 `voidtech-engineering:feature-context` 写回；仅仅读取不需要调用该技能。
 - **用户掌控副作用**：实现类技能默认交付"已验证但未提交"的工作树。发布 issue 或评论，以及提交、推送、合并、部署等动作，按各技能的显式触发和确认规则执行。
-- **重任务隔离**：复杂架构设计交给 `voidtech-engineering:architect`，产品破题交给 `voidtech-product:product-manager`，让主会话只接收结论、风险和可执行下一步。
+- **重任务隔离**：复杂架构设计交给 `voidtech-engineering:architect`，产品破题交给 `voidtech-product:product-manager`，界面与原型审查交给 `voidtech-design:designer`，让主会话只接收结论、风险和可执行下一步。
 
 ## 2. 如何调用
 
@@ -56,6 +56,7 @@
 ```text
 @voidtech-engineering:architect 设计支付回调幂等与重试架构
 @voidtech-product:product-manager 把这个想法整理成 MVP PRD
+@voidtech-design:designer 审查支付确认页的层级、状态覆盖与组件一致性
 ```
 
 下面的可见性表统计四个双宿主工作流插件。这里说的是当前宿主能不能看到并调用技能，不代表已经授权它写文件、提交、推送或发布评论；这些动作仍以各技能正文里的确认与验证规则为准。`voidtech-loop` 仅支持 Claude Code，其 `goal`、`goal-spec` 和 `review` 都只能由用户显式调用。
@@ -123,6 +124,7 @@
 |---|---|---|
 | `voidtech-engineering:architect` | 只读侦察复杂技术问题，设计架构、模块边界、接口契约、迁移和验证策略 | 推荐方案、现状证据、设计、风险与实施顺序 |
 | `voidtech-product:product-manager` | 把模糊想法或需求转成用户场景、MVP 边界、PRD/User Story，或评审既有体验 | 产品判断、范围边界、验收标准、PRD/User Story |
+| `voidtech-design:designer` | 基于真实界面、原型、设计系统和需求证据审查设计表达，不修改实现或替用户批准 | 审查结论、带证据 findings、系统性观察、Design Decision 候选和修订顺序 |
 
 ## 4. 入口选择与端到端工作流
 
@@ -194,7 +196,7 @@
 - 需要核实外部事实、版本、政策、价格或竞品信息时，用 `voidtech-core:research`。
 - 已知模块但 interface、seam 或测试面需要设计时，用 `voidtech-engineering:codebase-design`；要先扫描全仓寻找候选项时，用 `voidtech-engineering:architecture-review`。
 - 需要从项目事实建立或修订长期维护的设计系统合同时，用 `voidtech-design:create-design-md`。它把产品事实、设计推导和待批准候选分开，并以官方 lint 零 warning 为格式门；它不建立 `design-from-prd` 规划中的完整 Design Workspace。
-- 有一个明确的 UI 结构问题且文档难以回答时，用 `voidtech-design:ui-prototype`；状态、逻辑或数据结构问题则用 `voidtech-engineering:logic-spike`。得到答案后记录结论并清理临时代码。
+- 有一个明确的 UI 结构问题且文档难以回答时，用 `voidtech-design:ui-prototype`；原型生成后需要独立检查层级、交互一致性、状态覆盖或 AI slop 时，交给 `voidtech-design:designer`。状态、逻辑或数据结构问题则用 `voidtech-engineering:logic-spike`。得到答案后记录结论并清理临时代码。
 - 已有 PRD 与设计语言文档，需要生成给 claude.ai/design 的自包含输入时，用 `voidtech-design:to-design-brief`。
 - 方案存在关键约束、依赖或未经验证的假设时，在实现前用 `voidtech-core:plan-review`；还需要同步已确认的业务词汇或 ADR 时改用 `voidtech-core:plan-review-docs`。
 - 会话中确认了新的业务词汇或概念边界时，再用 `voidtech-engineering:feature-context` 就地更新；不要为了“先跑一遍流程”而创建空上下文。
@@ -268,6 +270,8 @@ architecture-review ────────▶ codebase-design
                               ├──▶ feature-context（出现新术语/长期决策时）
                               └──▶ plan-review-core（用户选中候选项后）
 
+ui-prototype ──方案生成后可交给──▶ designer subagent
+
 debug ──修复后若确认架构阻力，建议手动进入──▶ architecture-review
 research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom-agent-skills
 ```
@@ -286,6 +290,7 @@ research ──工具可用时配合──▶ 官方 exa / firecrawl / youdotcom
 | 从 PRD、实现与设计资产创建项目内标准 DESIGN.md | `voidtech-design:create-design-md` |
 | 拿 PRD 和设计语言文档生成给 claude.ai/design 用的设计 brief | `voidtech-design:to-design-brief` |
 | 比较多个一次性 UI 结构方案 | `voidtech-design:ui-prototype` |
+| 审查现有界面或原型的 IA、层级、交互一致性、状态覆盖和 AI slop | `voidtech-design:designer` |
 | 用终端程序推演状态、逻辑或数据结构 | `voidtech-engineering:logic-spike` |
 | 把 PRD/计划拆成能干活的 issue | `voidtech-engineering:to-issues` |
 | 按已有 PRD 或一组 issue 实现并核对验收标准 | `voidtech-engineering:implement` |
