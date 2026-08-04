@@ -78,7 +78,7 @@ class CompileTest(unittest.TestCase):
         model = atlas.compile(self.root)
         errors = check(model, load_schema(SKILL_ROOT / "schemas", "logic-model"))
         self.assertEqual(errors, [])
-        self.assertEqual(model["generatorVersion"], "1.8.0")
+        self.assertEqual(model["generatorVersion"], "1.9.0")
 
         pages = [n for n in model["nodes"] if n["kind"] == "page"]
         self.assertEqual({p["title"] for p in pages}, {"客户列表页", "客户详情页"})
@@ -1411,6 +1411,243 @@ stateDiagram-v2
         migration.commit_migration(root, confirmations={MANUAL_KEY: "TST-006"})
         with self.assertRaises(atlas.AtlasNotEnabled):
             atlas.compile(root)
+
+
+class SectionTableTest(unittest.TestCase):
+    """章节表定位：跨子标题、空行分组、空章节与未消费表（Bug 1/2/3 回归）。"""
+
+    def setUp(self):
+        self.root, self.tmp = atlas_worktree(self)
+
+    @staticmethod
+    def _replace_flow_section(body):
+        before, marker, after = ATLAS_MODULE_PRD.partition(
+            "### 5.0.1 核心流程（机器可解析）")
+        _old, next_marker, rest = after.partition(
+            "### 5.0.2 流程状态影响（机器可解析）")
+        return before + marker + body + next_marker + rest
+
+    MODULE_SCOPE = "01-test-system/01-module-a"
+
+    def _module_gaps(self, model, suffix):
+        return [
+            gap for gap in model["gaps"]
+            if gap["scopeId"] == self.MODULE_SCOPE
+            and gap["gapId"].endswith(suffix)]
+
+    def _flow_titles(self, model):
+        return {
+            node["title"] for node in model["nodes"]
+            if node["kind"] == "flow"
+            and (node.get("detail") or {}).get("category") == "userFlow"}
+
+    def test_tables_under_subheadings_are_all_compiled(self):
+        write_atlas_module(self.root, self._replace_flow_section("""
+
+#### 分组A：查看客户详情
+
+| 流程 | 步骤ID | 关联页面 | 角色 | 用户动作/触发 | 条件/分支 | 系统结果 | 下一步 | 失败处理 | 需求编号 |
+|---|---|---|---|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 管理员 | 选择客户 | 客户存在 | 打开客户详情 | S2 | 提示客户不存在并停留当前页 | TST-001 |
+| 查看客户详情 | S2 | 客户详情页 | 管理员 | 查看资料 | 客户存在 | 展示客户资料 | 结束 | 返回客户列表 | TST-003 |
+
+#### 分组B：停用客户
+
+| 流程 | 步骤ID | 关联页面 | 角色 | 用户动作/触发 | 条件/分支 | 系统结果 | 下一步 | 失败处理 | 需求编号 |
+|---|---|---|---|---|---|---|---|---|---|
+| 停用客户 | S1 | 客户详情页 | 管理员 | 点击停用 | 客户已激活 | 客户转已停用 | 结束 | 停用失败时提示重试 | TST-002 |
+
+"""))
+
+        model = atlas.compile(self.root)
+        self.assertEqual(self._flow_titles(model), {"查看客户详情", "停用客户"})
+        steps = {
+            node["nodeId"] for node in model["nodes"]
+            if (node.get("detail") or {}).get("category") == "flowStep"}
+        self.assertTrue(any(nid.endswith(":查看客户详情:S2") for nid in steps))
+        self.assertTrue(any(nid.endswith(":停用客户:S1") for nid in steps))
+        self.assertEqual(self._module_gaps(model, ":core-flow"), [])
+
+    def test_blank_line_grouped_rows_stay_in_one_table(self):
+        write_atlas_module(self.root, self._replace_flow_section("""
+
+| 流程 | 步骤ID | 关联页面 | 角色 | 用户动作/触发 | 条件/分支 | 系统结果 | 下一步 | 失败处理 | 需求编号 |
+|---|---|---|---|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 管理员 | 选择客户 | 客户存在 | 打开客户详情 | S2 | 提示客户不存在并停留当前页 | TST-001 |
+| 查看客户详情 | S2 | 客户详情页 | 管理员 | 查看资料 | 客户存在 | 展示客户资料 | 结束 | 返回客户列表 | TST-003 |
+
+| 停用客户 | S1 | 客户详情页 | 管理员 | 点击停用 | 客户已激活 | 客户转已停用 | 结束 | 停用失败时提示重试 | TST-002 |
+
+"""))
+
+        model = atlas.compile(self.root)
+        self.assertEqual(self._flow_titles(model), {"查看客户详情", "停用客户"})
+        self.assertEqual(
+            self._module_gaps(model, ":core-flow:extra-tables"), [])
+
+    def test_section_without_any_table_is_a_gap(self):
+        write_atlas_module(self.root, self._replace_flow_section("""
+
+流程细节见 §5.1 各路径小节。
+
+"""))
+
+        model = atlas.compile(self.root)
+        found = self._module_gaps(model, ":core-flow")
+        self.assertEqual(len(found), 1, model["gaps"])
+        gap = found[0]
+        self.assertEqual(gap["kind"], "missing-section")
+        self.assertIn("不涉及", gap["detail"])
+
+    def test_declared_not_applicable_section_is_not_a_gap(self):
+        write_atlas_module(self.root, self._replace_flow_section("""
+
+不涉及：本模块只做资料展示，没有多步骤流程。
+
+"""))
+
+        model = atlas.compile(self.root)
+        self.assertEqual(self._module_gaps(model, ":core-flow"), [])
+
+    def test_unconsumed_table_in_machine_section_is_reported(self):
+        write_atlas_module(self.root, self._replace_flow_section("""
+
+| 流程 | 步骤ID | 关联页面 | 角色 | 用户动作/触发 | 条件/分支 | 系统结果 | 下一步 | 失败处理 | 需求编号 |
+|---|---|---|---|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 管理员 | 选择客户 | 客户存在 | 打开客户详情 | S2 | 提示客户不存在并停留当前页 | TST-001 |
+| 查看客户详情 | S2 | 客户详情页 | 管理员 | 查看资料 | 客户存在 | 展示客户资料 | 结束 | 返回客户列表 | TST-003 |
+
+#### 分组B：停用客户
+
+| 流程名 | 步骤 | 页面 |
+|---|---|---|
+| 停用客户 | S1 | 客户详情页 |
+
+"""))
+
+        model = atlas.compile(self.root)
+        found = self._module_gaps(model, ":core-flow:extra-tables")
+        self.assertEqual(len(found), 1, model["gaps"])
+        gap = found[0]
+        self.assertEqual(gap["kind"], "unparsed")
+        self.assertIn("流程名", gap["detail"])
+
+    def test_data_section_does_not_swallow_nested_page_data_subsection(self):
+        nested = """
+#### 7.0.1 页面数据读写（机器可解析）
+
+| 流程 | 步骤ID | 页面 | 数据对象 | 操作 | 需求编号 |
+|---|---|---|---|---|---|
+| 查看客户详情 | S1 | 客户列表页 | 客户 | 读 | TST-001 |
+| 查看客户详情 | S2 | 客户详情页 | 客户 | 读 | TST-003 |
+"""
+        write_atlas_module(self.root, ATLAS_MODULE_PRD + nested)
+
+        model = atlas.compile(self.root)
+        self.assertEqual(
+            self._module_gaps(model, ":data-rw:extra-tables"), [])
+        pages = {
+            node["title"]: node["detail"]["dataDeclaration"]
+            for node in model["nodes"] if node["kind"] == "page"}
+        self.assertEqual(pages["客户列表页"], "mapped")
+
+    def test_dotted_section_number_reference_is_sliced(self):
+        spec = """# 领域规格
+
+## 1. 对象
+
+| 对象 | 说明 |
+|---|---|
+| 账号 | 登录主体 |
+
+## 2. 状态机
+
+| 对象 | 当前状态 | 进入条件 | 可执行操作 | 下一状态 | 触发方式 | 是否可逆 | 通知/日志 |
+|---|---|---|---|---|---|---|---|
+| 账号 | 正常 | 注册成功 | 封禁 | 封禁 | 人工 | 是 | 记录操作人 |
+
+## 3. 字段规则
+
+| 字段 | 说明 |
+|---|---|
+| 邮箱 | 唯一 |
+"""
+        sliced = atlas._section_text_for_reference(spec, "`spec.md` §2")
+
+        self.assertIn("## 2. 状态机", sliced)
+        self.assertIn("| 账号 | 正常 |", sliced.replace(
+            "| 账号 | 正常 | 注册成功 | 封禁 | 封禁 | 人工 | 是 | 记录操作人 |",
+            "| 账号 | 正常 |"))
+        self.assertNotIn("## 3. 字段规则", sliced)
+        self.assertNotIn("邮箱", sliced)
+        self.assertEqual(
+            sliced, atlas._section_text_for_reference(spec, "`spec.md` 第 2 节"))
+
+    def test_local_and_referenced_state_tables_are_both_compiled(self):
+        before, marker, after = ATLAS_MODULE_PRD.partition(
+            "## 6. 状态机与状态流转")
+        _old, next_marker, rest = after.partition("## 7. 字段与数据规则")
+        both = """
+
+| 对象 | 状态机主本 | 本端(机构后台)可见状态与操作差异 |
+|---|---|---|
+| 账号 | `../../00-global/domain-specs/account-identity.md` §2 | 后台可封禁/解封(TST-001) |
+
+本模块独有对象的状态机如下：
+
+| 对象 | 当前状态 | 状态含义 | 进入条件 | 可执行操作 | 下一状态 | 是否可逆 | 操作人 | 通知/日志 |
+|---|---|---|---|---|---|---|---|---|
+| 客户 | 待激活 | 已创建但未启用 | 创建成功 | 激活 | 已激活 | 否 | 管理员 | 记录操作人 |
+| 客户 | 已激活 | 可正常使用 | 激活成功 | 停用 | 已停用 | 是 | 管理员 | 通知客户 |
+
+```mermaid
+stateDiagram-v2
+    [*] --> 待激活: 创建成功
+    待激活 --> 已激活: 激活
+    已激活 --> 已停用: 停用
+```
+
+"""
+        write_atlas_module(self.root, before + marker + both + next_marker + rest)
+        spec = self.root / "00-global/domain-specs/account-identity.md"
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text("""# 账号身份
+
+## 2. 账号状态
+
+| 对象 | 当前状态 | 进入条件 | 可执行操作 | 下一状态 | 触发方式 | 是否可逆 | 通知/日志 |
+|---|---|---|---|---|---|---|---|
+| 账号 | 正常 | 注册成功 | 封禁 | 封禁 | 人工 | 是 | 记录操作人 |
+| 账号 | 封禁 | 管理员封禁 | 解封 | 正常 | 人工 | 是 | 通知用户 |
+
+```mermaid
+stateDiagram-v2
+    正常 --> 封禁: 封禁
+    封禁 --> 正常: 解封
+```
+
+## 3. 字段规则
+
+无。
+""", encoding="utf-8")
+
+        model = atlas.compile(self.root)
+        by_object = {}
+        for node in model["nodes"]:
+            if (node["kind"] == "state"
+                    and node["detail"].get("category") == "businessState"):
+                by_object.setdefault(
+                    node["detail"]["object"], set()).add(node["title"])
+
+        self.assertEqual(by_object.get("账号"), {"正常", "封禁"})
+        self.assertEqual(by_object.get("客户"), {"待激活", "已激活", "已停用"})
+        transitions = {
+            (edge["from"].split(":")[-2], edge["from"].split(":")[-1],
+             edge["to"].split(":")[-1])
+            for edge in model["edges"] if edge["kind"] == "transition"}
+        self.assertIn(("账号", "正常", "封禁"), transitions)
+        self.assertIn(("客户", "待激活", "已激活"), transitions)
+        self.assertEqual(self._module_gaps(model, ":business-states"), [])
 
 
 class PublishAndFreshnessTest(unittest.TestCase):
