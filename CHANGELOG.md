@@ -1,5 +1,22 @@
 # Changelog
 
+## voidtech-design 0.3.0 - 2026-08-04
+
+Design 插件此前可以把已有设计语言压缩成一次性 brief，也可以比较临时 UI 结构，却不能从项目事实建立一份长期维护、可机器校验的设计系统合同。团队只能手工拼接 `DESIGN.md`，容易把产品事实、设计推导和未经批准的范围写成同一种语气，也会把官方 lint 的 warning 当成可忽略提示。
+
+### Added
+
+- 新增公开 `/voidtech-design:create-design-md`：完整读取 PRD、实现、设计资产和现有约束，建立产品事实矩阵，区分产品事实、设计推导与 `DD-CANDIDATE`，创建或修订符合 Google design.md specification 的标准 `DESIGN.md`。
+- 随 Skill 分发一份最小可用模板和设计合同清单，固定八个规范二级章节、支持的 YAML/token/component 字段，以及产品边界、状态、安全、视觉系统、响应式和无障碍审查项。
+- 新增严格校验器：通过随附 lockfile 固定 `@google/design.md@0.4.0` 及完整依赖，禁用安装生命周期脚本；除官方 error 外也把 warning 和非标准章节结构视为失败，避免孤立 token、对比度不足、未知属性或章节漂移带着“退出码 0”进入交付。
+- 工作流要求在项目外生成自包含临时 HTML 预览，并在宿主支持时交给独立设计审查者复核；修复 P0/P1 后重新运行机械门禁。
+
+### Compatibility
+
+- Skill 同时随 Claude Code 与 OMP 的 `voidtech-design` 安装；资源只从插件安装目录解析，不依赖仓库 checkout 或用户私有路径。
+- 严格 lint 需要 Node.js 18+ 与 `npm`，首次运行会按随附 lockfile 下载完整锁定依赖；工具或网络不可用时明确停止，不伪装成已通过。
+- `create-design-md` 只建立标准 Design Foundation 文档，不替代 `design-from-prd` 规划中的 readiness、Design Workspace、trace、双审查或 accepted 生命周期，也不会自行 commit、push 或发布。
+
 ## voidtech-core 0.21.0 / voidtech-product 0.8.0 / voidtech-engineering 0.3.0 - 2026-07-29
 
 两个公开 subagent 固定 `model: fable`，这是插件替用户做的决定，而它有一个用户无法预料的失败模式。

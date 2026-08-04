@@ -2,13 +2,13 @@
 
 > 同时兼容 Claude Code 与 Oh My Pi（OMP）的开源插件市场：中文工程工作流、可机器验收的工程内循环，以及按需启用的 MCP。
 
-`voidtech-core v0.21.0` · `voidtech-product v0.8.0` · `voidtech-engineering v0.3.0` · `voidtech-design v0.2.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · OMP ≥ 17.1.5 · Apache-2.0
+`voidtech-core v0.21.0` · `voidtech-product v0.8.0` · `voidtech-engineering v0.3.0` · `voidtech-design v0.3.0` · `voidtech-loop v0.3.0` · Claude Code ≥ 2.1.154（loop ≥ 2.1.210，review ≥ 2.1.211） · OMP ≥ 17.1.5 · Apache-2.0
 
 VoidTech 维护的双宿主插件 Marketplace。Core、Product、Design、Engineering 与两组 MCP 同时支持 Claude Code 和 OMP；`voidtech-loop` 仍仅支持 Claude Code，不进入 OMP catalog。
 
 ## 亮点
 
-- **30 个自包含技能 + 2 个专业 subagent**，按 Core、Product、Design、Engineering 与 Loop 分层发布；能力不重复，命令归属与交付责任一致。
+- **31 个自包含技能 + 2 个专业 subagent**，按 Core、Product、Design、Engineering 与 Loop 分层发布；能力不重复，命令归属与交付责任一致。
 - **独立的工程内循环**：`voidtech-loop` 用不可变 Goal Spec、隔离 worktree 和指定 commit eval 推进可机器判定的任务；验收通过后仍由人复核、接受和合入。
 - **中文协作约定**：核心插件通过 `SessionStart` hook 注入团队的中文交流约定，代码与标识符仍用英文。
 - **每日更新提示**：核心插件每天最多检查一次远端版本；只提示更新命令，不自动修改本地环境。
@@ -67,6 +67,7 @@ OMP 17.1.5 已完成隔离安装冒烟。`voidtech-loop` 依赖 Claude Code 专�
 /voidtech-core:research "比较 iOS 崩溃日志脱敏方案，给出当前证据、风险和选型建议"
 /voidtech-engineering:to-prd "把刚才已经讨论清楚的支付回调需求整理成单体 PRD"
 /voidtech-product:prd-from-requirements "读取 docs/raw-requirements.xlsx，生成可追溯的模块化 PRD 工作树"
+/voidtech-design:create-design-md "读取 PRD 与实现，为官网创建 design/DESIGN-public-site.md"
 /voidtech-design:ui-prototype "比较三个支付确认页布局，选定后清理原型"
 /voidtech-engineering:logic-spike "用一次性终端原型验证订单状态机能否处理乱序事件"
 /voidtech-engineering:debug "支付回调偶发重复入账，先建立稳定复现再定位根因"
@@ -74,7 +75,7 @@ OMP 17.1.5 已完成隔离安装冒烟。`voidtech-loop` 依赖 Claude Code 专�
 /voidtech-loop:goal-spec "迁移支付 API，保持契约测试通过，并保护公开 fixtures"
 ```
 
-`to-prd` 和 `prd-from-requirements` 处理的是两类输入，不应串着使用。`ui-prototype` 与 `logic-spike` 都只回答一个明确问题，产物不能直接当作生产实现。完整边界见 [USAGE.md](docs/USAGE.md)。
+`create-design-md` 生成项目内长期维护、可 lint 的设计系统合同；`to-design-brief` 生成可独立粘贴给设计工具的一次性输入。`to-prd` 和 `prd-from-requirements` 处理的是两类输入，不应串着使用。`ui-prototype` 与 `logic-spike` 都只回答一个明确问题，产物不能直接当作生产实现。完整边界见 [USAGE.md](docs/USAGE.md)。
 
 完整安装、迁移与 MCP 配置见 [ONBOARDING.md](ONBOARDING.md)；每个技能的用途与工作流见 [USAGE.md](docs/USAGE.md)。
 
@@ -99,7 +100,7 @@ OMP 17.1.5 已完成隔离安装冒烟。`voidtech-loop` 依赖 Claude Code 专�
   - claude plugin install voidtech-design@voidtech
   - claude plugin install voidtech-engineering@voidtech
 - 检查 uname -s、uname -m、claude --version、node --version、git 和 jq；仅在 macOS arm64、Claude Code 2.1.210+、Node.js 18+ 且命令齐全时执行：claude plugin install voidtech-loop@voidtech。不满足时跳过并说明缺口。
-四个工作流插件合计提供 27 个自包含中文技能 + 2 个专业 subagent；Core 另提供中文协作约定与共享 Archify Runtime。
+四个工作流插件合计提供 28 个自包含中文技能 + 2 个专业 subagent；Core 另提供中文协作约定与共享 Archify Runtime。
 voidtech-loop 提供 goal 与 goal-spec：只用于完成条件可由命令退出码判定的工程任务；它不会自动 push、merge、建 PR 或改写用户分支。
 
 【第 2 步：按搭配矩阵安装官方插件（来自 claude-plugins-official）】
@@ -129,7 +130,7 @@ voidtech-loop 提供 goal 与 goal-spec：只用于完成条件可由命令退�
 |---|---|---|---|
 | [`voidtech-core`](plugins/voidtech-core) | 0.21.0 | ✅ 启用 | 中文约定 + 8 个公共技能 + 共享 Archify Runtime |
 | [`voidtech-product`](plugins/voidtech-product) | 0.8.0 | ✅ 启用 | 模块化 PRD、需求同步、Logic Atlas 阅读与产品验收 + Product Manager subagent |
-| [`voidtech-design`](plugins/voidtech-design) | 0.2.0 | ✅ 启用 | 设计 brief + 一次性 UI 原型 |
+| [`voidtech-design`](plugins/voidtech-design) | 0.3.0 | ✅ 启用 | 标准 DESIGN.md + 设计 brief + 一次性 UI 原型；严格 DESIGN.md lint 需 Node.js 18+ 与 `npm` |
 | [`voidtech-engineering`](plugins/voidtech-engineering) | 0.3.0 | ✅ 启用 | 14 个工程技能 + Architect subagent |
 | [`voidtech-loop`](plugins/voidtech-loop) | 0.3.0 | ✅ 启用 | Goal Spec + 确定性控制器 + 隔离 worktree + 指定 commit 验收（一期试点版） |
 | [`voidtech-mcp-common`](plugins/voidtech-mcp-common) | 0.1.0 | ⛔ 禁用 | Context7（库文档）、Chrome DevTools（无头浏览器验证） |
@@ -168,7 +169,7 @@ Core 与三个领域插件负责团队默认工作流；官方插件适合作为
 
 - **Core（8）** — `research`、`handoff`、`learn`、`plan-review`、`plan-review-core`、`plan-review-docs`、`text-naturalizer`、`write-skills`
 - **Product（3）** — `prd-from-requirements`、`prd-maintain`、`prd-sync`
-- **Design（2）** — `to-design-brief`、`ui-prototype`
+- **Design（3）** — `create-design-md`、`to-design-brief`、`ui-prototype`
 - **Engineering（14）** — `architecture-review`、`codebase-design`、`feature-context`、`to-prd`、`to-issues`、`prepare-issue`、`implement`、`debug`、`tdd`、`logic-spike`、`git-safety`、`setup-git-checks`、`fix-conflicts`、`ship`
 
 ## subagent 一览
@@ -192,7 +193,7 @@ Core 与三个领域插件负责团队默认工作流；官方插件适合作为
 plugins/
   voidtech-core/                  中文约定、8 个公共技能、Archify Runtime（含 SessionStart hook）
   voidtech-product/               3 个 PRD 技能 + Product Manager subagent
-  voidtech-design/                设计 brief + UI 原型
+  voidtech-design/                标准 DESIGN.md + 设计 brief + UI 原型
   voidtech-engineering/           14 个工程技能 + Architect subagent
   voidtech-loop/                  Goal Spec、确定性控制器、隔离 worktree 与指定 commit 验收
   voidtech-mcp-common/            可选：Context7、Chrome DevTools

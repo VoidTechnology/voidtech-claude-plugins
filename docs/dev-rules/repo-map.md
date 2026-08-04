@@ -23,7 +23,7 @@
 |---|---|---|
 | `voidtech-core` | 中文约定、跨领域公共 Skill、共享 Archify Runtime | SessionStart Hook、跨插件 Runtime |
 | `voidtech-product` | PRD 生成、同步、维护、Logic Atlas | schema、持久化、Renderer、跨插件 Runtime |
-| `voidtech-design` | 设计 brief、一次性 UI 原型 | 原型与生产实现边界 |
+| `voidtech-design` | 标准 DESIGN.md、设计 brief、一次性 UI 原型 | 产品事实与设计推导边界；原型与生产实现边界 |
 | `voidtech-engineering` | 架构、实现、调试、测试、Git、Issue、发布 Skill | Git 副作用、Shell、发布权限 |
 | `voidtech-loop` | Goal Spec、确定性控制器、隔离 worktree、指定 commit eval | 命令执行、Git refs、权限、状态完整性 |
 | `voidtech-mcp-common` | Context7、Chrome DevTools | 网络、浏览器、外部服务权限 |

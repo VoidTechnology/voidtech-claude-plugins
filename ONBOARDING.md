@@ -3,6 +3,7 @@
 ## 1. 前置条件
 
 - `voidtech-core`、`voidtech-product`、`voidtech-design`、`voidtech-engineering`：Claude Code 2.1.154 或更高版本，或 OMP 17.1.5 或更高版本；Product 的 Logic Atlas 复用 Core 的共享 Runtime，因此 Product 与 Core 配套安装
+- `voidtech-design:create-design-md`：严格校验需要 Node.js 18+ 与 `npm`；首次运行会按随附 lockfile 下载 `@google/design.md@0.4.0` 的完整锁定依赖，并禁用安装生命周期脚本
 - `voidtech-loop`：Claude Code 2.1.210 或更高版本；当前 F3 阶段仅支持 macOS arm64，并依赖 Node.js 18+、Git 与 `jq`
 - 使用 MCP 插件时需要 Node.js 20.19 或更高版本
 - Apple MCP 仅支持安装了 Xcode 的 macOS

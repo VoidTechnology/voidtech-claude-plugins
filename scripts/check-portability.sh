@@ -7,7 +7,7 @@ EXPECTED_PLUGINS=$'voidtech-core\nvoidtech-design\nvoidtech-engineering\nvoidtec
 EXPECTED_OMP_PLUGINS=$'voidtech-core\nvoidtech-design\nvoidtech-engineering\nvoidtech-mcp-apple\nvoidtech-mcp-common\nvoidtech-product'
 EXPECTED_CORE_SKILLS=$'handoff\nlearn\nplan-review\nplan-review-core\nplan-review-docs\nresearch\ntext-naturalizer\nwrite-skills'
 EXPECTED_PRODUCT_SKILLS=$'prd-from-requirements\nprd-maintain\nprd-sync'
-EXPECTED_DESIGN_SKILLS=$'to-design-brief\nui-prototype'
+EXPECTED_DESIGN_SKILLS=$'create-design-md\nto-design-brief\nui-prototype'
 EXPECTED_ENGINEERING_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nimplement\nlogic-spike\nprepare-issue\nsetup-git-checks\nship\ntdd\nto-issues\nto-prd'
 EXPECTED_PRODUCT_AGENTS='product-manager'
 EXPECTED_ENGINEERING_AGENTS='architect'
@@ -494,6 +494,12 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       "voidtech-product|skills/prd-from-requirements/assets/renderer-validation-proof.json"
       "voidtech-product|skills/prd-maintain/SKILL.md"
       "voidtech-product|skills/prd-sync/SKILL.md"
+      "voidtech-design|skills/create-design-md/SKILL.md"
+      "voidtech-design|skills/create-design-md/assets/DESIGN.template.md"
+      "voidtech-design|skills/create-design-md/references/design-md-contract.md"
+      "voidtech-design|skills/create-design-md/scripts/validate-design-md.sh"
+      "voidtech-design|skills/create-design-md/validator/package.json"
+      "voidtech-design|skills/create-design-md/validator/package-lock.json"
       "voidtech-design|skills/to-design-brief/SKILL.md"
       "voidtech-design|skills/ui-prototype/SKILL.md"
       "voidtech-engineering|agents/architect.md"
@@ -527,8 +533,12 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
     engineering_install_path=$(
       jq -r '.[] | select(.id == "voidtech-engineering@voidtech") | .installPath' <<<"$installed_json"
     )
+    design_install_path=$(
+      jq -r '.[] | select(.id == "voidtech-design@voidtech") | .installPath' <<<"$installed_json"
+    )
     if ((missing_installed_resource == 0)) && \
       [[ -x "$core_install_path/hooks/check-update.sh" ]] && \
+      [[ -x "$design_install_path/skills/create-design-md/scripts/validate-design-md.sh" ]] && \
       [[ -x "$engineering_install_path/skills/git-safety/scripts/block-dangerous-git.sh" ]]; then
       pass "隔离安装保留随附脚本执行权限"
     else
@@ -584,6 +594,10 @@ if [[ "${1:-}" == "--install-smoke" ]]; then
         "voidtech-product|tools/product-runtime.mjs"
         "voidtech-product|skills/_shared/HOST-RUNTIME.md"
         "voidtech-product|agents/product-manager.md"
+        "voidtech-design|skills/create-design-md/SKILL.md"
+        "voidtech-design|skills/create-design-md/scripts/validate-design-md.sh"
+        "voidtech-design|skills/create-design-md/validator/package.json"
+        "voidtech-design|skills/create-design-md/validator/package-lock.json"
         "voidtech-design|skills/to-design-brief/SKILL.md"
         "voidtech-engineering|agents/architect.md"
         "voidtech-engineering|skills/git-safety/scripts/block-dangerous-git-omp.mjs"
@@ -609,7 +623,11 @@ if [[ "${1:-}" == "--install-smoke" ]]; then
       omp_product_path=$(
         jq -r '.plugins["voidtech-product@voidtech"][0].installPath' "$omp_registry"
       )
+      omp_design_path=$(
+        jq -r '.plugins["voidtech-design@voidtech"][0].installPath' "$omp_registry"
+      )
       if ((omp_missing_resource == 0)) && \
+        [[ -x "$omp_design_path/skills/create-design-md/scripts/validate-design-md.sh" ]] && \
         HOME="$omp_audit_dir" node \
           -e "import('${omp_product_path}/tools/product-runtime.mjs')" >/dev/null 2>&1 && \
         HOME="$omp_audit_dir" python3 \
