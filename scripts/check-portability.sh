@@ -10,6 +10,7 @@ EXPECTED_PRODUCT_SKILLS=$'prd-from-requirements\nprd-maintain\nprd-sync'
 EXPECTED_DESIGN_SKILLS=$'create-design-md\nto-design-brief\nui-prototype'
 EXPECTED_ENGINEERING_SKILLS=$'architecture-review\ncodebase-design\ndebug\nfeature-context\nfix-conflicts\ngit-safety\nimplement\nlogic-spike\nprepare-issue\nsetup-git-checks\nship\ntdd\nto-issues\nto-prd'
 EXPECTED_PRODUCT_AGENTS='product-manager'
+EXPECTED_DESIGN_AGENTS='designer'
 EXPECTED_ENGINEERING_AGENTS='architect'
 failures=0
 
@@ -165,7 +166,7 @@ if [[ -d plugins/voidtech-core ]]; then
         ;;
       design)
         expected_skills="$EXPECTED_DESIGN_SKILLS"
-        expected_agents=""
+        expected_agents="$EXPECTED_DESIGN_AGENTS"
         ;;
       engineering)
         expected_skills="$EXPECTED_ENGINEERING_SKILLS"
@@ -494,6 +495,7 @@ if [[ "${1:-}" == "--install-smoke" ]] && command -v claude >/dev/null 2>&1; the
       "voidtech-product|skills/prd-from-requirements/assets/renderer-validation-proof.json"
       "voidtech-product|skills/prd-maintain/SKILL.md"
       "voidtech-product|skills/prd-sync/SKILL.md"
+      "voidtech-design|agents/designer.md"
       "voidtech-design|skills/create-design-md/SKILL.md"
       "voidtech-design|skills/create-design-md/assets/DESIGN.template.md"
       "voidtech-design|skills/create-design-md/references/design-md-contract.md"
@@ -594,6 +596,7 @@ if [[ "${1:-}" == "--install-smoke" ]]; then
         "voidtech-product|tools/product-runtime.mjs"
         "voidtech-product|skills/_shared/HOST-RUNTIME.md"
         "voidtech-product|agents/product-manager.md"
+        "voidtech-design|agents/designer.md"
         "voidtech-design|skills/create-design-md/SKILL.md"
         "voidtech-design|skills/create-design-md/scripts/validate-design-md.sh"
         "voidtech-design|skills/create-design-md/validator/package.json"

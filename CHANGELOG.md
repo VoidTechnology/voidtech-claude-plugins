@@ -1,8 +1,8 @@
 # Changelog
 
-## voidtech-design 0.3.0 - 2026-08-04
+## voidtech-design 0.4.0 - 2026-08-04
 
-Design 插件此前可以把已有设计语言压缩成一次性 brief，也可以比较临时 UI 结构，却不能从项目事实建立一份长期维护、可机器校验的设计系统合同。团队只能手工拼接 `DESIGN.md`，容易把产品事实、设计推导和未经批准的范围写成同一种语气，也会把官方 lint 的 warning 当成可忽略提示。
+Design 插件此前只能把已有设计语言压缩成一次性 brief，或比较临时 UI 结构。两个缺口同时存在：一是不能从项目事实建立一份长期维护、可机器校验的设计系统合同，团队只能手工拼接 `DESIGN.md`，容易把产品事实、设计推导和未经批准的范围写成同一种语气，也会把官方 lint 的 warning 当成可忽略提示；二是没有独立角色审查生成结果，主 Agent 既产出又自评，容易把视觉完成度误当成设计正确性。本版一次补齐规范产出与独立审查两侧，并补上 ADR-0006 已定义但尚未发布的 Designer 审查边界。
 
 ### Added
 
@@ -10,12 +10,19 @@ Design 插件此前可以把已有设计语言压缩成一次性 brief，也可�
 - 随 Skill 分发一份最小可用模板和设计合同清单，固定八个规范二级章节、支持的 YAML/token/component 字段，以及产品边界、状态、安全、视觉系统、响应式和无障碍审查项。
 - 新增严格校验器：通过随附 lockfile 固定 `@google/design.md@0.4.0` 及完整依赖，禁用安装生命周期脚本；除官方 error 外也把 warning 和非标准章节结构视为失败，避免孤立 token、对比度不足、未知属性或章节漂移带着“退出码 0”进入交付。
 - 工作流要求在项目外生成自包含临时 HTML 预览，并在宿主支持时交给独立设计审查者复核；修复 P0/P1 后重新运行机械门禁。
+- 新增公开 `designer` subagent：基于真实界面、原型、设计系统与需求证据，独立审查 IA、视觉层级、交互一致性、组件复用、状态覆盖、响应式、可访问性和 AI slop。
+- 审查输出固定区分 `revision_required` 与 `ready_for_user_review`；后者只表示可以交给用户复核，不代表已批准。问题按 `blocker`、`major`、`minor` 分级，并要求位置、证据、影响、修改方向和验证方式。
+- 允许提出单独标记的 `DD-CANDIDATE`，但不得批准 Design Decision、补写产品事实或把 Agent 结论伪装成用户验收。证据不足时必须报告缺口，不能对未见界面给整体通过结论。
+- 双宿主契约和隔离安装检查覆盖 `create-design-md` 与 `designer`，确保 Claude Code 与 OMP 都分发等价的资源与只读、搜索工具声明。
 
 ### Compatibility
 
-- Skill 同时随 Claude Code 与 OMP 的 `voidtech-design` 安装；资源只从插件安装目录解析，不依赖仓库 checkout 或用户私有路径。
-- 严格 lint 需要 Node.js 18+ 与 `npm`，首次运行会按随附 lockfile 下载完整锁定依赖；工具或网络不可用时明确停止，不伪装成已通过。
-- `create-design-md` 只建立标准 Design Foundation 文档，不替代 `design-from-prd` 规划中的 readiness、Design Workspace、trace、双审查或 accepted 生命周期，也不会自行 commit、push 或发布。
+- Skill 与 subagent 同时随 Claude Code 与 OMP 的 `voidtech-design` 安装；资源只从插件安装目录解析，不依赖仓库 checkout 或用户私有路径。
+- 严格 lint 需要 Node.js 18+ 与 `npm`，运行时会按随附 lockfile 安装完整锁定依赖；工具或网络不可用时明确停止，不伪装成已通过。
+- `designer` 只读，不授予 Write、Edit 或 Bash；不会修改业务代码、配置和设计产物。现有 `to-design-brief` 与 `ui-prototype` 行为不变。
+- 用户可用 `@voidtech-design:designer` 独立评审现有界面或一次性原型；`create-design-md` 的内容审查环节也可交给它执行。
+- `create-design-md` 只建立标准 Design Foundation 文档，不替代 `design-from-prd` 规划中的 readiness、Design Workspace、trace、双审查或 accepted 生命周期，也不会自行 commit、push 或发布；未来 `design-from-prd` 可复用 `designer` 的同一审查契约，不要求当前先实现 Design Workspace。
+- 0.3.0 只在 `main` 上短暂存在、从未打 tag 或发布，其全部内容包含在本版本中；升级路径是 0.2.0 直接到 0.4.0。
 
 ## voidtech-core 0.21.0 / voidtech-product 0.8.0 / voidtech-engineering 0.3.0 - 2026-07-29
 

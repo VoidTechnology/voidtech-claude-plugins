@@ -198,14 +198,27 @@ test('Product skills use one documented host-runtime seam for every bundled PRD 
 
 test('Published agents declare equivalent Claude Code and OMP read and search tools', () => {
   const productManager = read('plugins/voidtech-product/agents/product-manager.md');
+  const designer = read('plugins/voidtech-design/agents/designer.md');
   const architect = read('plugins/voidtech-engineering/agents/architect.md');
-  for (const agent of [productManager, architect]) {
+  for (const agent of [productManager, designer, architect]) {
     assert.match(agent, /^tools:.*\bRead\b.*\bread\b/m);
     assert.match(agent, /^tools:.*\bGrep\b.*\bgrep\b/m);
     assert.match(agent, /^tools:.*\bGlob\b.*\bglob\b/m);
     assert.match(agent, /^tools:.*\bWebSearch\b.*\bweb_search\b/m);
   }
   assert.match(productManager, /^tools:.*\bWrite\b.*\bwrite\b/m);
+});
+
+test('Designer reviews evidence without implementing or approving design decisions', () => {
+  const designer = read('plugins/voidtech-design/agents/designer.md');
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(designer)?.[1] ?? '';
+
+  assert.doesNotMatch(frontmatter, /\b(?:Write|write|Edit|edit|Bash|bash)\b/);
+  assert.match(designer, /证据不足/);
+  assert.match(designer, /DD-CANDIDATE/);
+  assert.match(designer, /不得批准/);
+  assert.match(designer, /revision_required/);
+  assert.match(designer, /ready_for_user_review/);
 });
 
 test('Engineering Git safety ships an OMP hook with the Claude policy matrix', async () => {
